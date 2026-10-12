@@ -37,13 +37,13 @@
     const r = PF.U.shuffle(PF.ROSTER).map(randomAbility);
     return PF.Match.create({
       teams: [[r[0], r[1]], [r[2], r[3]]],
-      humanTeam: -1, demo: true, time: 60, stadium: 'estadio', keeperMode: 'spider',
+      humanTeam: -1, demo: true, time: 60, stadium: 'estadio', keeperMode: 'dynamic', flip: Math.random() < 0.5,
       skills: [PF.AI.SKILLS.normal, PF.AI.SKILLS.normal],
     });
   }
 
   /**
-   * cfg: { size, teams, formations?, keeperMode, stadium, time, diff, mods? }
+   * cfg: { size, teams, bench?, formations?, keeperMode, stadium, time, diff, mods? }
    * onEnd(match) al terminar; quit = { label, fn } para la pausa.
    */
   function playMatch(cfg, onEnd, quit) {
@@ -51,8 +51,9 @@
     const st = PF.Save.data.settings;
     PF.configureField(cfg.size);
     match = PF.Match.create({
-      teams: cfg.teams, formations: cfg.formations, keeperMode: cfg.keeperMode, mods: cfg.mods,
+      teams: cfg.teams, formations: cfg.formations, keeperMode: cfg.keeperMode, mods: cfg.mods, bench: cfg.bench,
       humanTeam: 0, time: cfg.time, stadium: cfg.stadium, replays: st.replays,
+      flip: Math.random() < 0.5,   // tu equipo arranca de un lado al azar
       skills: [PF.AI.SKILLS.mate, PF.AI.SKILLS[cfg.diff]],
     });
     screen = 'match';
@@ -74,12 +75,15 @@
 
   function quickMatch() {
     const setup = PF.Save.data.setup;
-    const mine = setup.picks.map((id) => PF.withAbility(PF.rosterById(id), setup.abil[id] || 0));
+    const all = setup.picks.map((id) => PF.withAbility(PF.rosterById(id), setup.abil[id] || 0));
+    const mine = all.slice(0, setup.size), bench = all.slice(setup.size);
+    const rival = pickRival(setup.picks, setup.size + 2).map(randomAbility);
     const key = setup.size + '-' + setup.keeper;
     setup.spots[key] = setup.spots[key] || {};
     playMatch({
       size: setup.size, keeperMode: setup.keeper, stadium: setup.stadium, time: setup.time, diff: setup.diff,
-      teams: [mine, pickRival(setup.picks, setup.size).map(randomAbility)],
+      teams: [mine, rival.slice(0, setup.size)],
+      bench: [bench, rival.slice(setup.size)],
       formations: [PF.Board.spotsFor(setup.spots[key], mine, setup.keeper), null],
     }, quickResult, { label: 'Salir al menú', fn: toTitle });
   }
@@ -251,7 +255,10 @@
   function togglePause() {
     if (screen === 'match') {
       screen = 'pause';
-      PF.UI.pause(resume, restartMatch, current.quit.fn, current.quit.label);
+      PF.UI.pause(resume, restartMatch, current.quit.fn, current.quit.label, {
+        left: match.subsLeft[0], bench: match.bench[0].length,
+        open: () => PF.UI.subs(match, () => { screen = 'match'; togglePause(); }),
+      });
     } else if (screen === 'pause') resume();
   }
   function resume() { screen = 'match'; PF.UI.clear(); last = performance.now(); }

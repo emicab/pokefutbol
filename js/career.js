@@ -65,7 +65,7 @@ PF.Career = (() => {
   // ------------------------------------------------------------------ club
   function start(starterDex, name) {
     PF.Save.data.career = {
-      name: name || 'Club Paleta', club: [], lineup: [], spots: {}, keeper: 'spider',
+      name: name || 'Club Paleta', club: [], lineup: [], spots: {}, keeper: 'dynamic',
       badges: [], run: null, nextUid: 1,
     };
     const c = data();
@@ -181,7 +181,11 @@ PF.Career = (() => {
     const evolutions = [], abilityUnlocks = [];
 
     for (const mb of c.club) {
-      const p = m.players.find((q) => q.team === 0 && q.def.uid === mb.uid);
+      // jugó si estuvo en la cancha (aunque haya salido o entrado en un cambio);
+      // si salió y volvió a entrar, sus estadísticas se suman
+      const stints = m.players.concat(m.retired).filter((q) => q.team === 0 && q.def.uid === mb.uid);
+      const p = stints.length ? { stats: { goals: 0, assists: 0, tackles: 0, saves: 0 } } : null;
+      for (const q of stints) for (const k in p.stats) p.stats[k] += q.stats[k];
       let xp;
       if (p) {
         const st = p.stats;
@@ -256,9 +260,11 @@ PF.Career = (() => {
     const mine = lineupMembers();
     const defs = mine.map(defOf);
     const spots = spotsFor(defs);
+    const bench = c.club.filter((mb) => !c.lineup.includes(mb.uid)).map(defOf);   // todo el que no es titular
     return {
       size: TEAM_SIZE, keeperMode: c.keeper, stadium: g.stadium, time: 120,
       teams: [defs, opp.members.map(defOf)],
+      bench: [bench, []],
       formations: [spots, null],
       diff: opp.diff,
       mods: [runMods(run), opp.leader ? { speed: 1.04 } : {}],

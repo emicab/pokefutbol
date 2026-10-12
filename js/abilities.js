@@ -182,6 +182,7 @@ PF.Abilities = (() => {
       const r = PF.ROSTER.find((x) => x.abilities.some((a) => a.id === id));
       const name = r ? r.abilities.find((a) => a.id === id).name : id;
       PF.FX.text(m.fx, p.x, p.y - 90, name + '!', '#ffe0b0', 0.8, 1.1);
+      m.hit = { from: p, type: PF.ABILITY_TYPE[id] };   // sus golpes cuentan con el tipo de la habilidad sorteada
       return A[id](m, p);
     },
 

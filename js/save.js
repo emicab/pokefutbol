@@ -13,7 +13,7 @@ PF.Save = (() => {
     stadiums: ['estadio'],
     stats: { played: 0, won: 0, goals: 0, hardWins: 0, bigWins: 0 },
     settings: { music: 0.5, sfx: 0.8, aids: true, replays: true },
-    setup: { size: 2, time: 120, diff: 'normal', stadium: 'estadio', picks: [], abil: {}, keeper: 'spider', spots: {} },
+    setup: { size: 2, time: 120, diff: 'normal', stadium: 'estadio', picks: [], abil: {}, keeper: 'dynamic', spots: {} },
     career: null,                 // modo historia (career.js)
   });
 
@@ -23,6 +23,7 @@ PF.Save = (() => {
       const raw = localStorage.getItem(KEY);
       if (!raw) return d;
       const s = JSON.parse(raw);
+      migrate(s);
       return {
         coins: s.coins | 0,
         unlocked: Array.isArray(s.unlocked) ? s.unlocked : [],
@@ -35,6 +36,19 @@ PF.Save = (() => {
     } catch (e) {
       return d;
     }
+  }
+
+  /** Guardados viejos: el arquero "araña" pasó a llamarse "dinámico". */
+  function migrate(s) {
+    const fix = (o) => { if (o && o.keeper === 'spider') o.keeper = 'dynamic'; };
+    fix(s.setup);
+    fix(s.career);
+    if (s.setup && s.setup.spots) {
+      for (const k of Object.keys(s.setup.spots)) {
+        if (k.endsWith('-spider')) { s.setup.spots[k.replace('-spider', '-dynamic')] = s.setup.spots[k]; delete s.setup.spots[k]; }
+      }
+    }
+    if (s.career && s.career.spots && s.career.spots.spider) { s.career.spots.dynamic = s.career.spots.spider; delete s.career.spots.spider; }
   }
 
   let data = load();

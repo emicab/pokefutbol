@@ -360,3 +360,24 @@ kbd {
 .opt b { font-size: 19px; font-weight: normal; color: var(--yellow); }
 .opt small { font-size: 14px; color: var(--muted); }
 .opt:hover, .opt:focus-visible { border-color: var(--yellow); }
+
+/* suplentes y ayudas */
+.team b.sup { border-style: dashed; }
+.team b small { font-size: 10px; color: var(--yellow); }
+.keeperhelp { font-style: normal; font-size: 13px; color: var(--muted); align-self: center; }
+
+/* cambios */
+.subs { min-width: 760px; }
+.subcols { display: flex; gap: 20px; width: 100%; }
+.subcols > div { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.subcols h3 { margin: 0 0 4px; font-weight: normal; font-size: 18px; color: var(--muted); }
+.subrow {
+  display: grid; grid-template-columns: 52px 1fr 90px; align-items: center; gap: 8px; padding: 2px 8px;
+  background: var(--ink); border: 2px solid var(--line); border-radius: 6px; cursor: pointer; font-size: 16px;
+}
+.subrow canvas { image-rendering: pixelated; }
+.subrow:hover { border-color: var(--edge); }
+.subrow.on { border-color: var(--yellow); box-shadow: 0 0 0 2px var(--yellow); }
+.subrow small { color: var(--muted); font-size: 12px; }
+.ebar { height: 8px; background: #2a3550; border-radius: 2px; overflow: hidden; }
+.ebar b { display: block; height: 100%; }

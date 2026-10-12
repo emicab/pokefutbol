@@ -24,6 +24,20 @@ PF.Match = (() => {
   const HUMAN_STEAL = 0.12;      // segundos de contacto para robar (las IA usan skill.steal)
   const KICKOFF_WAIT = 0.4, KICKOFF_MAX = 6;
   const REC_FRAMES = 150;        // 2,5 s de repetición
+  const SUBS_PER_MATCH = 3;
+
+  /**
+   * Energía (0-100): se gasta corriendo, pateando, placando y con las
+   * habilidades, y al recibir golpes (más si el ataque es súper eficaz).
+   * Se recupera trotando o quieto, y en el banco. Por debajo de 40 el
+   * Pokémon está cansado (más lento, patea más flojo, recarga más lento);
+   * en 0 está agotado y no puede usar su habilidad.
+   */
+  const STAMINA = { run: 0.6, regen: 2.4, rest: 4, bench: 3, shot: 1.5, shotCharge: 2.5, pass: 0.5, tackle: 3, hit: 5, hitStun: 8, ability: 2, abilityCd: 0.35 };
+  const TIRED = 40;
+  /** Multiplicador por cansancio: 1 descansado, 0,65 agotado. */
+  const fatigue = (p) => (p.stamina >= TIRED ? 1 : 0.65 + 0.35 * Math.max(0, p.stamina) / TIRED);
+  function spend(p, amount) { p.stamina = Math.max(0, Math.min(100, p.stamina - amount)); }
   const NO_INTENT = { mx: 0, my: 0, pass: false, shootHold: false, ability: false, press: false };
 
   /**
@@ -32,7 +46,7 @@ PF.Match = (() => {
    * La pizarra (board.js) deja moverlas; el puesto sale de la profundidad (PF.zoneRole).
    */
   const PRESETS = {
-    spider: {
+    dynamic: {
       2: [[0.42, -0.3], [0.22, 0.28]],
       3: [[0.55, -0.35], [0.45, 0.38], [0.22, 0]],
       5: [[0.62, -0.33], [0.62, 0.33], [0.42, 0], [0.22, -0.42], [0.22, 0.42]],
@@ -51,7 +65,7 @@ PF.Match = (() => {
    * Devuelve [[d, f], ...] en el mismo orden que `defs`.
    */
   function autoFormation(defs, mode) {
-    const spots = (PRESETS[mode] || PRESETS.spider)[defs.length] || PRESETS.spider[2];
+    const spots = (PRESETS[mode] || PRESETS.dynamic)[defs.length] || PRESETS.dynamic[2];
     const sorted = spots.map((s, i) => ({ s, i })).sort((a, b) => a.s[0] - b.s[0]);   // del arco hacia arriba
     const left = defs.map((d, i) => ({ d, i, sc: PF.roleScores(d) }));
     const out = [];
@@ -86,12 +100,12 @@ PF.Match = (() => {
   const mass = (p) => p.def.mass * p.bonus.mass * (p.giant > 0 ? 2.2 : 1) * (p.wall > 0 ? 20 : 1);
 
   /** ¿El punto está dentro del área grande del equipo `team`? */
-  function inBox(team, x, y, pad = 0) {
+  function inBox(side, x, y, pad = 0) {
     if (Math.abs(y - F.cy) > F.boxH + pad) return false;
-    return team === 0 ? x < F.x0 + F.boxW + pad : x > F.x1 - F.boxW - pad;
+    return side === 0 ? x < F.x0 + F.boxW + pad : x > F.x1 - F.boxW - pad;
   }
   /** Arquero de ese equipo en este momento y dentro de su área (puede usar las manos). */
-  const isActiveKeeper = (m, p) => m.keeper[p.team] === p && inBox(p.team, p.x, p.y, 6);
+  const isActiveKeeper = (m, p) => m.keeper[p.team] === p && inBox(p.side, p.x, p.y, 6);
   const keeperOf = (m, team) => m.keeper[team];
 
   /** Reflejos del arquero: velocidad máxima de tiro que atrapa (más rápido, desvía). */
@@ -102,8 +116,9 @@ PF.Match = (() => {
   const teamOf = (m, team) => m.players.filter((q) => q.team === team);
   const matesOf = (m, p) => m.players.filter((q) => q.team === p.team && q !== p);
   const mateOf = (m, p) => matesOf(m, p)[0];
-  const ownGoalX = (team) => (team === 0 ? F.x0 : F.x1);
-  const dirOf = (team) => (team === 0 ? 1 : -1);
+  // lado de la cancha: 0 = defiende el arco izquierdo, 1 = el derecho (se sortea en cada partido)
+  const ownGoalX = (side) => (side === 0 ? F.x0 : F.x1);
+  const dirOf = (side) => (side === 0 ? 1 : -1);
 
   function setAnim(p, name, lock = false) {
     p.anim = name;
@@ -124,7 +139,7 @@ PF.Match = (() => {
    */
   function roleBonus(natural, pos) {
     const b = { speed: 1, power: 1, mass: 1, reflex: 1, cd: 1 };
-    if (natural === 'POR') b.reflex = 1.25;                 // de arquero siempre (también araña)
+    if (natural === 'POR') b.reflex = 1.25;                 // de arquero siempre (también dinámico)
     if (natural !== pos) return b;
     if (pos === 'DEF') b.mass = 1.15;
     if (pos === 'MED') { b.speed = 1.04; b.cd = 0.9; }
@@ -132,13 +147,14 @@ PF.Match = (() => {
     return b;
   }
 
-  function makePlayer(def, team, slot, skill, spot) {
+  function makePlayer(def, team, slot, skill, spot, side) {
     const natural = PF.naturalRole(def), pos = PF.zoneRole(spot[0]);
     return {
-      def, team, slot, skill, spot, natural, pos, bonus: roleBonus(natural, pos),
+      def, team, side, slot, skill, spot, natural, pos, bonus: roleBonus(natural, pos),
       stats: { goals: 0, assists: 0, tackles: 0, saves: 0 },
+      stamina: 100, types: PF.typesOf(def), tiredWarned: false,
       gkHold: false, gkT: 0, assistFrom: null, assistT: 0,
-      x: 0, y: 0, z: 0, vx: 0, vy: 0, facing: team === 0 ? 0 : Math.PI, r: def.radius,
+      x: 0, y: 0, z: 0, vx: 0, vy: 0, facing: 0, r: def.radius,
       stun: 0, asleep: false, cd: def.ability.cd * 0.75, tackleCd: 0, dash: 0, dashDx: 0, dashDy: 0, dashSpeed: DASH_SPEED,
       pickupCd: 0, holdT: 0, stealT: 0, charge: -1, aimMy: 0,
       fireShot: 0, phase: 0, turbo: 0, giant: 0, slow: 0, wall: 0, embers: 0, emberT: 0, slip: 0, burnCd: 0,
@@ -159,7 +175,7 @@ PF.Match = (() => {
   /** Posición de un slot de la formación, desplazada con la pelota (ai.js). */
   function homeSpot(m, p, shift = 0) {
     const [d, f] = p.spot;
-    const len = F.x1 - F.x0, H = (F.y1 - F.y0) / 2, dir = dirOf(p.team), own = ownGoalX(p.team);
+    const len = F.x1 - F.x0, H = (F.y1 - F.y0) / 2, dir = dirOf(p.side), own = ownGoalX(p.side);
     const b = m.ball;
     const progress = U.clamp(((b.x - own) * dir) / len, 0, 1);
     const attacking = b.holder && b.holder.team === p.team;
@@ -183,7 +199,7 @@ PF.Match = (() => {
         if (a < PASS_CONE && score < bestScore) { best = q; bestScore = score; }
       } else {
         const free = Math.min(250, nearestFoeDist(m, q, q.x, q.y));
-        const ahead = (q.x - p.x) * dirOf(p.team);
+        const ahead = (q.x - p.x) * dirOf(p.side);
         const score = free + ahead * 0.4 - Math.max(0, d - 450) * 0.6 - (q.stun > 0 ? 999 : 0);
         if (score > bestScore) { best = q; bestScore = score; }
       }
@@ -197,7 +213,7 @@ PF.Match = (() => {
    * palo contrario a donde está. { a, goal, tx, ty }
    */
   function shotAim(p) {
-    const gx = p.team === 0 ? F.x1 + 14 : F.x0 - 14;
+    const gx = p.side === 0 ? F.x1 + 14 : F.x0 - 14;
     const ag = Math.atan2(F.cy - p.y, gx - p.x);
     if (!p.human || Math.abs(U.angDiff(p.facing, ag)) > 0.9) return { a: p.facing, goal: false };
     const side = p.aimMy || (p.y < F.cy ? 0.45 : -0.45);
@@ -212,13 +228,15 @@ PF.Match = (() => {
    * opts.skills     [skill equipo 0, skill equipo 1] (ver PF.AI.SKILLS)
    * opts.stadium    id de PF.STADIUMS
    * opts.time       segundos · opts.replays  repetición de los goles
-   * opts.keeperMode 'spider' (arquero araña: ataja el más cercano a su arco) o 'fixed'
+   * opts.keeperMode 'dynamic' (arquero dinámico: ataja el más cercano a su arco) o 'fixed'
    * opts.formations [[[d, f]...], [[d, f]...]] posiciones (si falta, autoFormation)
    * opts.mods       [{speed, power, cd, reflex}, ...] multiplicadores por equipo (mejoras de la historia)
+   * opts.bench      [[def...], [def...]] suplentes de cada equipo (hasta 3 cambios)
+   * opts.flip       true: el equipo 0 defiende el arco derecho
    * Antes hay que llamar a PF.configureField(n) con el tamaño del equipo.
    */
   function create(opts) {
-    const keeperMode = opts.keeperMode || 'spider';
+    const keeperMode = opts.keeperMode || 'dynamic';
     const neutral = { speed: 1, power: 1, cd: 1, reflex: 1 };
     const m = {
       players: [],
@@ -236,12 +254,17 @@ PF.Match = (() => {
       humanTeam: opts.humanTeam, controlled: null, demo: !!opts.demo,
       order: 0,   // índice en ORDERS
       keeperMode, keeper: [null, null],
+      sides: opts.flip ? [1, 0] : [0, 1],   // lado de cada equipo
+      bench: [0, 1].map((t) => ((opts.bench && opts.bench[t]) || []).map((def) => ({ def, stamina: 100 }))),
+      subsLeft: [SUBS_PER_MATCH, SUBS_PER_MATCH], subT: 0,
+      retired: [],                          // los que salieron (para la experiencia)
+      hit: null,
       mods: [Object.assign({}, neutral, opts.mods && opts.mods[0]), Object.assign({}, neutral, opts.mods && opts.mods[1])],
     };
     opts.teams.forEach((defs, team) => {
       const given = opts.formations && opts.formations[team];
       const spots = given && given.length === defs.length ? given : autoFormation(defs, keeperMode);
-      defs.forEach((d, i) => m.players.push(makePlayer(d, team, i, opts.skills[team], spots[i])));
+      defs.forEach((d, i) => m.players.push(makePlayer(d, team, i, opts.skills[team], spots[i], m.sides[team])));
     });
     if (keeperMode === 'fixed') {
       for (const team of [0, 1]) {
@@ -267,8 +290,8 @@ PF.Match = (() => {
     const len = F.x1 - F.x0, H = (F.y1 - F.y0) / 2;
     for (const p of m.players) {
       const [d, f] = p.spot;
-      const dir = dirOf(p.team);
-      let x = ownGoalX(p.team) + dir * Math.max(0.02, Math.min(d * 0.85, 0.42)) * len;
+      const dir = dirOf(p.side);
+      let x = ownGoalX(p.side) + dir * Math.max(0.02, Math.min(d * 0.85, 0.42)) * len;
       const y = F.cy + f * H * (d < KEEPER_DEPTH ? 0 : 1);
       // fuera del círculo central
       if (U.dist(x, y, F.cx, F.cy) < 130) x = F.cx - dir * 130;
@@ -277,14 +300,14 @@ PF.Match = (() => {
         pickupCd: 0, holdT: 0, stealT: 0, phase: 0, wall: 0, embers: 0, slip: 0, dig: 0, ram: 0, spinT: 0,
         gkHold: false, gkT: 0, assistFrom: null,
       });
-      p.facing = p.team === 0 ? 0 : Math.PI;
+      p.facing = p.side === 0 ? 0 : Math.PI;
       p.ai.chasing = false; p.ai.shotT = 0;
       setAnim(p, 'Idle');
     }
     // saca el jugador de campo más adelantado
     const upfront = (team) => teamOf(m, team).filter((p) => !p.fixedKeeper).reduce((a, q) => (q.spot[0] > a.spot[0] ? q : a));
     const kicker = upfront(k);
-    kicker.x = F.cx - dirOf(k) * (radius(kicker) + BALL_R + 3);
+    kicker.x = F.cx - dirOf(m.sides[k]) * (radius(kicker) + BALL_R + 3);
     kicker.y = F.cy;
     b.holder = kicker; b.last = kicker;
     m.kicker = kicker;
@@ -297,6 +320,7 @@ PF.Match = (() => {
     for (const [fx, fy] of st.hazards) {
       addHazard(m, { kind: 'lava', x: F.cx + fx * (F.x1 - F.x0) / 2, y: F.cy + fy * H, r: 46 + H * 0.06, life: Infinity, team: -1 });
     }
+    for (const team of [0, 1]) if (team !== m.humanTeam) aiSubs(m, team, 40);
     m.rec = [];
     m.replay = null;
     m.state = 'kickoff';
@@ -334,14 +358,14 @@ PF.Match = (() => {
 
   // ---------------------------------------------------------------- arquero
   /**
-   * Arquero araña: el que está más cerca de su arco (de los que pueden) pasa a
+   * Arquero dinámico: el que está más cerca de su arco (de los que pueden) pasa a
    * ser el arquero. Sólo cambia si otro está claramente más cerca, para que no
    * salte de uno a otro a cada paso. Con arquero fijo no hace nada.
    */
   function updateKeepers(m, reset = false) {
     if (m.keeperMode === 'fixed') return;
     for (const team of [0, 1]) {
-      const gx = ownGoalX(team);
+      const gx = ownGoalX(m.sides[team]);
       const cur = reset ? null : m.keeper[team];
       if (cur && cur.gkHold) continue;
       let best = null, bd = Infinity;
@@ -359,7 +383,7 @@ PF.Match = (() => {
 
   /** El arquero no llega a atraparla: la desvía hacia fuera. */
   function parry(m, p, b) {
-    const gx = ownGoalX(p.team);
+    const gx = ownGoalX(p.side);
     const s = Math.hypot(b.vx, b.vy);
     let a = Math.atan2(b.y - F.cy, b.x - gx);
     if (Math.abs(b.y - F.cy) < 20) a += U.pick([-1, 1]) * 0.9;   // de frente: al córner
@@ -379,6 +403,45 @@ PF.Match = (() => {
     PF.FX.burst(m.fx, b.x, b.y, 10, '#ffffff', 200);
     PF.Audio.sfx.bounce(700);
     setAnim(p, 'Attack', true);
+  }
+
+  // ---------------------------------------------------------------- cambios
+  /**
+   * Cambia al jugador `out` (de m.players) por el suplente `benchIdx`. El que
+   * entra ocupa su puesto y su lugar en la cancha; el que sale se sienta y
+   * descansa (puede volver a entrar). Devuelve false si no quedan cambios.
+   */
+  function substitute(m, out, benchIdx) {
+    const team = out.team, seat = m.bench[team][benchIdx];
+    if (!seat || m.subsLeft[team] <= 0) return false;
+    const np = makePlayer(seat.def, team, out.slot, out.skill, out.spot, out.side);
+    Object.assign(np, { x: out.x, y: out.y, facing: out.facing, stamina: seat.stamina, cd: seat.cd ?? np.cd });
+    if (m.keeper[team] === out) { m.keeper[team] = np; np.fixedKeeper = out.fixedKeeper; }
+    if (m.ball.holder === out) { m.ball.holder = np; np.gkHold = out.gkHold; }
+    if (m.ball.passTo === out) m.ball.passTo = np;
+    if (m.kicker === out) m.kicker = np;
+    if (m.controlled === out) setControl(m, np);
+    m.bench[team][benchIdx] = { def: out.def, stamina: out.stamina, cd: out.cd };
+    m.retired.push(out);
+    m.players[m.players.indexOf(out)] = np;
+    m.subsLeft[team]--;
+    m.rec = [];                          // la repetición no puede mezclar a los dos
+    PF.FX.text(m.fx, np.x, np.y - 70, `⇄ ${np.def.name}`, PF.TEAM_COLORS[team], 0.9, 1.4);
+    PF.FX.burst(m.fx, np.x, np.y - 20, 14, '#ffffff', 160);
+    PF.Audio.sfx.whistle();
+    return true;
+  }
+
+  /** La CPU cambia a sus cansados por el suplente más fresco. */
+  function aiSubs(m, team, below) {
+    const tired = teamOf(m, team).filter((p) => p.stamina < below).sort((a, b) => a.stamina - b.stamina);
+    for (const p of tired) {
+      if (m.subsLeft[team] <= 0) return;
+      const bench = m.bench[team];
+      let best = -1;
+      bench.forEach((s, i) => { if (s.stamina > p.stamina + 25 && (best < 0 || s.stamina > bench[best].stamina)) best = i; });
+      if (best >= 0) substitute(m, p, best);
+    }
   }
 
   // ---------------------------------------------------------------- repetición
@@ -448,6 +511,15 @@ PF.Match = (() => {
 
     const playing = m.state === 'play';
     const kicking = m.state === 'kickoff';
+    for (const bench of m.bench) for (const s of bench) s.stamina = Math.min(100, s.stamina + STAMINA.bench * dt);
+    if (playing && (m.subT -= dt) <= 0) {
+      m.subT = 4;
+      for (const team of [0, 1]) {
+        if (team === m.humanTeam) continue;
+        const far = teamOf(m, team).filter((p) => p.stamina < 15 && U.dist(p.x, p.y, m.ball.x, m.ball.y) > 450);
+        if (far.length) aiSubs(m, team, 15);
+      }
+    }
     if (playing && hi && hi.swap) {
       // al compañero más cerca de la pelota (el arquero fijo no entra en la rotación)
       let best = null, bd = Infinity;
@@ -515,7 +587,17 @@ PF.Match = (() => {
       p[k] = Math.max(0, p[k] - dt);
     }
     // la habilidad sólo recarga con la pelota en juego (no en festejos ni saques)
-    if (m.state === 'play') p.cd = Math.max(0, p.cd - dt);
+    if (m.state === 'play') p.cd = Math.max(0, p.cd - dt * fatigue(p));
+    // energía: correr gasta, trotar o estar quieto recupera; fuera de juego se descansa
+    if (m.state === 'play') {
+      const frac = Math.hypot(p.vx, p.vy) / p.def.speed;
+      if (frac > 0.55 && p.stun <= 0) spend(p, STAMINA.run * frac * dt * (m.keeper[p.team] === p ? 0.5 : 1));
+      else spend(p, -STAMINA.regen * dt);
+      if (p.stamina <= 0 && p.team === m.humanTeam && !p.tiredWarned) {
+        p.tiredWarned = true;
+        PF.FX.text(m.fx, p.x, p.y - 70, '¡AGOTADO!', '#ff8a8a', 0.9, 1.4);
+      }
+    } else spend(p, -STAMINA.rest * dt);
     if (p.stun <= 0) p.asleep = false;
     if (b.holder === p) p.holdT += dt; else p.holdT = 0;
     if (digging && p.dig <= 0) popDig(m, p);
@@ -539,7 +621,7 @@ PF.Match = (() => {
       else if (ml > 0.2) p.facing = Math.atan2(my, mx);
     }
 
-    let sp = p.def.speed * (p.human ? 1 : p.skill.speed) * st.speed * p.bonus.speed * m.mods[p.team].speed;
+    let sp = p.def.speed * (p.human ? 1 : p.skill.speed) * st.speed * p.bonus.speed * m.mods[p.team].speed * fatigue(p);
     if (b.holder === p) sp *= 0.9;
     if (p.charge >= 0) sp *= 0.55;
     if (p.turbo > 0) sp *= 1.4;
@@ -599,7 +681,11 @@ PF.Match = (() => {
       if (p.gkT > 4) { pass(m, p); return; }
     }
 
-    if (it.ability && p.cd <= 0) useAbility(m, p);
+    if (it.ability && p.cd <= 0) {
+      if (p.stamina <= 0) {
+        if (p.human) PF.FX.text(m.fx, p.x, p.y - 60, 'sin energía...', '#ff8a8a', 0.7, 0.8);
+      } else useAbility(m, p);
+    }
     if (b.holder === p) {
       if (it.pass) pass(m, p);
       else if (it.shootHold) p.charge = Math.min(CHARGE_MAX, Math.max(0, p.charge) + dt);
@@ -628,7 +714,7 @@ PF.Match = (() => {
       PF.Field.collide(p, radius(p), 0.2, false);
       if (p.gkHold) {
         // con la pelota en las manos no sale del área
-        const x0 = p.team === 0 ? F.x0 : F.x1 - F.boxW, x1 = p.team === 0 ? F.x0 + F.boxW : F.x1;
+        const x0 = p.side === 0 ? F.x0 : F.x1 - F.boxW, x1 = p.side === 0 ? F.x0 + F.boxW : F.x1;
         p.x = U.clamp(p.x, x0, x1);
         p.y = U.clamp(p.y, F.cy - F.boxH, F.cy + F.boxH);
       }
@@ -668,7 +754,7 @@ PF.Match = (() => {
   function wallBump(m, w, v, nx, ny) {
     v.x = w.x + nx * (radius(w) + radius(v) + 1);
     v.y = w.y + ny * (radius(w) + radius(v) + 1);
-    if (knock(m, v, nx, ny, 320, 0.4)) {
+    if (withHit(m, w, 'rock', () => knock(m, v, nx, ny, 320, 0.4))) {
       PF.FX.text(m.fx, v.x, v.y - 50, '¡BOING!', '#e8e0cc', 0.8, 0.7);
       PF.Audio.sfx.bounce(600);
     }
@@ -712,13 +798,15 @@ PF.Match = (() => {
       release(m, p, Math.cos(p.facing) * sp, Math.sin(p.facing) * sp);
     }
     setAnim(p, 'Shoot', true);
+    spend(p, STAMINA.pass);
     PF.Audio.sfx.pass();
   }
 
   function shoot(m, p, k) {
     const b = m.ball;
+    spend(p, STAMINA.shot + STAMINA.shotCharge * k);
     const aim = shotAim(p);
-    const power = U.lerp(0.42, 1, k) * p.def.power * p.bonus.power * m.mods[p.team].power * (b.big > 0 ? 0.85 : 1);
+    const power = U.lerp(0.42, 1, k) * p.def.power * p.bonus.power * m.mods[p.team].power * (b.big > 0 ? 0.85 : 1) * (0.75 + 0.25 * fatigue(p));
     let sp = 1180 * power;
     const fire = p.fireShot > 0;
     if (fire) sp = 1450 * p.def.power;
@@ -745,6 +833,7 @@ PF.Match = (() => {
     p.dashDx = Math.cos(p.facing);
     p.dashDy = Math.sin(p.facing);
     p.tackleCd = p.human ? TACKLE_CD : p.skill.tackleCd;
+    spend(p, STAMINA.tackle);
     setAnim(p, 'Attack', true);
     PF.Audio.sfx.swoosh();
   }
@@ -762,12 +851,33 @@ PF.Match = (() => {
     m.shake = Math.max(m.shake, 5);
   }
 
+  /**
+   * Cansancio por un golpe. Si viene de una habilidad (m.hit = { from, type }),
+   * cuenta la tabla de tipos: súper eficaz cansa el doble y aturde más.
+   * Devuelve el multiplicador de aturdimiento.
+   */
+  function hurt(m, v, stun) {
+    const h = m.hit;
+    const eff = h && h.type ? PF.typeEffect(h.type, v.types) : 1;
+    spend(v, (STAMINA.hit + stun * STAMINA.hitStun) * eff);
+    if (eff >= 2) PF.FX.text(m.fx, v.x, v.y - 78, '¡Súper eficaz!', '#ffd23f', 0.7, 1);
+    else if (eff < 1) PF.FX.text(m.fx, v.x, v.y - 78, 'No es muy eficaz...', '#a9b6d3', 0.6, 1);
+    return eff >= 2 ? 1.25 : eff < 1 ? 0.8 : 1;
+  }
+
+  /** Ejecuta fn con el contexto de golpe (quién y de qué tipo) para hurt(). */
+  function withHit(m, from, type, fn) {
+    const prev = m.hit;
+    m.hit = { from, type };
+    try { return fn(); } finally { m.hit = prev; }
+  }
+
   /** Empuja y aturde. Si tenía la pelota, la suelta. Devuelve false si no le afecta. */
   function knock(m, v, nx, ny, force, stun) {
     if (untouchable(v) || v.wall > 0 || v.gkHold) return false;   // al arquero con la pelota en las manos no se le toca
     if (m.ball.holder === v) loseBall(m, v, nx, ny);
     v.vx = nx * force; v.vy = ny * force;
-    v.stun = Math.max(v.stun, stun);
+    v.stun = Math.max(v.stun, stun * hurt(m, v, stun));
     v.charge = -1; v.dash = 0;
     setAnim(v, 'Hurt');
     return true;
@@ -777,7 +887,7 @@ PF.Match = (() => {
     if (untouchable(v) || v.gkHold) return false;
     if (m.ball.holder === v) loseBall(m, v, Math.cos(v.facing), Math.sin(v.facing));
     v.vx *= 0.15; v.vy *= 0.15;
-    v.stun = Math.max(v.stun, stun);
+    v.stun = Math.max(v.stun, stun * hurt(m, v, stun));
     v.charge = -1; v.dash = 0;
     setAnim(v, 'Hurt');
     return true;
@@ -810,8 +920,10 @@ PF.Match = (() => {
   }
 
   function useAbility(m, p) {
-    const fn = PF.Abilities[p.def.ability.id];
-    const ok = fn(m, p);
+    const id = p.def.ability.id;
+    const fn = PF.Abilities[id];
+    const ok = withHit(m, p, PF.ABILITY_TYPE[id], () => fn(m, p));
+    if (ok !== false) spend(p, STAMINA.ability + p.def.ability.cd * STAMINA.abilityCd);
     p.cd = ok === false ? 1.2 : p.def.ability.cd * p.bonus.cd * m.mods[p.team].cd;
     if (ok !== false && p.anim !== 'Attack') setAnim(p, 'Charge', true);
   }
@@ -825,6 +937,9 @@ PF.Match = (() => {
   }
 
   function landSlam(m, p, soft) {
+    return withHit(m, p, 'normal', () => landSlamInner(m, p, soft));
+  }
+  function landSlamInner(m, p, soft) {
     if (soft) {
       PF.FX.burst(m.fx, p.x, p.y, 14, '#d9c9a8', 200, 0.4, 4);
       PF.FX.text(m.fx, p.x, p.y - 60, '¡PLOF!', '#fff', 0.9);
@@ -858,6 +973,9 @@ PF.Match = (() => {
 
   /** Onix sale de bajo tierra. */
   function popDig(m, p) {
+    return withHit(m, p, 'ground', () => popDigInner(m, p));
+  }
+  function popDigInner(m, p) {
     const R = 115;
     for (const q of m.players) {
       if (q.team === p.team) continue;
@@ -875,7 +993,7 @@ PF.Match = (() => {
   // ---------------------------------------------------------------- proyectiles
   /** pr: { x, y, vx, vy, team, kind, life, r, homing?, stun, color } */
   function addProjectile(m, pr) {
-    m.projs.push(Object.assign({ t: 0, r: 12, dead: false }, pr));
+    m.projs.push(Object.assign({ t: 0, r: 12, dead: false, hit: m.hit }, pr));
   }
 
   function updateProjectiles(m, dt, playing) {
@@ -904,7 +1022,7 @@ PF.Match = (() => {
         if (q.team === pr.team || q.stun > 0 || untouchable(q)) continue;
         if (U.dist(pr.x, pr.y, q.x, q.y - 10) > radius(q) + pr.r) continue;
         const s = Math.hypot(pr.vx, pr.vy) || 1;
-        if (knock(m, q, pr.vx / s, pr.vy / s, 220, pr.stun)) {
+        if (withHit(m, pr.hit && pr.hit.from, pr.hit && pr.hit.type, () => knock(m, q, pr.vx / s, pr.vy / s, 220, pr.stun))) {
           PF.FX.burst(m.fx, q.x, q.y - 14, 14, pr.color, 220);
           PF.FX.text(m.fx, q.x, q.y - 50, pr.hitText || '¡PAM!', pr.color, 0.9);
           PF.Audio.sfx.tackle();
@@ -919,6 +1037,7 @@ PF.Match = (() => {
   // ---------------------------------------------------------------- zonas
   /** h: { kind: fire|lava|puddle|ice|sleep, x, y, r, life, team (-1 = afecta a todos) } */
   function addHazard(m, h) {
+    h.ctx = m.hit || { from: null, type: h.kind === 'lava' ? 'fire' : null };
     h.t = 0;
     h.hit = new Set();
     m.hazards.push(h);
@@ -929,6 +1048,7 @@ PF.Match = (() => {
     m.hazards = m.hazards.filter((h) => h.t < h.life);
     if (!playing) return;
     for (const h of m.hazards) {
+      m.hit = h.ctx;
       for (const p of m.players) {
         if (p.team === h.team || untouchable(p)) continue;
         if (U.dist(p.x, p.y, h.x, h.y) > h.r + radius(p) * 0.5) continue;
@@ -955,6 +1075,7 @@ PF.Match = (() => {
         }
       }
     }
+    m.hit = null;
   }
 
   // ---------------------------------------------------------------- pelota
@@ -1100,7 +1221,7 @@ PF.Match = (() => {
         // la bola de fuego atraviesa: derriba rivales e ignora compañeros
         if (p.team !== b.last.team && p.stun <= 0) {
           const s = Math.hypot(b.vx, b.vy) || 1;
-          if (knock(m, p, b.vx / s, b.vy / s, 520, 1.2)) {
+          if (withHit(m, b.last, 'fire', () => knock(m, p, b.vx / s, b.vy / s, 520, 1.2))) {
             PF.FX.text(m.fx, p.x, p.y - 50, '¡ARDE!', '#ff8a3d');
             PF.FX.burst(m.fx, p.x, p.y - 10, 16, '#ff9a3d', 240);
             PF.Audio.sfx.tackle();
@@ -1140,8 +1261,8 @@ PF.Match = (() => {
     const b = m.ball;
     let team = -1;
     if (Math.abs(b.y - F.cy) < F.goalHalf + b.r) {
-      if (b.x < F.x0 - b.r) team = 1;
-      else if (b.x > F.x1 + b.r) team = 0;
+      if (b.x < F.x0 - b.r) team = m.sides.indexOf(1);        // entró en el arco izquierdo: marca el de la derecha
+      else if (b.x > F.x1 + b.r) team = m.sides.indexOf(0);
     }
     if (team < 0) return;
     b.holder = null;
@@ -1211,6 +1332,7 @@ PF.Match = (() => {
 
   return {
     create, step, CHARGE_MAX, ORDERS, orderOf, PRESETS, KEEPER_DEPTH, autoFormation,
+    substitute, fatigue, TIRED, SUBS_PER_MATCH,
     inBox, isActiveKeeper, keeperOf, ownGoalX, dirOf,
     // usados por abilities.js, ai.js y render.js
     radius, mass, untouchable, mateOf, matesOf, teamOf, setAnim, knock, stunInPlace, loseBall, shoot,

@@ -54,11 +54,16 @@ minutos), dificultad del rival, arquero y cancha. La cancha crece con el
 formato; si no entra en pantalla, la cámara sigue la jugada y aparece un
 minimapa.
 
+Cada partido sortea de qué lado juega tu equipo.
+
 ### Arquero
 
-- **Araña** (por defecto en 2 y 3 por equipo): ataja el que esté más cerca de
-  su arco en ese momento; cuando sale, lo reemplaza el siguiente.
-- **Fijo** (por defecto en 5 vs 5): uno del equipo se queda en el arco.
+- **Fijo** (por defecto en 5 vs 5): uno del equipo es el arquero todo el
+  partido. Se mueve por toda el área grande: adelantado cuando la pelota está
+  lejos, sobre la línea cuando se acerca, y sale a cortar las pelotas sueltas
+  que entran al área. Nunca sale del área.
+- **Dinámico** (por defecto en 2 y 3 por equipo): ataja el que esté más
+  cerca de su arco en cada momento; cuando sale, lo reemplaza el siguiente.
 
 El arquero lleva guantes verdes. En su área llega más lejos, atrapa los tiros
 que no sean demasiado fuertes para sus reflejos (los demás los desvía), se
@@ -90,6 +95,19 @@ Cada partido da monedas: por jugar, ganar o empatar, cada gol y la valla
 invicta, multiplicadas por la dificultad y la duración. Con ellas se compran
 Pokémon y canchas en la selección. Algunos Pokémon se ganan con retos. Todo
 se guarda en el navegador (`localStorage`); en Opciones se puede borrar.
+
+### Energía y cambios
+
+Cada Pokémon tiene energía (la barrita bajo sus pies). Se gasta corriendo,
+pateando, pasando, placando y con las habilidades (más las de recarga larga),
+y al recibir golpes: cuenta la **tabla de tipos**, así que un ataque súper
+eficaz cansa el doble (y uno poco eficaz, mucho menos). Se recupera trotando
+o quieto, y en el banco. Cansado (menos de 40) corre más lento, patea más
+flojo y recarga la habilidad más despacio; agotado (0) no puede usarla.
+
+En el partido rápido se pueden elegir hasta 2 suplentes; en el modo historia,
+todo el club que no es titular está en el banco. Hay 3 cambios por partido,
+desde la pausa (**Cambios**). La CPU también cambia a sus cansados.
 
 ## Modo historia
 

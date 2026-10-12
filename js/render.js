@@ -4,7 +4,7 @@ PF.Render = (() => {
   let fieldCanvas = null, fieldKey = '';
 
   // ---------------------------------------------------------------- cancha (una vez por formato y estadio)
-  function buildField(st) {
+  function buildField(st, sides) {
     const Wd = PF.WORLD;
     const c = document.createElement('canvas');
     c.width = Wd.w; c.height = Wd.h;
@@ -77,18 +77,19 @@ PF.Render = (() => {
       g.strokeRect(Math.min(x, x + s * sw), F.cy - sh, sw, sh * 2);
       g.beginPath(); g.arc(x + s * bw, F.cy, 60 * k, side ? Math.PI / 2 : -Math.PI / 2, side ? 1.5 * Math.PI : Math.PI / 2); g.stroke();
       // postes con el color del equipo que defiende
-      g.fillStyle = PF.TEAM_COLORS[side];
+      const postColor = PF.TEAM_COLORS[sides.indexOf(side)];   // el color del que defiende ese arco
+      g.fillStyle = postColor;
       for (const y of [F.cy - F.goalHalf, F.cy + F.goalHalf]) {
         g.fillRect(x - 6, y - 6, 12, 12);
-        g.fillStyle = '#fff'; g.fillRect(x - 3, y - 3, 6, 6); g.fillStyle = PF.TEAM_COLORS[side];
+        g.fillStyle = '#fff'; g.fillRect(x - 3, y - 3, 6, 6); g.fillStyle = postColor;
       }
     }
     return c;
   }
 
-  function fieldFor(st) {
-    const key = `${F.size}/${st.id}`;
-    if (key !== fieldKey) { fieldCanvas = buildField(st); fieldKey = key; }
+  function fieldFor(st, sides) {
+    const key = `${F.size}/${st.id}/${sides.join('')}`;
+    if (key !== fieldKey) { fieldCanvas = buildField(st, sides); fieldKey = key; }
     return fieldCanvas;
   }
 
@@ -223,7 +224,27 @@ PF.Render = (() => {
     if (k > 0.95) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(x - 3, y - 3, w + 6, h + 6); }
   }
 
-  /** Guantes verdes a los lados: éste es el arquero (en araña, el de ahora). */
+  const staminaColor = (v) => (v > 60 ? '#5fd68a' : v > PF.Match.TIRED ? '#ffd23f' : v > 15 ? '#ff8a3d' : '#ff5a5f');
+
+  /** Barra de energía bajo los pies (siempre en tu equipo; en el rival, si está cansado). */
+  function drawStamina(ctx, m, p, r) {
+    const mine = p.team === m.humanTeam;
+    if (!mine && p.stamina >= PF.Match.TIRED) return;
+    const w = 30, x = p.x - w / 2, y = p.y + r * 0.6 + 5;
+    ctx.fillStyle = '#141018'; ctx.fillRect(x - 1, y - 1, w + 2, 5);
+    ctx.fillStyle = staminaColor(p.stamina); ctx.fillRect(x, y, (w * p.stamina) / 100, 3);
+    // cansado: gotas de sudor
+    if (p.stamina < PF.Match.TIRED && p.stun <= 0) {
+      const k = (m.clock * 1.5 + p.slot * 0.3) % 1;
+      ctx.globalAlpha = 1 - k;
+      ctx.fillStyle = '#8fd8ff';
+      ctx.fillRect(p.x + r * 0.7 + k * 6, p.y - r * 1.6 + k * 14, 3, 4);
+      ctx.fillRect(p.x - r * 0.8 - k * 6, p.y - r * 1.4 + k * 12, 3, 4);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  /** Guantes verdes a los lados: éste es el arquero (en dinámico, el de ahora). */
   function drawGloves(ctx, m, p, head, r) {
     const y = (p.y + head) / 2 + 4;
     const wave = p.gkHold ? 0 : Math.sin(m.clock * 8) * 2;
@@ -297,6 +318,7 @@ PF.Render = (() => {
       ctx.beginPath(); ctx.moveTo(p.x - 7, y - 10); ctx.lineTo(p.x + 7, y - 10); ctx.lineTo(p.x, y - 1); ctx.closePath(); ctx.fill();
     }
     if (p.charge >= 0 && p.team === m.humanTeam) drawPowerBar(ctx, p, head);
+    if (!m.demo && m.state !== 'replay') drawStamina(ctx, m, p, r);
   }
 
   function drawHazards(ctx, m) {
@@ -442,6 +464,9 @@ PF.Render = (() => {
     ctx.fillStyle = p.cd <= 0 ? '#141018' : '#d6def0';
     ctx.textAlign = 'center';
     ctx.fillText(p.cd <= 0 ? p.def.ability.name.toUpperCase() : p.def.ability.name, bx + bw / 2, y + 15);
+    // energía
+    ctx.fillStyle = '#0b1222'; ctx.fillRect(x + 4, y + 25, 224, 4);
+    ctx.fillStyle = staminaColor(p.stamina); ctx.fillRect(x + 4, y + 25, 2.24 * p.stamina, 4);
   }
 
   /** Minimapa (sólo si la cancha no entra en pantalla). */
@@ -491,11 +516,11 @@ PF.Render = (() => {
     panel(ctx, cx - 210, 14, 420, 62);
     ctx.textBaseline = 'middle';
     for (const team of [0, 1]) {
-      const s = team ? 1 : -1;
+      const right = m.sides[team] === 1, s = right ? 1 : -1;   // cada equipo en el lado donde juega
       ctx.fillStyle = PF.TEAM_COLORS[team];
-      ctx.fillRect(cx + s * 196 - (team ? 14 : 0), 14, 14, 62);
+      ctx.fillRect(cx + s * 196 - (right ? 14 : 0), 14, 14, 62);
       ctx.font = '16px Pixelify, monospace';
-      ctx.textAlign = team ? 'right' : 'left';
+      ctx.textAlign = right ? 'right' : 'left';
       ctx.fillStyle = '#a9b6d3';
       ctx.fillText(names[team], cx + s * 172, 30);
       // mini retratos (si caben)
@@ -542,7 +567,7 @@ PF.Render = (() => {
 
   // ---------------------------------------------------------------- frame
   function draw(ctx, m, opts = {}) {
-    const field = fieldFor(m.stadium);
+    const field = fieldFor(m.stadium, m.sides);
     const aids = opts.aids !== false;
     ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = '#0e1420';

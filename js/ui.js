@@ -15,6 +15,12 @@ PF.UI = (() => {
     return t.content.firstElementChild;
   }
 
+  const BENCH_MAX = 2;   // suplentes en partido rápido
+  const KEEPER_HELP = {
+    fixed: 'Arquero fijo: uno se queda en el arco y se mueve por el área grande.',
+    dynamic: 'Arquero dinámico: ataja el que esté más cerca del arco en cada momento.',
+  };
+
   const coinHTML = (n) => `<span class="coins"><i class="coin"></i>${n}</span>`;
 
   function toast(msg) {
@@ -119,7 +125,8 @@ PF.UI = (() => {
           ${chips('Formato', [[2, '2 vs 2'], [3, '3 vs 3'], [5, '5 vs 5']], setup.size)}
           ${chips('Tiempo', [[60, '1 min'], [120, '2 min'], [180, '3 min'], [300, '5 min']], setup.time)}
           ${chips('Rival', [['easy', 'Fácil'], ['normal', 'Normal'], ['hard', 'Difícil']], setup.diff)}
-          ${chips('Arquero', [['spider', 'Araña'], ['fixed', 'Fijo']], setup.keeper)}
+          ${chips('Arquero', [['fixed', 'Fijo'], ['dynamic', 'Dinámico']], setup.keeper)}
+          <em class="keeperhelp"></em>
         </div>
         <div class="setup stadiums"></div>
         <div class="grid"></div>
@@ -157,7 +164,7 @@ PF.UI = (() => {
       if (PF.isUnlocked(r)) {
         const i = setup.picks.indexOf(r.id);
         if (i >= 0) setup.picks.splice(i, 1);
-        else { setup.picks.push(r.id); while (setup.picks.length > setup.size) setup.picks.shift(); }
+        else { setup.picks.push(r.id); while (setup.picks.length > setup.size + BENCH_MAX) setup.picks.shift(); }
         PF.Audio.sfx.click();
       }
       PF.Save.save();
@@ -170,8 +177,8 @@ PF.UI = (() => {
           const name = g.dataset.name, v = b.dataset.v;
           if (name === 'Formato') {
             setup.size = +v;
-            while (setup.picks.length > setup.size) setup.picks.pop();
-            setup.keeper = setup.size >= 5 ? 'fixed' : 'spider';   // lo habitual en cada formato
+            while (setup.picks.length > setup.size + BENCH_MAX) setup.picks.pop();
+            setup.keeper = setup.size >= 5 ? 'fixed' : 'dynamic';   // lo habitual en cada formato
           }
           if (name === 'Tiempo') setup.time = +v;
           if (name === 'Rival') setup.diff = v;
@@ -184,7 +191,7 @@ PF.UI = (() => {
     });
 
     s.querySelector('[data-act=back]').onclick = onBack;
-    s.querySelector('[data-act=go]').onclick = () => { if (setup.picks.length === setup.size) onGo(); };
+    s.querySelector('[data-act=go]').onclick = () => { if (setup.picks.length >= setup.size) onGo(); };
 
     function buy(price, apply, label) {
       if (save.coins < price) { toast(`Te faltan ${price - save.coins} monedas.`); PF.Audio.sfx.fail(); return; }
@@ -261,7 +268,7 @@ PF.UI = (() => {
 
     function refreshBoard() {
       const slot = s.querySelector('.boardslot');
-      const defs = setup.picks.map((id) => Object.assign(PF.withAbility(PF.rosterById(id), setup.abil[id] || 0)));
+      const defs = setup.picks.slice(0, setup.size).map((id) => PF.withAbility(PF.rosterById(id), setup.abil[id] || 0));
       if (!defs.length) { slot.innerHTML = '<div class="empty">Elige tus Pokémon para acomodarlos.</div>'; slot.classList.remove('board'); return; }
       const key = setup.size + '-' + setup.keeper;
       setup.spots[key] = setup.spots[key] || {};
@@ -286,7 +293,7 @@ PF.UI = (() => {
         c.classList.toggle('on', i >= 0);
         c.classList.toggle('focus', r.id === focus);
         c.classList.toggle('locked', !un);
-        c.querySelector('.pick').textContent = i >= 0 ? String(i + 1) : '';
+        c.querySelector('.pick').textContent = i < 0 ? '' : i < setup.size ? String(i + 1) : 'S';
         c.querySelector('.lock').innerHTML = un ? '' : r.unlock.coins ? `<i class="coin"></i>${r.unlock.coins}` : '🔒 reto';
       });
       s.querySelector('.selhead .coins').outerHTML = coinHTML(save.coins);
@@ -294,12 +301,13 @@ PF.UI = (() => {
       refreshDetail();
       refreshBoard();
       const team = s.querySelector('.team');
-      team.innerHTML = `<span>Tu equipo</span>` + Array.from({ length: setup.size }, (_, i) => {
-        const r = setup.picks[i] && PF.rosterById(setup.picks[i]);
-        return `<b class="${r ? 'full' : ''}" style="--tc:${r ? r.color : '#5b6f99'}">${r ? r.name : '—'}</b>`;
+      s.querySelector('.keeperhelp').textContent = KEEPER_HELP[setup.keeper];
+      team.innerHTML = `<span>Tu equipo</span>` + Array.from({ length: setup.size + BENCH_MAX }, (_, i) => {
+        const r = setup.picks[i] && PF.rosterById(setup.picks[i]), sup = i >= setup.size;
+        return `<b class="${r ? 'full' : ''} ${sup ? 'sup' : ''}" style="--tc:${r ? r.color : '#5b6f99'}">${sup ? '<small>SUP</small> ' : ''}${r ? r.name : sup ? 'opcional' : '—'}</b>`;
       }).join('');
       const go = s.querySelector('[data-act=go]');
-      go.disabled = setup.picks.length !== setup.size;
+      go.disabled = setup.picks.length < setup.size;
       go.textContent = go.disabled ? `Elige ${setup.size - setup.picks.length} más` : '¡A la cancha!';
     }
 
@@ -350,23 +358,81 @@ PF.UI = (() => {
   }
 
   // ---------------------------------------------------------------- pausa / resultado
-  function pause(onResume, onRestart, onQuit, quitLabel = 'Salir al menú') {
+  function pause(onResume, onRestart, onQuit, quitLabel = 'Salir al menú', subs = null) {
     clear();
     const s = el(`
       <div class="screen">
         <div class="box menu">
           <h2>Pausa</h2>
           <button class="btn" data-act="resume">Seguir</button>
+          ${subs ? `<button class="btn" data-act="subs" ${subs.left > 0 && subs.bench > 0 ? '' : 'disabled'}>Cambios (${subs.left} restantes)</button>` : ''}
           <button class="btn" data-act="restart">Reiniciar partido</button>
           <button class="btn" data-act="quit">${quitLabel}</button>
           <div class="hint">J pase/placaje · K tiro · L habilidad · Espacio presionar · Q cambiar · T orden</div>
         </div>
       </div>`);
     s.querySelector('[data-act=resume]').onclick = onResume;
+    if (subs) s.querySelector('[data-act=subs]').onclick = subs.open;
     s.querySelector('[data-act=restart]').onclick = onRestart;
     s.querySelector('[data-act=quit]').onclick = onQuit;
     root().appendChild(s);
     s.querySelector('button').focus();
+  }
+
+  /**
+   * Cambios: elegir uno de la cancha y uno del banco. Muestra la energía de
+   * cada uno; los cambios se hacen al instante (el partido está en pausa).
+   */
+  function subs(m, onBack) {
+    clear();
+    const team = m.humanTeam;
+    let out = null, inn = null;
+    const s = el(`
+      <div class="screen">
+        <div class="box menu subs">
+          <h2>Cambios <small class="left"></small></h2>
+          <div class="subcols"><div class="field"><h3>En cancha</h3></div><div class="benchc"><h3>Banco</h3></div></div>
+          <div class="row">
+            <button class="btn" data-act="back">Volver</button>
+            <button class="btn big" data-act="do" disabled>Hacer el cambio</button>
+          </div>
+        </div>
+      </div>`);
+    const color = (v) => (v > 60 ? '#5fd68a' : v > 40 ? '#ffd23f' : v > 15 ? '#ff8a3d' : '#ff5a5f');
+    const row = (def, stamina, extra) => {
+      const r = el(`<div class="subrow" tabindex="0" role="button">
+        <canvas width="52" height="44"></canvas>
+        <div>${def.name} <small>${extra}</small></div>
+        <div class="ebar"><b style="width:${stamina}%;background:${color(stamina)}"></b></div></div>`);
+      portraits.push({ canvas: r.querySelector('canvas'), r: def, small: true });
+      return r;
+    };
+    function refresh() {
+      portraits = [];
+      s.querySelector('.left').textContent = `(${m.subsLeft[team]} restantes)`;
+      const f = s.querySelector('.field'), b = s.querySelector('.benchc');
+      f.querySelectorAll('.subrow').forEach((x) => x.remove());
+      b.querySelectorAll('.subrow').forEach((x) => x.remove());
+      for (const p of PF.Match.teamOf(m, team)) {
+        const r = row(p.def, Math.round(p.stamina), PF.ROLES[p.pos].short + (p === m.keeper[team] ? ' · arquero' : ''));
+        r.classList.toggle('on', p === out);
+        r.onclick = () => { out = p; refresh(); };
+        f.appendChild(r);
+      }
+      m.bench[team].forEach((seat, i) => {
+        const r = row(seat.def, Math.round(seat.stamina), PF.ROLES[PF.naturalRole(seat.def)].short);
+        r.classList.toggle('on', i === inn);
+        r.onclick = () => { inn = i; refresh(); };
+        b.appendChild(r);
+      });
+      s.querySelector('[data-act=do]').disabled = !(out && inn !== null && m.subsLeft[team] > 0);
+    }
+    s.querySelector('[data-act=back]').onclick = onBack;
+    s.querySelector('[data-act=do]').onclick = () => {
+      if (PF.Match.substitute(m, out, inn)) { out = null; inn = null; refresh(); }
+    };
+    root().appendChild(s);
+    refresh();
   }
 
   /** reward: { coins, lines: [[texto, monedas]], unlocked: [nombres] } */
@@ -395,5 +461,5 @@ PF.UI = (() => {
     s.querySelector('button').focus();
   }
 
-  return { clear, title, options, select, tickPortraits, addPortrait, clearPortraits, addEvolution, pause, result, toast };
+  return { clear, title, options, select, tickPortraits, addPortrait, clearPortraits, addEvolution, pause, subs, result, toast };
 })();

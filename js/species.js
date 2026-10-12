@@ -125,6 +125,54 @@
   PF.TYPE_ES = TYPE_ES;
   PF.EVOLVE = EVOLVE;
 
+  // ------------------------------------------------------------------ tabla de tipos
+  /** Ataque → tipos defensores con ×2, ×0,5 y ×0 (aquí ×0,25: casi no le afecta). */
+  const CHART = {
+    normal: { half: ['rock', 'steel'], zero: ['ghost'] },
+    fire: { double: ['grass', 'ice', 'bug', 'steel'], half: ['fire', 'water', 'rock', 'dragon'] },
+    water: { double: ['fire', 'ground', 'rock'], half: ['water', 'grass', 'dragon'] },
+    electric: { double: ['water', 'flying'], half: ['electric', 'grass', 'dragon'], zero: ['ground'] },
+    grass: { double: ['water', 'ground', 'rock'], half: ['fire', 'grass', 'poison', 'flying', 'bug', 'dragon', 'steel'] },
+    ice: { double: ['grass', 'ground', 'flying', 'dragon'], half: ['fire', 'water', 'ice', 'steel'] },
+    fighting: { double: ['normal', 'ice', 'rock', 'dark', 'steel'], half: ['poison', 'flying', 'psychic', 'bug', 'fairy'], zero: ['ghost'] },
+    poison: { double: ['grass', 'fairy'], half: ['poison', 'ground', 'rock', 'ghost'], zero: ['steel'] },
+    ground: { double: ['fire', 'electric', 'poison', 'rock', 'steel'], half: ['grass', 'bug'], zero: ['flying'] },
+    flying: { double: ['grass', 'fighting', 'bug'], half: ['electric', 'rock', 'steel'] },
+    psychic: { double: ['fighting', 'poison'], half: ['psychic', 'steel'], zero: ['dark'] },
+    bug: { double: ['grass', 'psychic', 'dark'], half: ['fire', 'fighting', 'poison', 'flying', 'ghost', 'steel', 'fairy'] },
+    rock: { double: ['fire', 'ice', 'flying', 'bug'], half: ['fighting', 'ground', 'steel'] },
+    ghost: { double: ['psychic', 'ghost'], half: ['dark'], zero: ['normal'] },
+    dragon: { double: ['dragon'], half: ['steel'], zero: ['fairy'] },
+    dark: { double: ['psychic', 'ghost'], half: ['fighting', 'dark', 'fairy'] },
+    steel: { double: ['ice', 'rock', 'fairy'], half: ['fire', 'water', 'electric', 'steel'] },
+    fairy: { double: ['fighting', 'dragon', 'dark'], half: ['fire', 'poison', 'steel'] },
+  };
+
+  /** Multiplicador de un ataque de tipo `att` contra un Pokémon de tipos `defTypes`. */
+  PF.typeEffect = (att, defTypes) => {
+    const c = CHART[att];
+    if (!c) return 1;
+    let k = 1;
+    for (const t of defTypes || []) {
+      if (c.double && c.double.includes(t)) k *= 2;
+      else if (c.half && c.half.includes(t)) k *= 0.5;
+      else if (c.zero && c.zero.includes(t)) k *= 0.25;
+    }
+    return k;
+  };
+
+  /** Tipo de cada habilidad (para la efectividad de sus golpes). */
+  PF.ABILITY_TYPE = {
+    zap: 'electric', quick: 'normal', fireshot: 'fire', embers: 'fire', hydro: 'water', puddle: 'water',
+    vine: 'grass', sleep: 'grass', phase: 'ghost', teleport: 'ghost', slam: 'normal', wall: 'rock',
+    confusion: 'psychic', sing: 'fairy', roll: 'fairy', throw: 'fighting', punch: 'fighting', ice: 'ice',
+    surf: 'water', dig: 'ground', aura: 'fighting', shuriken: 'water', splash: 'water', jump: 'normal',
+    psychic: 'psychic', psywave: 'psychic', adapt: null,
+  };
+
+  /** Tipos de un Pokémon (del plantel o de la Pokédex). */
+  PF.typesOf = (def) => def.types || (PF.POKEDEX[def.dex] && PF.POKEDEX[def.dex].types) || ['normal'];
+
   // ------------------------------------------------------------------ roles
   PF.ROLES = {
     POR: { label: 'Arquero', short: 'POR', color: '#9cff6b' },

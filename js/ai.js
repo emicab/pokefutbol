@@ -83,15 +83,17 @@ PF.AI = (() => {
 
   // ------------------------------------------------------------------ arquero
   /**
-   * Arquero (fijo, o araña con la pelota en su mitad):
+   * Arquero (fijo, o dinámico con la pelota en su mitad):
    *   1) tiro que viene al arco → ir al punto por donde cruza; estirarse si no llega
-   *   2) pelota suelta en el área y nadie más cerca → salir a por ella
+   *   2) pelota suelta en el área y él llega antes que los rivales → salir a por ella
    *   3) rival con la pelota cerca dentro del área → achicar (y placar si puede)
-   *   4) si no, sobre la línea, entre la pelota y el centro del arco
+   *   4) si no, se mueve por el área grande: adelantado (de líbero) con la
+   *      pelota lejos, sobre la línea cuando se acerca; siempre entre la
+   *      pelota y el centro del arco. Nunca sale del área.
    */
   function keeperThink(p, m, it, c) {
     const M = PF.Match, b = m.ball, s = p.skill;
-    const dir = M.dirOf(p.team), gx = M.ownGoalX(p.team);
+    const dir = M.dirOf(p.side), gx = M.ownGoalX(p.side);
     const lineX = gx + dir * 34;
     const maxY = F.goalHalf - 8;
     it.aim = c.aimBall;
@@ -109,24 +111,29 @@ PF.AI = (() => {
         }
       }
     }
-    if (!b.holder && M.inBox(p.team, b.x, b.y) && c.dMe < 170) {
-      moveTo(it, p, b.x, b.y);
-      return it;
+    if (!b.holder && M.inBox(p.side, b.x, b.y, 20)) {
+      const foeD = m.players.filter((q) => q.team !== p.team).reduce((d, q) => Math.min(d, U.dist(q.x, q.y, b.x, b.y)), Infinity);
+      if (c.dMe < foeD * 1.15 || c.dMe < 120) { moveTo(it, p, b.x, b.y); return it; }
     }
-    if (c.foeHolder && M.inBox(p.team, b.x, b.y, 50) && c.dHolder < 170) {
+    if (c.foeHolder && M.inBox(p.side, b.x, b.y, 50) && c.dHolder < 170) {
       moveTo(it, p, U.lerp(gx, b.x, 0.6), U.lerp(F.cy, b.y, 0.6));
       if (c.dHolder < 75 && p.tackleCd <= 0 && Math.random() < s.aggro) { it.aim = c.aimHolder; it.pass = true; }
       return it;
     }
-    const depth = 30 + Math.min(40, c.dMe * 0.05);
-    moveTo(it, p, gx + dir * depth, F.cy + U.clamp((b.y - F.cy) * 0.45, -maxY, maxY));
+    // cuanto más lejos la pelota, más se adelanta (hasta el 75 % del área)
+    const dGoal = U.dist(b.x, b.y, gx, F.cy);
+    const near = 1 - U.clamp((dGoal - 150) / 650, 0, 1);
+    const depth = U.lerp(F.boxW * 0.75, 30, near);
+    const ang = Math.atan2(b.y - F.cy, (b.x - gx) * dir);
+    const ty = F.cy + U.clamp(Math.sin(ang) * depth * 0.9 + (b.y - F.cy) * 0.25, -F.boxH * 0.6, F.boxH * 0.6);
+    moveTo(it, p, gx + dir * depth, Math.abs(depth) < 60 ? U.clamp(ty, F.cy - maxY, F.cy + maxY) : ty);
     if (Math.hypot(it.mx, it.my) < 0.05) it.aim = c.aimBall;
     return it;
   }
 
   /** Arquero con la pelota en las manos: pase a un compañero libre o despeje largo. */
   function keeperDistribute(p, m, it) {
-    const M = PF.Match, ai = p.ai, dirX = M.dirOf(p.team);
+    const M = PF.Match, ai = p.ai, dirX = M.dirOf(p.side);
     if (p.gkT < 0.7 + (p.slot % 3) * 0.15) return it;
     const mate = M.passTarget(m, p);
     if (mate && M.nearestFoeDist(m, mate, mate.x, mate.y) > 120) { it.pass = true; return it; }
@@ -165,7 +172,7 @@ PF.AI = (() => {
     else chase = ai.chasing ? dMe <= dOtherAI * 1.25 : dMe <= dOtherAI;
     if (dHuman < Infinity) chase = chase && dMe < dHuman * 0.7;
 
-    const ownX = p.team === 0 ? F.x0 : F.x1;
+    const ownX = p.side === 0 ? F.x0 : F.x1;
     const ownThird = Math.abs(b.x - ownX) < (F.x1 - F.x0) / 3;
     if (order === 'def') chase = (chase && ownThird) || dMe < 110;
     else if (order === 'atk') chase = chase && dMe < 220 && dMe < dHuman * 0.5;
@@ -175,9 +182,9 @@ PF.AI = (() => {
   function think(p, m, dt) {
     const s = p.skill, ai = p.ai, b = m.ball, M = PF.Match;
     const it = { mx: 0, my: 0, pass: false, shootHold: false, ability: false };
-    const dirX = p.team === 0 ? 1 : -1;
-    const goalX = p.team === 0 ? F.x1 : F.x0;
-    const ownX = p.team === 0 ? F.x0 : F.x1;
+    const dirX = p.side === 0 ? 1 : -1;
+    const goalX = p.side === 0 ? F.x1 : F.x0;
+    const ownX = p.side === 0 ? F.x0 : F.x1;
     const teamSize = M.teamOf(m, p.team).length;
     const foes = m.players.filter((q) => q.team !== p.team);
     const order = M.orderOf(m, p);
@@ -253,7 +260,7 @@ PF.AI = (() => {
     if (M.keeperOf(m, p.team) === p) {
       const ownHalf = (b.x - ownX) * dirX < (F.x1 - F.x0) * 0.5;
       if (p.fixedKeeper || ownHalf) return keeperThink(p, m, it, c);
-      // araña con la pelota lejos: líbero, atrás y sin salir a perseguir
+      // dinámico con la pelota lejos: líbero, atrás y sin salir a perseguir
       ai.chasing = false;
       const [tx, ty] = M.homeSpot(m, p, -0.25);
       moveTo(it, p, tx, ty);
