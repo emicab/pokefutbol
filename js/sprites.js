@@ -24,7 +24,10 @@ PF.Sprites = (() => {
   }
 
   function preload(dex) { for (const a of ANIMS) sheet(dex, a); }
-  function preloadAll() { for (const r of PF.ROSTER) preload(r.dex); }
+  /** Al arrancar: sólo tu equipo guardado (el resto se carga al aparecer en pantalla). */
+  function preloadAll() {
+    for (const id of PF.Save.data.setup.picks) { const r = PF.rosterById(id); if (r) preload(r.dex); }
+  }
 
   function anim(dex, name) {
     const m = PF.SPRITE_META[dex];

@@ -8,8 +8,10 @@ PF.Save = (() => {
   const KEY = 'pokefutbol.v1';
 
   const defaults = () => ({
+    v: 2,                         // versión del guardado (ver migrate)
     coins: 0,
-    unlocked: [],                 // ids de Pokémon comprados o ganados (los iniciales no hace falta)
+    unlocked: [],                 // ids de Pokémon comprados o ganados (los gratis no hace falta)
+    abil: {},                     // id → true: segunda habilidad comprada
     stadiums: ['estadio'],
     stats: { played: 0, won: 0, goals: 0, hardWins: 0, bigWins: 0 },
     settings: { music: 0.5, sfx: 0.8, aids: true, replays: true, keys: null },
@@ -25,8 +27,10 @@ PF.Save = (() => {
       const s = JSON.parse(raw);
       migrate(s);
       return {
+        v: 2,
         coins: s.coins | 0,
         unlocked: Array.isArray(s.unlocked) ? s.unlocked : [],
+        abil: s.abil && typeof s.abil === 'object' ? s.abil : {},
         stadiums: Array.isArray(s.stadiums) ? s.stadiums : d.stadiums,
         stats: Object.assign(d.stats, s.stats),
         settings: Object.assign(d.settings, s.settings),
@@ -60,6 +64,11 @@ PF.Save = (() => {
       }
     }
     if (s.career && s.career.spots && s.career.spots.spider) { s.career.spots.dynamic = s.career.spots.spider; delete s.career.spots.spider; }
+    // v2: la segunda habilidad pasa a comprarse; la que ya tenías elegida queda tuya
+    if (!s.v || s.v < 2) {
+      s.abil = s.abil || {};
+      if (s.setup && s.setup.abil) for (const [id, i] of Object.entries(s.setup.abil)) if (i === 1) s.abil[id] = true;
+    }
   }
 
   let data = load();

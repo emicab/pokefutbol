@@ -19,6 +19,7 @@ PF.UI = (() => {
   /** Una línea con las teclas actuales, para ayudas. */
   const hintLine = () => `${K.label('pass')} pase/placaje · ${K.label('shoot')} tiro · ${K.label('ability')} habilidad · ${K.label('press')} presionar · ${K.label('swap')} cambiar · ${K.label('order')} orden · ${K.label('subs')} cambios`;
   const BENCH_MAX = 2;   // suplentes en partido rápido
+  const selFilter = { tier: 'all', type: '', q: '' };   // filtros de la selección (se recuerdan al volver)
   const KEEPER_HELP = {
     fixed: 'Arquero fijo: uno es el arquero; sale a cerrar cuando hace falta y un compañero lo releva.',
     dynamic: 'Arquero dinámico: ataja el que esté más cerca del arco en cada momento.',
@@ -147,6 +148,7 @@ PF.UI = (() => {
     clear();
     const save = PF.Save.data, setup = save.setup;
     let focus = setup.picks[0] || PF.ROSTER[0].id;
+    let abFocus = null;   // { id, i }: habilidad sin comprar que se está mirando
 
     const s = el(`
       <div class="screen select">
@@ -162,6 +164,19 @@ PF.UI = (() => {
           <em class="keeperhelp"></em>
         </div>
         <div class="setup stadiums"></div>
+        <div class="filters">
+          <div class="chips" data-filter="tier"><span>Ver</span>
+            ${[['all', 'Todos'], ['mine', 'Míos'], ['f1', 'Fase 1'], ['f2', 'Fase 2'], ['f3', 'Fase 3'], ['strong', 'Fuertes'], ['elite', 'Élite'], ['legend', 'Legendarios']]
+              .map(([v, l]) => `<button data-v="${v}" class="${selFilter.tier === v ? 'on' : ''}">${l}</button>`).join('')}
+          </div>
+          <select class="typesel">
+            <option value="">Todos los tipos</option>
+            ${Object.entries(PF.TYPE_ES).filter(([k]) => PF.ROSTER.some((r) => PF.typesOf(r).includes(k)))
+              .map(([k, v]) => `<option value="${k}" ${selFilter.type === k ? 'selected' : ''}>${v}</option>`).join('')}
+          </select>
+          <input class="search" placeholder="Buscar…" value="${selFilter.q}" spellcheck="false" autocomplete="off">
+          <em class="count"></em>
+        </div>
         <div class="grid"></div>
         <div class="lower">
           <div class="detail box"></div>
@@ -178,19 +193,59 @@ PF.UI = (() => {
       </div>`);
 
     const grid = s.querySelector('.grid');
+    // con 151 Pokémon, sólo se animan (y se cargan) los retratos que se ven
+    function updateVisible() {
+      const top = grid.scrollTop - 60, bottom = grid.scrollTop + grid.clientHeight + 60;
+      s.querySelectorAll('.mini').forEach((c) => {
+        const y = c.offsetTop;
+        c._portrait.hidden = c.style.display === 'none' || y + c.offsetHeight < top || y > bottom;
+      });
+    }
+    grid.addEventListener('scroll', updateVisible, { passive: true });
     for (const r of PF.ROSTER) {
       const c = el(`
         <div class="mini" role="button" tabindex="0" data-id="${r.id}" style="--tc:${r.color}">
           <span class="pick"></span>
-          <canvas width="96" height="72"></canvas>
+          <canvas width="88" height="60"></canvas>
           <div class="nm">${r.name}</div>
           <div class="lock"></div>
         </div>`);
-      portraits.push({ canvas: c.querySelector('canvas'), r });
+      const p = { canvas: c.querySelector('canvas'), r, hidden: true };
+      c._portrait = p;
+      portraits.push(p);
       c.onclick = () => clickPokemon(r);
       c.onkeydown = (e) => { if (e.key === 'Enter') clickPokemon(r); };
       grid.appendChild(c);
     }
+
+    /** Filtros de la grilla: tier (o sólo los míos), tipo y búsqueda por nombre. */
+    function applyFilter() {
+      const q = selFilter.q.trim().toLowerCase();
+      let n = 0;
+      s.querySelectorAll('.mini').forEach((c) => {
+        const r = PF.rosterById(c.dataset.id);
+        const ok = (selFilter.tier === 'all' || (selFilter.tier === 'mine' ? PF.isUnlocked(r) : r.tier === selFilter.tier)) &&
+          (!selFilter.type || PF.typesOf(r).includes(selFilter.type)) &&
+          (!q || r.name.toLowerCase().includes(q) || String(r.dex) === q);
+        c.style.display = ok ? '' : 'none';
+        if (ok) n++;
+      });
+      s.querySelector('.filters .count').textContent = `${n} Pokémon`;
+      if (s.isConnected) updateVisible();
+    }
+    s.querySelectorAll('[data-filter=tier] button').forEach((b) => {
+      b.onclick = () => {
+        selFilter.tier = b.dataset.v;
+        s.querySelectorAll('[data-filter=tier] button').forEach((x) => x.classList.toggle('on', x === b));
+        PF.Audio.sfx.click();
+        applyFilter();
+        grid.scrollTop = 0;
+      };
+    });
+    s.querySelector('.typesel').onchange = (e) => { selFilter.type = e.target.value; applyFilter(); grid.scrollTop = 0; };
+    const search = s.querySelector('.search');
+    search.oninput = () => { selFilter.q = search.value; applyFilter(); grid.scrollTop = 0; };
+    search.onkeydown = (e) => e.stopPropagation();
 
     function clickPokemon(r) {
       focus = r.id;
@@ -266,12 +321,16 @@ PF.UI = (() => {
       const d = s.querySelector('.detail');
       const unlocked = PF.isUnlocked(r);
       const ai = setup.abil[r.id] || 0;
+      // la habilidad que se muestra: la elegida, o la que se tocó para ver/comprar
+      const shown = abFocus && abFocus.id === r.id ? abFocus.i : ai;
       d.style.setProperty('--tc', r.color);
       const role = PF.ROLES[PF.naturalRole(r)];
+      const tier = PF.TIERS[r.tier];
+      const types = PF.typesOf(r).map((t) => PF.TYPE_ES[t] || t).join(' / ');
       d.innerHTML = `
         <canvas width="120" height="104"></canvas>
         <div class="info">
-          <div class="name">${r.name} <small>${r.type}</small> <span class="rolechip" style="background:${role.color}">${role.short}</span></div>
+          <div class="name">${r.name} <small>#${r.dex} · ${types}</small> <span class="rolechip" style="background:${role.color}">${role.short}</span> <span class="tierchip t-${r.tier}">${tier.label}</span></div>
           ${statBar('Velocidad', (r.speed - 200) / 150)}
           ${statBar('Tiro', (r.power - 0.7) / 0.6)}
           ${statBar('Peso', r.mass / 2.8)}
@@ -279,14 +338,20 @@ PF.UI = (() => {
         </div>
         <div class="abil">
           <div class="abs">
-            ${r.abilities.map((a, i) => `<button class="abtn ${i === ai ? 'on' : ''}" data-i="${i}">${a.name} <small>${a.cd} s</small></button>`).join('')}
+            ${r.abilities.map((a, i) => `<button class="abtn ${i === ai ? 'on' : ''} ${i === shown && i !== ai ? 'peek' : ''} ${PF.abilityOwned(r, i) ? '' : 'locked'}" data-i="${i}">${PF.abilityOwned(r, i) ? '' : '🔒 '}${a.name} <small>${a.cd} s</small></button>`).join('')}
           </div>
-          <div class="ab">${r.abilities[ai].desc} <b>Recarga: ${r.abilities[ai].cd} s.</b></div>
+          <div class="ab">${r.abilities[shown].desc} <b>Recarga: ${r.abilities[shown].cd} s.</b></div>
           <div class="unlock"></div>
         </div>`;
       portraits.push({ canvas: d.querySelector('canvas'), r, big: true });
       d.querySelectorAll('.abtn').forEach((b) => {
-        b.onclick = () => { setup.abil[r.id] = +b.dataset.i; PF.Save.save(); PF.Audio.sfx.click(); refresh(); };
+        b.onclick = () => {
+          const i = +b.dataset.i;
+          if (PF.abilityOwned(r, i)) { setup.abil[r.id] = i; abFocus = null; PF.Save.save(); }
+          else abFocus = { id: r.id, i };   // sin comprar: se muestra y aparece el botón de compra
+          PF.Audio.sfx.click();
+          refresh();
+        };
       });
       const u = d.querySelector('.unlock');
       if (!unlocked) {
@@ -297,6 +362,11 @@ PF.UI = (() => {
         } else {
           u.innerHTML = `<span class="challenge">🔒 Reto: ${r.unlock.label}</span>`;
         }
+      } else if (!PF.abilityOwned(r, 1)) {
+        const price = PF.abilityPrice(r);
+        const b = el(`<button class="btn buy small">Comprar ${r.abilities[1].name} · <i class="coin"></i>${price}</button>`);
+        b.onclick = () => buy(price, () => { save.abil[r.id] = true; setup.abil[r.id] = 1; abFocus = null; }, r.abilities[1].name);
+        u.appendChild(b);
       }
     }
 
@@ -349,7 +419,11 @@ PF.UI = (() => {
     setup.picks = setup.picks.filter((id) => { const r = PF.rosterById(id); return r && PF.isUnlocked(r); });
     if (!PF.STADIUMS.some((x) => x.id === setup.stadium) || !save.stadiums.includes(setup.stadium)) setup.stadium = 'estadio';
     root().appendChild(s);
+    applyFilter();
     refresh();
+    const cur = s.querySelector(`.mini[data-id="${focus}"]`);
+    if (cur && cur.style.display !== 'none') grid.scrollTop = Math.max(0, cur.offsetTop - 8);
+    updateVisible();
   }
 
   /** Retrato animado de una especie (modo historia). */
@@ -365,7 +439,7 @@ PF.UI = (() => {
 
   function tickPortraits(t) {
     for (const p of portraits) {
-      if (!p.canvas.isConnected) continue;
+      if (p.hidden || !p.canvas.isConnected) continue;
       const g = p.canvas.getContext('2d');
       g.imageSmoothingEnabled = false;
       g.clearRect(0, 0, p.canvas.width, p.canvas.height);

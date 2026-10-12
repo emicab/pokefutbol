@@ -7,9 +7,8 @@
  * role       puesto natural (opcional; si no, sale de los stats: PF.naturalRole)
  * abilities  dos opciones; en la selección se elige cuál llevar.
  *            Cada `id` es una función de abilities.js.
- * unlock     sin él: disponible desde el principio.
- *            { coins }: se compra en la selección.
- *            { challenge, label }: se gana cumpliendo un reto (ver PF.CHALLENGES).
+ * unlock     lo pone species.js según el tier (PF.tierOf): sin él, disponible
+ *            desde el principio; { coins }: se compra; { challenge, label }: reto.
  */
 PF.ROSTER = [
   {
@@ -73,10 +72,9 @@ PF.ROSTER = [
     ],
   },
 
-  // ------------------------------------------------ desbloqueables
   {
     id: 'eevee', dex: 133, name: 'Eevee', type: 'Normal', color: '#d9a066',
-    speed: 325, power: 1.02, mass: 1.0, radius: 18, unlock: { coins: 200 },
+    speed: 325, power: 1.02, mass: 1.0, radius: 18,
     abilities: [
       { id: 'adapt', name: 'Adaptabilidad', cd: 8,
         desc: 'Cada vez usa una habilidad al azar de otro Pokémon. ¡Sorpresa!' },
@@ -86,7 +84,7 @@ PF.ROSTER = [
   },
   {
     id: 'psyduck', dex: 54, name: 'Psyduck', type: 'Agua', color: '#ffd84a',
-    speed: 290, power: 0.95, mass: 1.05, radius: 18, unlock: { coins: 200 },
+    speed: 290, power: 0.95, mass: 1.05, radius: 18,
     abilities: [
       { id: 'confusion', name: 'Confusión', cd: 9,
         desc: 'Los rivales cercanos dan vueltas mareados y sueltan la pelota.' },
@@ -96,7 +94,7 @@ PF.ROSTER = [
   },
   {
     id: 'jigglypuff', dex: 39, name: 'Jigglypuff', type: 'Hada', color: '#ff9ccf',
-    speed: 285, power: 0.9, mass: 0.85, radius: 17, unlock: { coins: 250 },
+    speed: 285, power: 0.9, mass: 0.85, radius: 17,
     abilities: [
       { id: 'sing', name: 'Canto', cd: 12,
         desc: 'Todos los rivales cerca de ti se duermen escuchándote.' },
@@ -106,7 +104,7 @@ PF.ROSTER = [
   },
   {
     id: 'machamp', dex: 68, name: 'Machamp', type: 'Lucha', color: '#9fb6d6',
-    speed: 285, power: 1.22, mass: 1.8, radius: 23, role: 'DEF', unlock: { coins: 350 },
+    speed: 285, power: 1.22, mass: 1.8, radius: 23, role: 'DEF',
     abilities: [
       { id: 'throw', name: 'Sísmico', cd: 9,
         desc: 'Agarra al rival más cercano y lo lanza lejos.' },
@@ -116,7 +114,7 @@ PF.ROSTER = [
   },
   {
     id: 'lapras', dex: 131, name: 'Lapras', type: 'Hielo', color: '#7fd4f0',
-    speed: 262, power: 1.15, mass: 2.0, radius: 25, scale: 0.85, unlock: { coins: 400 },
+    speed: 262, power: 1.15, mass: 2.0, radius: 25, scale: 0.85,
     abilities: [
       { id: 'ice', name: 'Rayo Hielo', cd: 9,
         desc: 'Congela el suelo delante: los rivales patinan y van lentos 6 s.' },
@@ -126,7 +124,7 @@ PF.ROSTER = [
   },
   {
     id: 'onix', dex: 95, name: 'Onix', type: 'Roca', color: '#a9a39a',
-    speed: 252, power: 1.1, mass: 2.8, radius: 29, scale: 0.6, unlock: { coins: 400 },
+    speed: 252, power: 1.1, mass: 2.8, radius: 29, scale: 0.6,
     abilities: [
       { id: 'wall', name: 'Bloqueo', cd: 10,
         desc: '3,5 s hecho una muralla: inamovible, rebota tiros y rivales.' },
@@ -136,7 +134,7 @@ PF.ROSTER = [
   },
   {
     id: 'alakazam', dex: 65, name: 'Alakazam', type: 'Psíquico', color: '#e8b84a',
-    speed: 330, power: 1.15, mass: 1.0, radius: 19, unlock: { coins: 500 },
+    speed: 330, power: 1.15, mass: 1.0, radius: 19,
     abilities: [
       { id: 'psybeam', name: 'Psicorrayo', cd: 8,
         desc: 'Esfera psíquica que persigue al rival más cercano y lo aturde.' },
@@ -146,7 +144,7 @@ PF.ROSTER = [
   },
   {
     id: 'jolteon', dex: 135, name: 'Jolteon', type: 'Eléctrico', color: '#f6d32d',
-    speed: 350, power: 1.05, mass: 0.95, radius: 18, unlock: { coins: 600 },
+    speed: 350, power: 1.05, mass: 0.95, radius: 18,
     abilities: [
       { id: 'pinmissile', name: 'Pin Misil', cd: 9,
         desc: 'Cinco agujas en abanico que aturden al que tocan.' },
@@ -157,7 +155,6 @@ PF.ROSTER = [
   {
     id: 'magikarp', dex: 129, name: 'Magikarp', type: 'Agua', color: '#ff7a4a',
     speed: 235, power: 0.75, mass: 0.8, radius: 17,
-    unlock: { challenge: 'played5', label: 'Juega 5 partidos' },
     abilities: [
       { id: 'splash', name: 'Salpicadura', cd: 3,
         desc: '¡Pero no pasa nada! ...casi nunca.' },
@@ -168,7 +165,6 @@ PF.ROSTER = [
   {
     id: 'mewtwo', dex: 150, name: 'Mewtwo', type: 'Psíquico', color: '#c58ae0',
     speed: 340, power: 1.3, mass: 1.3, radius: 21,
-    unlock: { challenge: 'hardWin', label: 'Gana un partido en Difícil' },
     abilities: [
       { id: 'psychic', name: 'Psíquico', cd: 14,
         desc: 'Trae la pelota con la mente desde cualquier lugar de la cancha.' },
@@ -178,16 +174,37 @@ PF.ROSTER = [
   },
 ];
 
-/** Retos que desbloquean Pokémon. Reciben las estadísticas guardadas. */
+// El resto de la Gen 1 (y el precio o reto de cada uno según su fase) lo
+// agrega species.js: ver PF.tierOf.
+
+/** Retos que desbloquean Pokémon (los legendarios). Reciben las estadísticas guardadas. */
 PF.CHALLENGES = {
   played5: (st) => st.played >= 5,
   hardWin: (st) => st.hardWins >= 1,
+  hardWins5: (st) => st.hardWins >= 5,
+  bigWins3: (st) => st.bigWins >= 3,
+  goals50: (st) => st.goals >= 50,
+  won15: (st) => st.won >= 15,
 };
 
 PF.rosterById = (id) => PF.ROSTER.find((r) => r.id === id);
 
 /** ¿Se puede elegir ya este Pokémon? */
 PF.isUnlocked = (r) => !r.unlock || PF.Save.data.unlocked.includes(r.id);
+
+/** ¿Tiene esa habilidad? La primera siempre; la segunda se compra (PF.abilityPrice). */
+PF.abilityOwned = (r, i) => i === 0 || !!PF.Save.data.abil[r.id];
+PF.abilityPrice = (r) => (PF.TIERS[r.tier] || PF.TIERS.f1).abil;
+
+/** Quita del equipo guardado lo que ya no vale (bloqueados, habilidades sin comprar). */
+PF.sanitizeSetup = () => {
+  const setup = PF.Save.data.setup;
+  setup.picks = setup.picks.filter((id) => { const r = PF.rosterById(id); return r && PF.isUnlocked(r); });
+  for (const id of Object.keys(setup.abil)) {
+    const r = PF.rosterById(id);
+    if (!r || !PF.abilityOwned(r, setup.abil[id])) setup.abil[id] = 0;
+  }
+};
 
 /** Copia del Pokémon con la habilidad elegida en `def.ability`. */
 PF.withAbility = (r, i) => Object.assign({}, r, { ability: r.abilities[i] || r.abilities[0] });

@@ -335,6 +335,8 @@ PF.Match = (() => {
       get() { return this.humanTeam >= 0 ? this.orders[this.humanTeam] : 0; },
       set(v) { if (this.humanTeam >= 0) this.orders[this.humanTeam] = v; },
     });
+    // sprites de todos los que pueden aparecer (se cargan mientras arranca el saque)
+    for (const defs of opts.teams.concat(opts.bench || [])) for (const d of defs) PF.Sprites.preload(d.dex);
     opts.teams.forEach((defs, team) => {
       const given = opts.formations && opts.formations[team];
       const spots = given && given.length === defs.length ? given : autoFormation(defs, keeperMode);

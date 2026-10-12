@@ -22,7 +22,7 @@
   const TYPE_ABILITIES = {
     normal: ['quick', 'slam'], fire: ['fireshot', 'embers'], water: ['hydro', 'puddle'], grass: ['vine', 'sleep'],
     electric: ['zap', 'quick'], ice: ['ice', 'surf'], fighting: ['punch', 'throw'], poison: ['sleep', 'embers'],
-    ground: ['dig', 'wall'], flying: ['quick', 'jump'], psychic: ['confusion', 'psywave'], bug: ['shuriken', 'quick'],
+    ground: ['dig', 'wall'], flying: ['quick', 'jump'], psychic: ['confusion', 'psywave'], bug: ['pinmissile', 'quick'],
     rock: ['wall', 'dig'], ghost: ['phase', 'teleport'], dragon: ['surf', 'psywave'], dark: ['teleport', 'shuriken'],
     steel: ['wall', 'aura'], fairy: ['sing', 'roll'],
   };
@@ -69,6 +69,9 @@
   Object.assign(ABILITY_INFO, {
     teleport: { id: 'teleport', name: 'Teletransporte', cd: 6, desc: 'Desapareces y reapareces más adelante, con la pelota incluida.' },
     quick: { id: 'quick', name: 'Ataque Rápido', cd: 5, desc: 'Embestida veloz sin soltar la pelota: arrolla a quien se cruce.' },
+    pinmissile: { id: 'pinmissile', name: 'Pin Misil', cd: 9, desc: 'Cinco agujas en abanico que aturden al que tocan.' },
+    shuriken: { id: 'shuriken', name: 'Shuriken de Agua', cd: 8, desc: 'Tres estrellas de agua en abanico que tumban al que tocan.' },
+    aura: { id: 'aura', name: 'Esfera Aural', cd: 9, desc: 'Esfera que persigue al rival más cercano y lo tumba.' },
   });
 
   /** Evoluciones que cambian tanto que no heredan (Gyarados no salpica; las Eeveelutions son de su tipo). */
@@ -86,7 +89,7 @@
     const t1 = TYPE_ABILITIES[types[0]] || TYPE_ABILITIES.normal;
     const t2 = types[1] && TYPE_ABILITIES[types[1]];
     const ids = t2 && t2[0] !== t1[0] ? [t1[0], t2[0]] : t1;
-    return ids.map((id) => ABILITY_INFO[id]);
+    return ids.map((id) => ABILITY_INFO[id] || ABILITY_INFO.quick);
   }
 
   const cache = {};
@@ -96,7 +99,8 @@
     const d = PF.POKEDEX[dex];
     if (!d) throw new Error('Especie sin datos: ' + dex);
     const heavy = d.types.some((t) => t === 'rock' || t === 'steel' || t === 'ground') ? 0.6 : 0;
-    const mass = 0.75 + ((d.hp - 79) / 63) * 2 + Math.max(0, d.bst - 450) / 230 * 0.4 + heavy;
+    // tope 2,8 (Onix): Chansey, con PS enormes, sería una pared imposible de mover
+    const mass = Math.min(2.8, 0.75 + ((d.hp - 79) / 63) * 2 + Math.max(0, d.bst - 450) / 230 * 0.4 + heavy);
     const walk = PF.SPRITE_META[dex] && PF.SPRITE_META[dex].a.Walk;
     const h = walk ? walk.h : 40;
     const radius = Math.round(Math.min(30, Math.max(16 + (mass - 0.75) * 4, 12 + h * 0.2)));
@@ -216,6 +220,81 @@
 
   /** Puesto de una posición de la pizarra según la profundidad (0 = arco propio). */
   PF.zoneRole = (depth) => (depth < 0.1 ? 'POR' : depth < 0.34 ? 'DEF' : depth < 0.56 ? 'MED' : 'DEL');
+
+  // ------------------------------------------------------------------ plantel completo (Gen 1)
+  /**
+   * Familias de la primera generación (sólo evoluciones de la Gen 1), para
+   * saber la fase de cada uno. Eevee: sus tres evoluciones son fase 2.
+   */
+  const FAMILIES = [
+    [1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12], [13, 14, 15], [16, 17, 18], [19, 20], [21, 22], [23, 24],
+    [25, 26], [27, 28], [29, 30, 31], [32, 33, 34], [35, 36], [37, 38], [39, 40], [41, 42], [43, 44, 45],
+    [46, 47], [48, 49], [50, 51], [52, 53], [54, 55], [56, 57], [58, 59], [60, 61, 62], [63, 64, 65],
+    [66, 67, 68], [69, 70, 71], [72, 73], [74, 75, 76], [77, 78], [79, 80], [81, 82], [83], [84, 85],
+    [86, 87], [88, 89], [90, 91], [92, 93, 94], [95], [96, 97], [98, 99], [100, 101], [102, 103], [104, 105],
+    [106], [107], [108], [109, 110], [111, 112], [113], [114], [115], [116, 117], [118, 119], [120, 121],
+    [122], [123], [124], [125], [126], [127], [128], [129, 130], [131], [132], [133, 134], [135], [136],
+    [137], [138, 139], [140, 141], [142], [143], [144], [145], [146], [147, 148, 149], [150], [151],
+  ];
+  const STAGE = {}, SINGLE = new Set();
+  for (const f of FAMILIES) {
+    f.forEach((d, i) => { STAGE[d] = i + 1; });
+    if (f.length === 1) SINGLE.add(f[0]);
+  }
+  STAGE[135] = STAGE[136] = 2; SINGLE.delete(135); SINGLE.delete(136);   // Jolteon y Flareon también vienen de Eevee
+
+  /** Legendarios: se ganan con un reto (ver PF.CHALLENGES). */
+  const LEGENDS = {
+    144: { challenge: 'bigWins3', label: 'Gana 3 partidos por 3 goles o más' },
+    145: { challenge: 'goals50', label: 'Mete 50 goles' },
+    146: { challenge: 'won15', label: 'Gana 15 partidos' },
+    150: { challenge: 'hardWin', label: 'Gana un partido en Difícil' },
+    151: { challenge: 'hardWins5', label: 'Gana 5 partidos en Difícil' },
+  };
+  /** Los más poderosos (fuera de los legendarios). */
+  const ELITE = new Set([130, 143, 149]);
+
+  /**
+   * Tiers del partido rápido:
+   *   f1      fase 1 (sin preevolución en la Gen 1): gratis
+   *   f2      fase 2: 150 monedas
+   *   f3      fase 3, o sin evolución pero fuerte (stats ≥ 490): 300
+   *   elite   Dragonite, Gyarados, Snorlax: 500
+   *   legend  legendarios: por reto
+   * abil = precio de la segunda habilidad.
+   */
+  const TIERS = {
+    f1: { id: 'f1', label: 'Fase 1', price: 0, abil: 60 },
+    f2: { id: 'f2', label: 'Fase 2', price: 150, abil: 90 },
+    f3: { id: 'f3', label: 'Fase 3', price: 300, abil: 120 },
+    strong: { id: 'strong', label: 'Fuerte', price: 300, abil: 120 },
+    elite: { id: 'elite', label: 'Élite', price: 500, abil: 150 },
+    legend: { id: 'legend', label: 'Legendario', price: 0, abil: 200 },
+  };
+  PF.TIERS = TIERS;
+  PF.tierOf = (dex) => {
+    if (LEGENDS[dex]) return TIERS.legend;
+    if (ELITE.has(dex)) return TIERS.elite;
+    if (SINGLE.has(dex)) return PF.POKEDEX[dex] && PF.POKEDEX[dex].bst >= 490 ? TIERS.strong : TIERS.f1;
+    return TIERS[['f1', 'f2', 'f3'][(STAGE[dex] || 1) - 1]];
+  };
+  const unlockFor = (dex) => {
+    const t = PF.tierOf(dex);
+    if (t.id === 'legend') return LEGENDS[dex];
+    return t.price ? { coins: t.price } : undefined;
+  };
+  const slug = (name) => name.toLowerCase().replace('♀', 'f').replace('♂', 'm').normalize('NFD').replace(/[^a-z0-9]/g, '');
+
+  // Los del plantel hecho a mano conservan stats y habilidades, pero se
+  // desbloquean por su tier; el resto de la Gen 1 sale de la Pokédex.
+  for (const r of PF.ROSTER) { r.tier = PF.tierOf(r.dex).id; r.unlock = unlockFor(r.dex); }
+  const made = new Set(PF.ROSTER.map((r) => r.dex));
+  for (let dex = 1; dex <= 151; dex++) {
+    if (made.has(dex) || !PF.POKEDEX[dex]) continue;
+    const sp = PF.species(dex);
+    PF.ROSTER.push(Object.assign({}, sp, { id: slug(sp.name), tier: PF.tierOf(dex).id, unlock: unlockFor(dex), evolve: undefined }));
+  }
+  PF.ROSTER.sort((a, b) => a.dex - b.dex);
 
   // ------------------------------------------------------------------ modo historia
   PF.CAREER_STARTERS = [4, 7, 1, 25];

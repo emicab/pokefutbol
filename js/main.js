@@ -528,8 +528,13 @@
 
   // ---------------------------------------------------------------- arranque
   PF.debug = { get match() { return match; }, get screen() { return screen; }, get online() { return online; } };   // para la consola
+  // retos ya cumplidos (por si se agregaron Pokémon nuevos) y equipo guardado al día
+  const startUnlocked = checkChallenges();
+  PF.sanitizeSetup();
+  PF.Save.save();
   PF.Sprites.preloadAll();
   applySettings();
+  if (startUnlocked.length) setTimeout(() => PF.UI.toast(`¡Desbloqueaste: ${startUnlocked.join(', ')}!`), 1200);
   const fontReady = document.fonts ? document.fonts.load('20px Pixelify') : Promise.resolve();
   fontReady.catch(() => {}).then(() => {
     toTitle();

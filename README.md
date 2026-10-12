@@ -124,7 +124,8 @@ Pelota gigante, Pelota loca (hace curvas) e Imán (atrae la pelota suelta).
 
 Cada partido da monedas: por jugar, ganar o empatar, cada gol y la valla
 invicta, multiplicadas por la dificultad y la duración. Con ellas se compran
-Pokémon y canchas en la selección. Algunos Pokémon se ganan con retos. Todo
+Pokémon, segundas habilidades y canchas en la selección (ver
+[Plantel](#plantel)). Los legendarios se ganan con retos. Todo
 se guarda en el navegador (`localStorage`); en Opciones se puede borrar.
 
 ### Energía y cambios
@@ -222,27 +223,46 @@ versión del juego (por ejemplo, compartiendo la carpeta).
 
 ## Plantel
 
-Por ahora todos los Pokémon son de la **primera generación**. Cada uno tiene
-dos habilidades; se elige cuál llevar en la selección.
+Están los **151 Pokémon de la primera generación**. Se desbloquean según su
+fase (sólo cuentan las evoluciones de la Gen 1):
 
-| Pokémon | Habilidad 1 | Habilidad 2 | Se consigue |
+| Tier | Quiénes | Cuesta | 2ª habilidad |
 |---|---|---|---|
-| Pikachu | **Impactrueno**: aturde a los rivales cercanos | **Ataque Rápido**: embestida sin soltar la pelota | inicial |
-| Charmander | **Tiro Ígneo**: bola de fuego que atraviesa y derriba | **Ascuas**: rastro de fuego | inicial |
-| Squirtle | **Hidrobomba**: abanico que barre rivales y pelota | **Charco**: los rivales patinan | inicial |
-| Bulbasaur | **Látigo Cepa**: trae la pelota a distancia | **Somnífero**: nube que duerme | inicial |
-| Gengar | **Intangible**: 3 s sin que nadie te toque | **Teletransporte**: reaparece más adelante | inicial |
-| Snorlax | **Golpe Cuerpo**: salto y onda expansiva | **Bloqueo**: muralla que rebota tiros | inicial |
-| Eevee | **Adaptabilidad**: una habilidad al azar de otro | **Ataque Rápido** | 200 |
-| Psyduck | **Confusión**: los rivales dan vueltas mareados | **Hidrobomba** | 200 |
-| Jigglypuff | **Canto**: duerme a los rivales cercanos | **Rodar**: arrolla a todo el que se cruce | 250 |
-| Machamp | **Sísmico**: agarra y lanza al rival | **Puño Dinámico**: tumba y despeja | 350 |
-| Lapras | **Rayo Hielo**: suelo congelado | **Surf**: ola que arrastra todo | 400 |
-| Onix | **Bloqueo** | **Excavar**: bajo tierra y sale tumbando | 400 |
-| Alakazam | **Psicorrayo**: esfera que persigue al rival y lo aturde | **Teletransporte** | 500 |
-| Jolteon | **Pin Misil**: cinco agujas en abanico | **Ataque Rápido** | 600 |
-| Magikarp | **Salpicadura**: no pasa nada… casi nunca | **Salto**: enorme e inútil | reto: juega 5 partidos |
-| Mewtwo | **Psíquico**: trae la pelota desde donde sea | **Onda Mental**: aparta a todos | reto: gana en Difícil |
+| Fase 1 | sin preevolución (Bulbasaur, Pikachu, Eevee, Magikarp, Onix…) | gratis | 60 |
+| Fase 2 | Ivysaur, Raichu, Jolteon, Golbat… | 150 | 90 |
+| Fase 3 | Venusaur, Charizard, Gengar, Alakazam, Machamp… | 300 | 120 |
+| Fuerte | sin evolución y con muchos stats: Lapras, Aerodactyl, Scyther, Pinsir, Kangaskhan, Tauros, Electabuzz, Magmar | 300 | 120 |
+| Élite | Dragonite, Gyarados, Snorlax | 500 | 150 |
+| Legendario | Articuno (gana 3 partidos por 3+ goles), Zapdos (mete 50 goles), Moltres (gana 15 partidos), Mewtwo (gana en Difícil), Mew (gana 5 en Difícil) | reto | 200 |
+
+Cada Pokémon tiene dos habilidades: la primera viene con él y **la segunda se
+compra** en la selección (tocándola aparece el botón). La selección tiene
+filtros por tier y tipo, y un buscador.
+
+Dieciséis tienen stats y habilidades hechas a mano:
+
+| Pokémon | Habilidad 1 | Habilidad 2 |
+|---|---|---|
+| Pikachu | **Impactrueno**: aturde a los rivales cercanos | **Ataque Rápido**: embestida sin soltar la pelota |
+| Charmander | **Tiro Ígneo**: bola de fuego que atraviesa y derriba | **Ascuas**: rastro de fuego |
+| Squirtle | **Hidrobomba**: abanico que barre rivales y pelota | **Charco**: los rivales patinan |
+| Bulbasaur | **Látigo Cepa**: trae la pelota a distancia | **Somnífero**: nube que duerme |
+| Gengar | **Intangible**: 3 s sin que nadie te toque | **Teletransporte**: reaparece más adelante |
+| Snorlax | **Golpe Cuerpo**: salto y onda expansiva | **Bloqueo**: muralla que rebota tiros |
+| Eevee | **Adaptabilidad**: una habilidad al azar de otro | **Ataque Rápido** |
+| Psyduck | **Confusión**: los rivales dan vueltas mareados | **Hidrobomba** |
+| Jigglypuff | **Canto**: duerme a los rivales cercanos | **Rodar**: arrolla a todo el que se cruce |
+| Machamp | **Sísmico**: agarra y lanza al rival | **Puño Dinámico**: tumba y despeja |
+| Lapras | **Rayo Hielo**: suelo congelado | **Surf**: ola que arrastra todo |
+| Onix | **Bloqueo** | **Excavar**: bajo tierra y sale tumbando |
+| Alakazam | **Psicorrayo**: esfera que persigue al rival y lo aturde | **Teletransporte** |
+| Jolteon | **Pin Misil**: cinco agujas en abanico | **Ataque Rápido** |
+| Magikarp | **Salpicadura**: no pasa nada… casi nunca | **Salto**: enorme e inútil |
+| Mewtwo | **Psíquico**: trae la pelota desde donde sea | **Onda Mental**: aparta a todos |
+
+El resto saca los stats de la Pokédex (velocidad, tiro, peso y tamaño) y las
+habilidades de su línea evolutiva (Charizard juega como Charmander) o de su
+tipo (`js/species.js`).
 
 ## Código
 
