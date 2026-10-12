@@ -78,6 +78,8 @@
     const setup = PF.Save.data.setup;
     const all = setup.picks.map((id) => PF.withAbility(PF.rosterById(id), setup.abil[id] || 0));
     const mine = all.slice(0, setup.size), bench = all.slice(setup.size);
+    // equipo incompleto: el resto, al azar (casi siempre fase 1)
+    for (const id of PF.randomFill(setup.picks, setup.size - mine.length)) mine.push(PF.withAbility(PF.rosterById(id), 0));
     const rival = pickRival(setup.picks, setup.size + 2).map(randomAbility);
     const key = setup.size + '-' + setup.keeper;
     setup.spots[key] = setup.spots[key] || {};
@@ -102,11 +104,24 @@
     for (const l of lines) l[1] = Math.round(l[1] * mult);
     const coins = lines.reduce((s, l) => s + l[1], 0);
     save.coins += coins;
+    countPlays(m, 0);
     countStats(m, setup.diff);
     const unlocked = checkChallenges();
     PF.Save.save();
     if (coins) PF.Audio.sfx.coin();
     return { coins, lines, unlocked };
+  }
+
+  /**
+   * Suma un partido a cada Pokémon del equipo `team` que jugó (también los que
+   * entraron o salieron de cambio) y avisa si con eso ya se puede comprar alguna evolución.
+   */
+  function countPlays(m, team) {
+    const ids = m.players.concat(m.retired).filter((p) => p.team === team).map((p) => PF.rosterIdOfDex(p.def.dex));
+    const before = PF.ROSTER.filter((r) => !PF.isUnlocked(r) && r.unlock && r.unlock.needs && PF.canBuy(r).ok).map((r) => r.id);
+    PF.addPlays(ids);
+    const now = PF.ROSTER.filter((r) => !PF.isUnlocked(r) && r.unlock && r.unlock.needs && PF.canBuy(r).ok && !before.includes(r.id));
+    if (now.length) setTimeout(() => PF.UI.toast(`¡Ya puedes comprar a ${now.map((r) => r.name).join(', ')}!`), 600);
   }
 
   function countStats(m, diff) {
@@ -172,6 +187,7 @@
     toMenu();
     PF.Audio.setAmbience(0.25);
     const res = C.applyMatch(m, opp);
+    countPlays(m, 0);
     countStats(m, opp.diff);
     const unlocked = checkChallenges();
     PF.Save.save();
@@ -305,7 +321,7 @@
     const key = (x) => x.id + ':' + x.a;
     const fill = (picks, n) => {
       const out = picks.filter((x) => PF.rosterById(x.id));
-      while (out.length < n) out.push({ id: PF.U.pick(PF.ROSTER).id, a: Math.random() < 0.5 ? 0 : 1 });
+      for (const id of PF.randomFill(out.map((x) => x.id), n - out.length)) out.push({ id, a: 0 });
       return out;
     };
     const nHost = pvp ? size : Math.ceil(size / 2), nGuest = size - (pvp ? 0 : nHost);
@@ -367,6 +383,7 @@
     if (m.score[team]) lines.push([`Goles (${m.score[team]})`, 10 * m.score[team]]);
     const coins = lines.reduce((s, l) => s + l[1], 0);
     save.coins += coins;
+    countPlays(m, team);
     PF.Save.save();
     PF.Audio.sfx.coin();
     return { coins, lines, unlocked: [] };

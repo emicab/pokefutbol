@@ -78,12 +78,13 @@
   const NO_INHERIT = new Set([130, 134, 135, 136]);
 
   function abilitiesFor(dex, types) {
+    // (el modo historia usa dos; los movimientos extra de las evoluciones son del partido rápido)
     const own = PF.ROSTER.find((x) => x.dex === dex);
-    if (own) return own.abilities;
+    if (own) return own.abilities.slice(0, 2);
     // 1) alguien de su línea está en el plantel a mano: hereda sus habilidades
     for (const d of NO_INHERIT.has(dex) ? [] : lineOf(dex)) {
       const r = PF.ROSTER.find((x) => x.dex === d);
-      if (r) return r.abilities;
+      if (r) return r.abilities.slice(0, 2);
     }
     // 2) por tipo: la primera de cada tipo, o las dos del único tipo
     const t1 = TYPE_ABILITIES[types[0]] || TYPE_ABILITIES.normal;
@@ -256,21 +257,31 @@
 
   /**
    * Tiers del partido rápido:
-   *   f1      fase 1 (sin preevolución en la Gen 1): gratis
-   *   f2      fase 2: 150 monedas
-   *   f3      fase 3, o sin evolución pero fuerte (stats ≥ 490): 300
-   *   elite   Dragonite, Gyarados, Snorlax: 500
+   *   f1      fase 1 (sin preevolución en la Gen 1): 80 monedas (gratis los iniciales: FREE)
+   *   f2      fase 2: 150, teniendo su preevolución y 5 partidos con ella
+   *   f3      fase 3: 300, teniendo su fase 2 y 8 partidos con ella
+   *   strong  sin evolución pero fuerte (stats ≥ 490): 300
+   *   elite   Dragonite, Gyarados, Snorlax: 500 (+ requisito de evolución si tienen)
    *   legend  legendarios: por reto
-   * abil = precio de la segunda habilidad.
+   * abil = precio de la segunda habilidad (las siguientes, algo más: PF.abilityPrice).
+   * moves = cuántas habilidades tiene (las evoluciones aprenden más).
    */
   const TIERS = {
-    f1: { id: 'f1', label: 'Fase 1', price: 0, abil: 60 },
-    f2: { id: 'f2', label: 'Fase 2', price: 150, abil: 90 },
-    f3: { id: 'f3', label: 'Fase 3', price: 300, abil: 120 },
-    strong: { id: 'strong', label: 'Fuerte', price: 300, abil: 120 },
-    elite: { id: 'elite', label: 'Élite', price: 500, abil: 150 },
-    legend: { id: 'legend', label: 'Legendario', price: 0, abil: 200 },
+    f1: { id: 'f1', label: 'Fase 1', price: 80, abil: 60, moves: 2 },
+    f2: { id: 'f2', label: 'Fase 2', price: 150, abil: 90, moves: 3 },
+    f3: { id: 'f3', label: 'Fase 3', price: 300, abil: 120, moves: 4 },
+    strong: { id: 'strong', label: 'Fuerte', price: 300, abil: 120, moves: 3 },
+    elite: { id: 'elite', label: 'Élite', price: 500, abil: 150, moves: 4 },
+    legend: { id: 'legend', label: 'Legendario', price: 0, abil: 200, moves: 4 },
   };
+  /** Los iniciales de siempre: los únicos que vienen desde el principio. */
+  const FREE = new Set([1, 4, 7, 25]);
+  /** Partidos con la preevolución para poder comprar la evolución, según su fase. */
+  const PLAYS_TO_EVOLVE = { 2: 5, 3: 8 };
+  // preevolución de cada uno (Gen 1)
+  const PREV = {};
+  for (const f of FAMILIES) for (let i = 1; i < f.length; i++) PREV[f[i]] = f[i - 1];
+  PREV[135] = PREV[136] = 133;
   PF.TIERS = TIERS;
   PF.tierOf = (dex) => {
     if (LEGENDS[dex]) return TIERS.legend;
@@ -278,21 +289,59 @@
     if (SINGLE.has(dex)) return PF.POKEDEX[dex] && PF.POKEDEX[dex].bst >= 490 ? TIERS.strong : TIERS.f1;
     return TIERS[['f1', 'f2', 'f3'][(STAGE[dex] || 1) - 1]];
   };
+  const slug = (name) => name.toLowerCase().replace('♀', 'f').replace('♂', 'm').normalize('NFD').replace(/[^a-z0-9]/g, '');
+  const idOfDex = {};
+  for (const dex of Object.keys(PF.POKEDEX)) idOfDex[dex] = slug(PF.POKEDEX[dex].name);
+  for (const r of PF.ROSTER) idOfDex[r.dex] = r.id;
+  /** Id del plantel de un número de Pokédex (para contar partidos desde el modo historia). */
+  PF.rosterIdOfDex = (dex) => idOfDex[dex];
+
+  /**
+   * Cómo se consigue: { coins, needs?, plays? } (needs = id de la preevolución
+   * que hay que tener, plays = partidos jugados con ella) o un reto.
+   */
   const unlockFor = (dex) => {
     const t = PF.tierOf(dex);
     if (t.id === 'legend') return LEGENDS[dex];
-    return t.price ? { coins: t.price } : undefined;
+    if (FREE.has(dex)) return undefined;
+    const u = { coins: t.price };
+    if (PREV[dex]) { u.needs = idOfDex[PREV[dex]]; u.plays = PLAYS_TO_EVOLVE[STAGE[dex]] || 5; }
+    return u;
   };
-  const slug = (name) => name.toLowerCase().replace('♀', 'f').replace('♂', 'm').normalize('NFD').replace(/[^a-z0-9]/g, '');
 
-  // Los del plantel hecho a mano conservan stats y habilidades, pero se
-  // desbloquean por su tier; el resto de la Gen 1 sale de la Pokédex.
-  for (const r of PF.ROSTER) { r.tier = PF.tierOf(r.dex).id; r.unlock = unlockFor(r.dex); }
+  /**
+   * Movimientos extra de las evoluciones: después de los suyos, los de su
+   * línea evolutiva y los de sus tipos, hasta tener los que marca su tier.
+   */
+  function movesFor(dex, base) {
+    const want = PF.tierOf(dex).moves;
+    const out = base.slice(0, want);
+    const add = (id) => { if (out.length < want && ABILITY_INFO[id] && !out.some((a) => a.id === id)) out.push(ABILITY_INFO[id]); };
+    // (Gyarados no salpica ni las Eeveelutions se adaptan: no heredan de su línea)
+    const fam = NO_INHERIT.has(dex) ? [dex] : FAMILIES.find((f) => f.includes(dex)) || [dex];
+    for (const d of fam) { const r = PF.ROSTER.find((x) => x.dex === d && x.handmade); if (r) r.abilities.slice(0, 2).forEach((a) => add(a.id)); }
+    for (const t of PF.POKEDEX[dex].types) (TYPE_ABILITIES[t] || []).forEach(add);
+    for (const id of ['quick', 'slam', 'jump', 'psywave']) add(id);
+    return out;
+  }
+
+  // Los del plantel hecho a mano conservan stats y habilidades (más las que
+  // aprendan por su fase), pero se desbloquean por su tier; el resto de la
+  // Gen 1 sale de la Pokédex.
+  for (const r of PF.ROSTER) r.handmade = true;
+  for (const r of PF.ROSTER) {
+    r.tier = PF.tierOf(r.dex).id;
+    r.unlock = unlockFor(r.dex);
+    r.abilities = movesFor(r.dex, r.abilities);
+  }
   const made = new Set(PF.ROSTER.map((r) => r.dex));
   for (let dex = 1; dex <= 151; dex++) {
     if (made.has(dex) || !PF.POKEDEX[dex]) continue;
     const sp = PF.species(dex);
-    PF.ROSTER.push(Object.assign({}, sp, { id: slug(sp.name), tier: PF.tierOf(dex).id, unlock: unlockFor(dex), evolve: undefined }));
+    PF.ROSTER.push(Object.assign({}, sp, {
+      id: idOfDex[dex], tier: PF.tierOf(dex).id, unlock: unlockFor(dex), evolve: undefined,
+      abilities: movesFor(dex, sp.abilities),
+    }));
   }
   PF.ROSTER.sort((a, b) => a.dex - b.dex);
 

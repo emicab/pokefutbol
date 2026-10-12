@@ -192,9 +192,59 @@ PF.rosterById = (id) => PF.ROSTER.find((r) => r.id === id);
 /** ¿Se puede elegir ya este Pokémon? */
 PF.isUnlocked = (r) => !r.unlock || PF.Save.data.unlocked.includes(r.id);
 
-/** ¿Tiene esa habilidad? La primera siempre; la segunda se compra (PF.abilityPrice). */
-PF.abilityOwned = (r, i) => i === 0 || !!PF.Save.data.abil[r.id];
-PF.abilityPrice = (r) => (PF.TIERS[r.tier] || PF.TIERS.f1).abil;
+/** ¿Tiene esa habilidad? La primera siempre; las demás se compran (PF.abilityPrice). */
+PF.abilityOwned = (r, i) => {
+  if (i === 0) return true;
+  const v = PF.Save.data.abil[r.id];
+  return Array.isArray(v) ? v.includes(i) : v === true && i === 1;
+};
+/** Precio de la habilidad i: el de su tier para la segunda, un 30 % más por cada una siguiente. */
+PF.abilityPrice = (r, i = 1) => Math.round(((PF.TIERS[r.tier] || PF.TIERS.f1).abil * (1 + 0.3 * (i - 1))) / 10) * 10;
+PF.buyAbility = (r, i) => {
+  const s = PF.Save.data, v = s.abil[r.id];
+  const list = Array.isArray(v) ? v : v === true ? [1] : [];
+  if (!list.includes(i)) list.push(i);
+  s.abil[r.id] = list;
+};
+
+/** Partidos jugados con cada Pokémon (para poder comprar su evolución). */
+PF.playsOf = (id) => PF.Save.data.plays[id] || 0;
+PF.addPlays = (ids) => { for (const id of new Set(ids)) if (id) PF.Save.data.plays[id] = PF.playsOf(id) + 1; };
+
+/**
+ * ¿Se puede comprar ya? Las evoluciones piden tener la preevolución y haber
+ * jugado unos partidos con ella. { ok, need?, have?, plays?, prev? }
+ */
+PF.canBuy = (r) => {
+  const u = r.unlock;
+  if (!u || !u.coins) return { ok: false };
+  if (!u.needs) return { ok: true };
+  const prev = PF.rosterById(u.needs);
+  const owned = prev && PF.isUnlocked(prev);
+  const have = PF.playsOf(u.needs);
+  return { ok: owned && have >= u.plays, prev, owned, have, plays: u.plays };
+};
+
+/**
+ * Completa un equipo al azar (cualquiera del plantel, tenga o no): casi
+ * siempre fase 1; si entre los elegidos hay de fase 2 o 3, suben un poco
+ * esas chances. Devuelve ids.
+ */
+PF.randomFill = (picks, n) => {
+  const tiers = picks.map((id) => (PF.rosterById(id) || {}).tier);
+  const hasF2 = tiers.includes('f2'), hasF3 = tiers.some((t) => t === 'f3' || t === 'strong' || t === 'elite');
+  // peso por Pokémon de cada tier (hay 65 de fase 1, 55 de fase 2, 15 de fase 3…)
+  const W = { f1: 75, f2: 16 * (hasF2 ? 1.6 : 1) * (hasF3 ? 1.2 : 1), f3: 5 * (hasF3 ? 3.5 : 1), strong: 3 * (hasF3 ? 3 : 1), elite: 0.6, legend: 0 };
+  const out = [];
+  const pool = PF.ROSTER.filter((r) => !picks.includes(r.id));
+  while (out.length < n && pool.length) {
+    const total = pool.reduce((s, r) => s + (W[r.tier] || 0), 0);
+    let x = Math.random() * total, k = 0;
+    while (k < pool.length - 1 && (x -= W[pool[k].tier] || 0) > 0) k++;
+    out.push(pool.splice(k, 1)[0].id);
+  }
+  return out;
+};
 
 /** Quita del equipo guardado lo que ya no vale (bloqueados, habilidades sin comprar). */
 PF.sanitizeSetup = () => {

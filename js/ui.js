@@ -279,7 +279,7 @@ PF.UI = (() => {
     });
 
     s.querySelector('[data-act=back]').onclick = onBack;
-    s.querySelector('[data-act=go]').onclick = () => { if (setup.picks.length >= setup.size) onGo(); };
+    s.querySelector('[data-act=go]').onclick = () => { if (setup.picks.length >= 1) onGo(); };
 
     function buy(price, apply, label) {
       if (save.coins < price) { toast(`Te faltan ${price - save.coins} monedas.`); PF.Audio.sfx.fail(); return; }
@@ -356,17 +356,27 @@ PF.UI = (() => {
       const u = d.querySelector('.unlock');
       if (!unlocked) {
         if (r.unlock.coins) {
-          const b = el(`<button class="btn buy">Desbloquear · <i class="coin"></i>${r.unlock.coins}</button>`);
+          // las evoluciones piden tener la preevolución y haber jugado con ella
+          const cb = PF.canBuy(r);
+          if (r.unlock.needs) {
+            const pn = cb.prev ? cb.prev.name : r.unlock.needs;
+            u.appendChild(el(`<div class="req ${cb.ok ? 'ok' : ''}">
+              ${cb.owned ? '✔' : '✘'} Tener a ${pn} ·
+              ${cb.have >= cb.plays ? '✔' : '✘'} ${Math.min(cb.have, cb.plays)}/${cb.plays} partidos con ${pn}</div>`));
+          }
+          const b = el(`<button class="btn buy" ${cb.ok ? '' : 'disabled'}>Desbloquear · <i class="coin"></i>${r.unlock.coins}</button>`);
           b.onclick = () => buy(r.unlock.coins, () => save.unlocked.push(r.id), r.name);
           u.appendChild(b);
         } else {
           u.innerHTML = `<span class="challenge">🔒 Reto: ${r.unlock.label}</span>`;
         }
-      } else if (!PF.abilityOwned(r, 1)) {
-        const price = PF.abilityPrice(r);
-        const b = el(`<button class="btn buy small">Comprar ${r.abilities[1].name} · <i class="coin"></i>${price}</button>`);
-        b.onclick = () => buy(price, () => { save.abil[r.id] = true; setup.abil[r.id] = 1; abFocus = null; }, r.abilities[1].name);
+      } else if (!PF.abilityOwned(r, shown)) {
+        const price = PF.abilityPrice(r, shown), ab = r.abilities[shown];
+        const b = el(`<button class="btn buy small">Comprar ${ab.name} · <i class="coin"></i>${price}</button>`);
+        b.onclick = () => buy(price, () => { PF.buyAbility(r, shown); setup.abil[r.id] = shown; abFocus = null; }, ab.name);
         u.appendChild(b);
+      } else if (r.abilities.some((_, i) => !PF.abilityOwned(r, i))) {
+        u.innerHTML = '<span class="hint2">Toca un movimiento con 🔒 para verlo y comprarlo.</span>';
       }
     }
 
@@ -408,11 +418,13 @@ PF.UI = (() => {
       s.querySelector('.keeperhelp').textContent = KEEPER_HELP[setup.keeper];
       team.innerHTML = `<span>Tu equipo</span>` + Array.from({ length: setup.size + BENCH_MAX }, (_, i) => {
         const r = setup.picks[i] && PF.rosterById(setup.picks[i]), sup = i >= setup.size;
-        return `<b class="${r ? 'full' : ''} ${sup ? 'sup' : ''}" style="--tc:${r ? r.color : '#5b6f99'}">${sup ? '<small>SUP</small> ' : ''}${r ? r.name : sup ? 'opcional' : '—'}</b>`;
+        return `<b class="${r ? 'full' : ''} ${sup ? 'sup' : ''}" style="--tc:${r ? r.color : '#5b6f99'}">${sup ? '<small>SUP</small> ' : ''}${r ? r.name : sup ? 'opcional' : '🎲 al azar'}</b>`;
       }).join('');
+      // con uno solo ya se puede jugar: el resto se completa al azar (PF.randomFill)
       const go = s.querySelector('[data-act=go]');
-      go.disabled = setup.picks.length < setup.size;
-      go.textContent = go.disabled ? `Elige ${setup.size - setup.picks.length} más` : '¡A la cancha!';
+      const missing = setup.size - setup.picks.length;
+      go.disabled = setup.picks.length < 1;
+      go.textContent = go.disabled ? 'Elige al menos 1' : missing > 0 && goLabel === '¡A la cancha!' ? `¡A la cancha! (+${missing} 🎲)` : goLabel;
     }
 
     // limpia elecciones que ya no valen (p. ej. tras borrar el progreso)

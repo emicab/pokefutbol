@@ -223,21 +223,34 @@ versión del juego (por ejemplo, compartiendo la carpeta).
 
 ## Plantel
 
-Están los **151 Pokémon de la primera generación**. Se desbloquean según su
-fase (sólo cuentan las evoluciones de la Gen 1):
+Están los **151 Pokémon de la primera generación**. Al principio sólo se
+tienen los iniciales de siempre: **Bulbasaur, Charmander, Squirtle y
+Pikachu**. El resto se compra según su fase (sólo cuentan las evoluciones de
+la Gen 1), y **para comprar una evolución hay que tener su preevolución y
+haber jugado partidos con ella** (5 para una fase 2, 8 para una fase 3: para
+Charizard, tener a Charmeleon y 8 partidos con él). Cuenta cada partido en el
+que juega (también entrando de cambio, y en el modo historia).
 
-| Tier | Quiénes | Cuesta | 2ª habilidad |
-|---|---|---|---|
-| Fase 1 | sin preevolución (Bulbasaur, Pikachu, Eevee, Magikarp, Onix…) | gratis | 60 |
-| Fase 2 | Ivysaur, Raichu, Jolteon, Golbat… | 150 | 90 |
-| Fase 3 | Venusaur, Charizard, Gengar, Alakazam, Machamp… | 300 | 120 |
-| Fuerte | sin evolución y con muchos stats: Lapras, Aerodactyl, Scyther, Pinsir, Kangaskhan, Tauros, Electabuzz, Magmar | 300 | 120 |
-| Élite | Dragonite, Gyarados, Snorlax | 500 | 150 |
-| Legendario | Articuno (gana 3 partidos por 3+ goles), Zapdos (mete 50 goles), Moltres (gana 15 partidos), Mewtwo (gana en Difícil), Mew (gana 5 en Difícil) | reto | 200 |
+| Tier | Quiénes | Cuesta | Movimientos | 2º movimiento |
+|---|---|---|---|---|
+| Fase 1 | sin preevolución (Rattata, Eevee, Magikarp, Onix…) | 80 | 2 | 60 |
+| Fase 2 | Ivysaur, Raichu, Jolteon, Golbat… | 150 + 5 partidos con su preevolución | 3 | 90 |
+| Fase 3 | Venusaur, Charizard, Gengar, Alakazam, Machamp… | 300 + 8 partidos con su fase 2 | 4 | 120 |
+| Fuerte | sin evolución y con muchos stats: Lapras, Aerodactyl, Scyther, Pinsir, Kangaskhan, Tauros, Electabuzz, Magmar | 300 | 3 | 120 |
+| Élite | Dragonite y Gyarados (con su requisito de evolución), Snorlax | 500 | 4 | 150 |
+| Legendario | Articuno (gana 3 partidos por 3+ goles), Zapdos (mete 50 goles), Moltres (gana 15 partidos), Mewtwo (gana en Difícil), Mew (gana 5 en Difícil) | reto | 4 | 200 |
 
-Cada Pokémon tiene dos habilidades: la primera viene con él y **la segunda se
-compra** en la selección (tocándola aparece el botón). La selección tiene
-filtros por tier y tipo, y un buscador.
+Las evoluciones **aprenden más movimientos**: los suyos, los de su línea
+evolutiva y los de sus tipos. Se lleva uno al partido; el primero viene con
+el Pokémon y los demás se compran (el tercero y el cuarto, un poco más caros).
+En la selección, tocando un movimiento con 🔒 aparece su descripción y el
+botón para comprarlo. La selección tiene filtros por tier y tipo, y un
+buscador.
+
+**Equipo incompleto:** con un solo Pokémon elegido ya se puede jugar; el
+resto se completa al azar (🎲) con cualquiera del plantel, casi siempre de
+fase 1. Si entre los tuyos hay de fase 2 o 3, suben un poco las chances de
+que salgan de esas fases.
 
 Dieciséis tienen stats y habilidades hechas a mano:
 

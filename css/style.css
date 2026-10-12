@@ -191,6 +191,11 @@ kbd {
 .tierchip.t-elite { background: #ff8a3d; }
 .tierchip.t-legend { background: #d9a0ff; }
 .abtn.locked { border-style: dashed; }
+.abs { flex-wrap: wrap; }
+.abs .abtn { flex: 1 1 45%; font-size: 14px; padding: 4px 5px; }
+.req { font-size: 14px; color: #ff9a8a; margin-bottom: 6px; }
+.req.ok { color: #9cff6b; }
+.hint2 { font-size: 13px; color: var(--muted); }
 .abtn.peek { border-color: var(--yellow); color: var(--text); }
 .btn.buy.small { font-size: 15px; }
 .mini:hover, .mini.focus { border-color: var(--edge); }

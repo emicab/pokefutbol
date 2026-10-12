@@ -11,7 +11,8 @@ PF.Save = (() => {
     v: 2,                         // versión del guardado (ver migrate)
     coins: 0,
     unlocked: [],                 // ids de Pokémon comprados o ganados (los gratis no hace falta)
-    abil: {},                     // id → true: segunda habilidad comprada
+    abil: {},                     // id → [índices de habilidades compradas] (la 0 viene con él)
+    plays: {},                    // id → partidos jugados con ese Pokémon (para comprar su evolución)
     stadiums: ['estadio'],
     stats: { played: 0, won: 0, goals: 0, hardWins: 0, bigWins: 0 },
     settings: { music: 0.5, sfx: 0.8, aids: true, replays: true, keys: null },
@@ -31,6 +32,7 @@ PF.Save = (() => {
         coins: s.coins | 0,
         unlocked: Array.isArray(s.unlocked) ? s.unlocked : [],
         abil: s.abil && typeof s.abil === 'object' ? s.abil : {},
+        plays: s.plays && typeof s.plays === 'object' ? s.plays : {},
         stadiums: Array.isArray(s.stadiums) ? s.stadiums : d.stadiums,
         stats: Object.assign(d.stats, s.stats),
         settings: Object.assign(d.settings, s.settings),
