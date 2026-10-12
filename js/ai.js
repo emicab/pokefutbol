@@ -170,7 +170,8 @@ PF.AI = (() => {
     if (!m.marks[team] || m.clock - m.markT[team] > 0.5) {
       m.markT[team] = m.clock;
       const own = M.ownGoalX(p.side), dir = M.dirOf(p.side);
-      const defending = (b.holder && b.holder.team !== team) || (!b.holder && (b.x - own) * dir < (F.x1 - F.x0) * 0.55);
+      // con el arquero rival sacando de las manos no se marca: se vuelve a la formación
+      const defending = (b.holder && b.holder.team !== team && !b.holder.gkHold) || (!b.holder && (b.x - own) * dir < (F.x1 - F.x0) * 0.55);
       const map = new Map();
       if (defending) {
         const keeper = M.keeperOf(m, team);
@@ -256,7 +257,8 @@ PF.AI = (() => {
     const gy = F.cy + (p.y < F.cy ? 1 : -1) * U.rand(20, F.goalHalf * 0.65);   // al palo contrario
     const c = {
       b, mine, ownX,
-      foeHolder: !!(holder && holder.team !== p.team),
+      // el arquero rival con la pelota en las manos no cuenta: no se le puede quitar
+      foeHolder: !!(holder && holder.team !== p.team && !holder.gkHold),
       dHolder: holder ? U.dist(p.x, p.y, holder.x, holder.y) : Infinity,
       aimHolder: holder ? Math.atan2(holder.y - p.y, holder.x - p.x) : 0,
       dMe: U.dist(p.x, p.y, b.x, b.y),
@@ -329,6 +331,17 @@ PF.AI = (() => {
         moveTo(it, p, tx, ty);
         return it;
       }
+    }
+
+    // ---------------------------------------------- arquero rival con la pelota en las manos:
+    // no hay nada que disputar; volver al puesto y darle espacio para sacar
+    if (holder && holder.team !== p.team && holder.gkHold) {
+      ai.chasing = false;
+      let [tx, ty] = M.homeSpot(m, p, 0);
+      const dx = tx - holder.x, dy = ty - holder.y, d = Math.hypot(dx, dy) || 1;
+      if (d < 200) { tx = holder.x + (dx / d) * 200; ty = holder.y + (dy / d) * 200; }
+      moveTo(it, p, U.clamp(tx, F.x0 + 40, F.x1 - 40), U.clamp(ty, F.y0 + 40, F.y1 - 40));
+      return it;
     }
 
     // ---------------------------------------------- me la pasan: ir a buscarla
