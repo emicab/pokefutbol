@@ -78,7 +78,7 @@ PF.CareerUI = (() => {
           <div class="col right">
             <div class="boardbox box">
               <div class="bt">Pizarra <small>titulares · el resto, al banco</small>
-                <span class="chips keeper" data-name="Arquero"><span>Arquero</span><button data-v="fixed" title="Uno se queda en el arco y se mueve por el área grande">Fijo</button><button data-v="dynamic" title="Ataja el que esté más cerca del arco en cada momento">Dinámico</button></span></div>
+                <span class="chips keeper" data-name="Arquero"><span>Arquero</span><button data-v="fixed" title="Uno es el arquero; sale a cerrar cuando hace falta y un compañero lo releva">Fijo</button><button data-v="dynamic" title="Ataja el que esté más cerca del arco en cada momento">Dinámico</button></span></div>
               <div class="boardslot"></div>
             </div>
             <div class="gyms box"></div>

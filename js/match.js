@@ -380,7 +380,7 @@ PF.Match = (() => {
     for (const team of [0, 1]) {
       const gx = ownGoalX(m.sides[team]);
       const cur = reset ? null : m.keeper[team];
-      if (cur && cur.gkHold) continue;
+      if (cur && cur.gkHold && m.ball.holder === cur) continue;   // con la pelota en las manos sigue siéndolo
       let best = null, bd = Infinity;
       for (const p of teamOf(m, team)) {
         if (p.stun > 0 || p.slam || p.dig > 0 || m.ball.holder === p) continue;

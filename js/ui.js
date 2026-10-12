@@ -17,7 +17,7 @@ PF.UI = (() => {
 
   const BENCH_MAX = 2;   // suplentes en partido rápido
   const KEEPER_HELP = {
-    fixed: 'Arquero fijo: uno se queda en el arco y se mueve por el área grande.',
+    fixed: 'Arquero fijo: uno es el arquero; sale a cerrar cuando hace falta y un compañero lo releva.',
     dynamic: 'Arquero dinámico: ataja el que esté más cerca del arco en cada momento.',
   };
 

@@ -61,8 +61,10 @@ Cada partido sortea de qué lado juega tu equipo.
 
 - **Fijo** (por defecto en 5 vs 5): uno del equipo es el arquero todo el
   partido. Se mueve por toda el área grande: adelantado cuando la pelota está
-  lejos, sobre la línea cuando se acerca, y sale a cortar las pelotas sueltas
-  que entran al área. Nunca sale del área.
+  lejos, sobre la línea cuando se acerca. Si un rival con la pelota se acerca
+  al arco y él es quien mejor llega, sale directo a cerrarle el ángulo
+  (aunque sea fuera del área; las manos sólo valen dentro) y el compañero
+  libre más cercano baja a cubrir el arco hasta que vuelva.
 - **Dinámico** (por defecto en 2 y 3 por equipo): ataja el que esté más
   cerca de su arco en cada momento; cuando sale, lo reemplaza el siguiente.
   A veces se suma al ataque y otro queda en el arco.
@@ -79,6 +81,8 @@ El entrenador rival cambia de táctica según el partido (se ve en el
 marcador): si va perdiendo se va al ataque, si gana sobre el final se cierra
 atrás, y si no, varía para no ser previsible. Sus jugadores rotan de puesto:
 si un defensa sube con la pelota, el compañero que quedó atrás baja a cubrir.
+Cuando defienden en su mitad, los que no van a la pelota marcan a un rival
+cada uno (al más peligroso primero), parados entre él y el arco.
 
 ### Puestos y pizarra
 
