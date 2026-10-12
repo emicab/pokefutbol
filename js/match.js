@@ -939,7 +939,9 @@ PF.Match = (() => {
     }
   }
 
-  const abilityCost = (p) => STAMINA.ability + p.def.ability.cd * STAMINA.abilityCd;
+  /** Energía extra de algunas habilidades muy fuertes (además del costo por recarga). */
+  const ABILITY_EXTRA = { fireshot: 14.5 };
+  const abilityCost = (p) => STAMINA.ability + p.def.ability.cd * STAMINA.abilityCd + (ABILITY_EXTRA[p.def.ability.id] || 0);
   /** Aviso de "sin energía" (como mucho uno por segundo). */
   function noEnergy(m, p) {
     if (!p.human || m.clock - (p.noEnergyT || -9) < 1) return;

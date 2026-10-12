@@ -266,9 +266,9 @@ Dieciséis tienen stats y habilidades hechas a mano:
 | Pokémon | Habilidad 1 | Habilidad 2 |
 |---|---|---|
 | Pikachu | **Impactrueno**: aturde a los rivales cercanos | **Ataque Rápido**: embestida sin soltar la pelota |
-| Charmander | **Tiro Ígneo**: bola de fuego que atraviesa y derriba | **Ascuas**: rastro de fuego |
+| Charmander | **Tiro Ígneo**: bola de fuego que atraviesa y derriba (gasta mucha energía: 20) | **Ascuas**: rastro de fuego |
 | Squirtle | **Hidrobomba**: abanico que barre rivales y pelota | **Charco**: los rivales patinan |
-| Bulbasaur | **Látigo Cepa**: trae la pelota a distancia | **Somnífero**: nube que duerme |
+| Bulbasaur | **Látigo Cepa**: trae la pelota desde cerca (260 px), aunque la tenga un rival | **Somnífero**: nube que duerme |
 | Gengar | **Intangible**: 3 s sin que nadie te toque | **Teletransporte**: reaparece más adelante |
 | Snorlax | **Golpe Cuerpo**: salto y onda expansiva | **Bloqueo**: muralla que rebota tiros |
 | Eevee | **Adaptabilidad**: una habilidad al azar de otro | **Ataque Rápido** |

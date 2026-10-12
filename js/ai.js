@@ -42,7 +42,7 @@ PF.AI = (() => {
     surf: (c) => (c.mine ? c.dGoal < 520 && c.aimGoal : c.foeHolder && c.dHolder < 380 && c.aimHolder),
     puddle: (c) => c.foeHolder && c.dHolder < 230 && c.aimHolder,
     ice: (c) => c.foeHolder && c.dHolder < 230 && c.aimHolder,
-    vine: (c) => !c.mine && c.dMe < 420 && (c.foeHolder || c.dMe > 200),
+    vine: (c) => !c.mine && c.dMe < 250 && (c.foeHolder || c.dMe > 140),
     psychic: (c) => !c.mine && (c.foeHolder || c.dMe > 320),
     sleep: (c) => c.foeHolder && c.dHolder < 170 && c.aimHolder,
     sing: (c) => c.foesNear > 0 && (c.mine ? c.pressure < 160 : c.foeHolder && c.dHolder < 210),

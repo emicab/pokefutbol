@@ -26,7 +26,7 @@ PF.ROSTER = [
     speed: 315, power: 1.12, mass: 1.0, radius: 18,
     abilities: [
       { id: 'fireshot', name: 'Tiro Ígneo', cd: 10,
-        desc: 'Bola de fuego que atraviesa y derriba. Con la pelota, dispara al instante.' },
+        desc: 'Bola de fuego que atraviesa y derriba. Con la pelota, dispara al instante. Gasta mucha energía.' },
       { id: 'embers', name: 'Ascuas', cd: 9,
         desc: 'Durante 3 s dejas un rastro de fuego que tumba a los rivales que lo pisan.' },
     ],
@@ -46,7 +46,7 @@ PF.ROSTER = [
     speed: 300, power: 0.96, mass: 1.15, radius: 19, role: 'DEF',
     abilities: [
       { id: 'vine', name: 'Látigo Cepa', cd: 8,
-        desc: 'Atrapa la pelota a distancia con un látigo, aunque la tenga un rival.' },
+        desc: 'Atrapa la pelota con un látigo, aunque la tenga un rival (alcance corto).' },
       { id: 'sleep', name: 'Somnífero', cd: 10,
         desc: 'Nube de esporas delante de ti: el rival que entra se queda dormido.' },
     ],

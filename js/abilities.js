@@ -8,6 +8,8 @@ PF.Abilities = (() => {
   const near = (m, p, R) => foes(m, p).filter((q) => U.dist(p.x, p.y, q.x, q.y) < R);
   /** Al arquero con la pelota en las manos nadie se la saca. */
   const safe = (b) => !!(b.holder && b.holder.gkHold);
+  /** Alcance del Látigo Cepa (antes 440: robaba casi desde la otra punta). */
+  const VINE_RANGE = 260;
 
   /** Abanico de agua/ola: empuja rivales y pelota dentro del cono. */
   function cone(m, p, R, half, force, stun, ballSpeed) {
@@ -86,7 +88,7 @@ PF.Abilities = (() => {
     vine(m, p) {
       const b = m.ball;
       if (b.holder === p) return false;
-      if (U.dist(p.x, p.y, b.x, b.y) > 440 || (b.holder && b.holder.phase > 0) || safe(b)) {
+      if (U.dist(p.x, p.y, b.x, b.y) > VINE_RANGE || (b.holder && b.holder.phase > 0) || safe(b)) {
         PF.FX.text(m.fx, p.x, p.y - 56, 'no llega...', '#cfcfcf', 0.6, 0.7);
         PF.Audio.sfx.fail();
         return false;
