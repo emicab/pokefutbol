@@ -27,17 +27,21 @@ PF.Match = (() => {
   const SUBS_PER_MATCH = 3;
 
   /**
-   * Energía (0-100): se gasta corriendo, pateando, placando y con las
-   * habilidades, y al recibir golpes (más si el ataque es súper eficaz).
-   * Se recupera trotando o quieto, y en el banco. Por debajo de 40 el
-   * Pokémon está cansado (más lento, patea más flojo, recarga más lento);
-   * en 0 está agotado y no puede usar su habilidad.
+   * Energía: el máximo sale de los PS (más PS = más aguante). Se gasta
+   * corriendo, pateando, placando y con las habilidades, y al recibir golpes
+   * (más si el ataque es súper eficaz); el gasto es igual para todos, así que
+   * al que tiene más PS le pesa menos. Se recupera trotando o quieto, y en el
+   * banco (en proporción a su máximo). Por debajo del 40 % el Pokémon está
+   * cansado (más lento, patea más flojo, recarga más lento); en 0 está
+   * agotado y no puede usar su habilidad.
    */
   const STAMINA = { run: 0.6, regen: 2.4, rest: 4, bench: 3, shot: 1.5, shotCharge: 2.5, pass: 0.5, tackle: 3, hit: 5, hitStun: 8, ability: 2, abilityCd: 0.35 };
-  const TIRED = 40;
+  const TIRED = 40;   // % de energía por debajo del cual está cansado
+  /** Energía en % del máximo (el máximo sale de los PS: PF.staminaMax). */
+  const energyPct = (x) => (100 * x.stamina) / x.maxStamina;
   /** Multiplicador por cansancio: 1 descansado, 0,65 agotado. */
-  const fatigue = (p) => (p.stamina >= TIRED ? 1 : 0.65 + 0.35 * Math.max(0, p.stamina) / TIRED);
-  function spend(p, amount) { p.stamina = Math.max(0, Math.min(100, p.stamina - amount)); }
+  const fatigue = (p) => { const e = energyPct(p); return e >= TIRED ? 1 : 0.65 + (0.35 * Math.max(0, e)) / TIRED; };
+  function spend(p, amount) { p.stamina = Math.max(0, Math.min(p.maxStamina, p.stamina - amount)); }
   const NO_INTENT = { mx: 0, my: 0, pass: false, shootHold: false, ability: false, press: false };
 
   /**
@@ -63,18 +67,25 @@ PF.Match = (() => {
    * Formación por defecto para unos Pokémon: reparte las posiciones según el
    * puesto natural de cada uno (el más arquero al arco, el más delantero arriba).
    * Devuelve [[d, f], ...] en el mismo orden que `defs`.
+   * `size` = formato del partido; con un equipo a medio elegir (menos Pokémon
+   * que el formato) se usa la formación completa y se llenan sólo esos puestos.
    */
-  function autoFormation(defs, mode) {
-    const spots = (PRESETS[mode] || PRESETS.dynamic)[defs.length] || PRESETS.dynamic[2];
+  function autoFormation(defs, mode, size = defs.length) {
+    const presets = PRESETS[mode] || PRESETS.dynamic;
+    const fit = Object.keys(presets).map(Number).sort((a, b) => a - b).find((n) => n >= Math.max(size, defs.length)) || 5;
+    const spots = presets[fit];
     const sorted = spots.map((s, i) => ({ s, i })).sort((a, b) => a.s[0] - b.s[0]);   // del arco hacia arriba
     const left = defs.map((d, i) => ({ d, i, sc: PF.roleScores(d) }));
     const out = [];
     for (const { s } of sorted) {
+      if (!left.length) break;
       const role = PF.zoneRole(s[0]);
       left.sort((a, b) => b.sc[role] - a.sc[role]);
       const pick = left.shift();
       out[pick.i] = s.slice();
     }
+    // más Pokémon que puestos (no debería pasar): el resto en el medio
+    left.forEach((l, k) => { out[l.i] = [0.4, (k % 2 ? 1 : -1) * 0.5]; });
     return out;
   }
 
@@ -152,7 +163,8 @@ PF.Match = (() => {
     return {
       def, team, side, slot, skill, spot, natural, pos, bonus: roleBonus(natural, pos),
       stats: { goals: 0, assists: 0, tackles: 0, saves: 0 },
-      stamina: 100, types: PF.typesOf(def), tiredWarned: false,
+      stamina: PF.staminaMax(def), maxStamina: PF.staminaMax(def), agility: PF.agility(def),
+      types: PF.typesOf(def), tiredWarned: false,
       gkHold: false, gkT: 0, assistFrom: null, assistT: 0,
       x: 0, y: 0, z: 0, vx: 0, vy: 0, facing: 0, r: def.radius,
       stun: 0, asleep: false, cd: def.ability.cd * 0.75, tackleCd: 0, dash: 0, dashDx: 0, dashDy: 0, dashSpeed: DASH_SPEED,
@@ -255,7 +267,7 @@ PF.Match = (() => {
       order: 0,   // índice en ORDERS
       keeperMode, keeper: [null, null],
       sides: opts.flip ? [1, 0] : [0, 1],   // lado de cada equipo
-      bench: [0, 1].map((t) => ((opts.bench && opts.bench[t]) || []).map((def) => ({ def, stamina: 100 }))),
+      bench: [0, 1].map((t) => ((opts.bench && opts.bench[t]) || []).map((def) => ({ def, stamina: PF.staminaMax(def), maxStamina: PF.staminaMax(def) }))),
       subsLeft: [SUBS_PER_MATCH, SUBS_PER_MATCH], subT: 0,
       retired: [],                          // los que salieron (para la experiencia)
       hit: null,
@@ -421,7 +433,7 @@ PF.Match = (() => {
     if (m.ball.passTo === out) m.ball.passTo = np;
     if (m.kicker === out) m.kicker = np;
     if (m.controlled === out) setControl(m, np);
-    m.bench[team][benchIdx] = { def: out.def, stamina: out.stamina, cd: out.cd };
+    m.bench[team][benchIdx] = { def: out.def, stamina: out.stamina, maxStamina: out.maxStamina, cd: out.cd };
     m.retired.push(out);
     m.players[m.players.indexOf(out)] = np;
     m.subsLeft[team]--;
@@ -434,12 +446,12 @@ PF.Match = (() => {
 
   /** La CPU cambia a sus cansados por el suplente más fresco. */
   function aiSubs(m, team, below) {
-    const tired = teamOf(m, team).filter((p) => p.stamina < below).sort((a, b) => a.stamina - b.stamina);
+    const tired = teamOf(m, team).filter((p) => energyPct(p) < below).sort((a, b) => energyPct(a) - energyPct(b));
     for (const p of tired) {
       if (m.subsLeft[team] <= 0) return;
       const bench = m.bench[team];
       let best = -1;
-      bench.forEach((s, i) => { if (s.stamina > p.stamina + 25 && (best < 0 || s.stamina > bench[best].stamina)) best = i; });
+      bench.forEach((s, i) => { if (energyPct(s) > energyPct(p) + 25 && (best < 0 || energyPct(s) > energyPct(bench[best]))) best = i; });
       if (best >= 0) substitute(m, p, best);
     }
   }
@@ -511,12 +523,12 @@ PF.Match = (() => {
 
     const playing = m.state === 'play';
     const kicking = m.state === 'kickoff';
-    for (const bench of m.bench) for (const s of bench) s.stamina = Math.min(100, s.stamina + STAMINA.bench * dt);
+    for (const bench of m.bench) for (const s of bench) s.stamina = Math.min(s.maxStamina, s.stamina + STAMINA.bench * dt * (s.maxStamina / 100));
     if (playing && (m.subT -= dt) <= 0) {
       m.subT = 4;
       for (const team of [0, 1]) {
         if (team === m.humanTeam) continue;
-        const far = teamOf(m, team).filter((p) => p.stamina < 15 && U.dist(p.x, p.y, m.ball.x, m.ball.y) > 450);
+        const far = teamOf(m, team).filter((p) => energyPct(p) < 15 && U.dist(p.x, p.y, m.ball.x, m.ball.y) > 450);
         if (far.length) aiSubs(m, team, 15);
       }
     }
@@ -592,12 +604,12 @@ PF.Match = (() => {
     if (m.state === 'play') {
       const frac = Math.hypot(p.vx, p.vy) / p.def.speed;
       if (frac > 0.55 && p.stun <= 0) spend(p, STAMINA.run * frac * dt * (m.keeper[p.team] === p ? 0.5 : 1));
-      else spend(p, -STAMINA.regen * dt);
+      else spend(p, -STAMINA.regen * dt * (p.maxStamina / 100));
       if (p.stamina <= 0 && p.team === m.humanTeam && !p.tiredWarned) {
         p.tiredWarned = true;
         PF.FX.text(m.fx, p.x, p.y - 70, '¡AGOTADO!', '#ff8a8a', 0.9, 1.4);
       }
-    } else spend(p, -STAMINA.rest * dt);
+    } else spend(p, -STAMINA.rest * dt * (p.maxStamina / 100));
     if (p.stun <= 0) p.asleep = false;
     if (b.holder === p) p.holdT += dt; else p.holdT = 0;
     if (digging && p.dig <= 0) popDig(m, p);
@@ -642,7 +654,7 @@ PF.Match = (() => {
       const k = U.damp(p.slip > 0 ? 0.8 : st.traction * 0.32, dt);
       p.vx -= p.vx * k; p.vy -= p.vy * k;
     } else {
-      const k = U.damp(p.slip > 0 ? 1.3 : st.traction, dt);
+      const k = U.damp(p.slip > 0 ? 1.3 : st.traction * p.agility, dt);
       p.vx += (mx * sp - p.vx) * k;
       p.vy += (my * sp - p.vy) * k;
     }
@@ -1332,7 +1344,7 @@ PF.Match = (() => {
 
   return {
     create, step, CHARGE_MAX, ORDERS, orderOf, PRESETS, KEEPER_DEPTH, autoFormation,
-    substitute, fatigue, TIRED, SUBS_PER_MATCH,
+    substitute, fatigue, energyPct, TIRED, SUBS_PER_MATCH,
     inBox, isActiveKeeper, keeperOf, ownGoalX, dirOf,
     // usados por abilities.js, ai.js y render.js
     radius, mass, untouchable, mateOf, matesOf, teamOf, setAnim, knock, stunInPlace, loseBall, shoot,

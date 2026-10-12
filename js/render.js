@@ -229,12 +229,13 @@ PF.Render = (() => {
   /** Barra de energía bajo los pies (siempre en tu equipo; en el rival, si está cansado). */
   function drawStamina(ctx, m, p, r) {
     const mine = p.team === m.humanTeam;
-    if (!mine && p.stamina >= PF.Match.TIRED) return;
+    const e = PF.Match.energyPct(p);
+    if (!mine && e >= PF.Match.TIRED) return;
     const w = 30, x = p.x - w / 2, y = p.y + r * 0.6 + 5;
     ctx.fillStyle = '#141018'; ctx.fillRect(x - 1, y - 1, w + 2, 5);
-    ctx.fillStyle = staminaColor(p.stamina); ctx.fillRect(x, y, (w * p.stamina) / 100, 3);
+    ctx.fillStyle = staminaColor(e); ctx.fillRect(x, y, (w * e) / 100, 3);
     // cansado: gotas de sudor
-    if (p.stamina < PF.Match.TIRED && p.stun <= 0) {
+    if (e < PF.Match.TIRED && p.stun <= 0) {
       const k = (m.clock * 1.5 + p.slot * 0.3) % 1;
       ctx.globalAlpha = 1 - k;
       ctx.fillStyle = '#8fd8ff';
@@ -466,7 +467,8 @@ PF.Render = (() => {
     ctx.fillText(p.cd <= 0 ? p.def.ability.name.toUpperCase() : p.def.ability.name, bx + bw / 2, y + 15);
     // energía
     ctx.fillStyle = '#0b1222'; ctx.fillRect(x + 4, y + 25, 224, 4);
-    ctx.fillStyle = staminaColor(p.stamina); ctx.fillRect(x + 4, y + 25, 2.24 * p.stamina, 4);
+    const e = PF.Match.energyPct(p);
+    ctx.fillStyle = staminaColor(e); ctx.fillRect(x + 4, y + 25, 2.24 * e, 4);
   }
 
   /** Minimapa (sólo si la cancha no entra en pantalla). */

@@ -116,10 +116,11 @@ PF.Board = (() => {
    * Posiciones guardadas (mapa id → [d, f]) o automáticas, validando el arco:
    * con arquero fijo tiene que haber exactamente uno; sin él, nadie en el arco.
    */
-  function spotsFor(saved, defs, mode) {
-    const auto = PF.Match.autoFormation(defs, mode);
+  function spotsFor(saved, defs, mode, size = defs.length) {
+    const auto = PF.Match.autoFormation(defs, mode, size);
     let spots = defs.map((d, i) => (saved && saved[d.id] ? saved[d.id].slice() : auto[i]));
-    if (mode === 'fixed') { if (spots.filter((s) => s[0] < 0.1).length !== 1) spots = auto; }
+    // con arquero fijo tiene que haber uno solo (o ninguno, si el equipo está a medio elegir)
+    if (mode === 'fixed') { const gk = spots.filter((s) => s[0] < 0.1).length; if (gk > 1 || (gk === 0 && defs.length === size)) spots = auto; }
     else spots = spots.map((s) => (s[0] < 0.12 ? [0.12, s[1]] : s));
     return spots;
   }

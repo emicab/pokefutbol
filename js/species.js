@@ -170,6 +170,20 @@
     psychic: 'psychic', psywave: 'psychic', adapt: null,
   };
 
+  /**
+   * Energía máxima (aguante) según los PS: de ~70 (Magikarp, Pikachu) a ~130
+   * (Snorlax, Lapras). En el modo historia además sube con el nivel (career.js
+   * la deja en def.stamina).
+   */
+  PF.staminaMax = (def) => {
+    if (def.stamina) return def.stamina;
+    const hp = def.hp || (PF.POKEDEX[def.dex] && PF.POKEDEX[def.dex].hp) || 90;
+    return Math.round(Math.max(65, Math.min(135, 70 + (hp - 79) * 0.95)));
+  };
+
+  /** Agilidad (cuánto tarda en acelerar y frenar) según la velocidad: 0,85 lentos … 1,15 rápidos. */
+  PF.agility = (def) => 0.85 + 0.3 * Math.max(0, Math.min(1, (def.speed - 230) / 120));
+
   /** Tipos de un Pokémon (del plantel o de la Pokédex). */
   PF.typesOf = (def) => def.types || (PF.POKEDEX[def.dex] && PF.POKEDEX[def.dex].types) || ['normal'];
 

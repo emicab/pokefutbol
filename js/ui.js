@@ -242,6 +242,7 @@ PF.UI = (() => {
           ${statBar('Velocidad', (r.speed - 200) / 150)}
           ${statBar('Tiro', (r.power - 0.7) / 0.6)}
           ${statBar('Peso', r.mass / 2.8)}
+          ${statBar('Energía', (PF.staminaMax(r) - 60) / 75)}
         </div>
         <div class="abil">
           <div class="abs">
@@ -272,7 +273,7 @@ PF.UI = (() => {
       if (!defs.length) { slot.innerHTML = '<div class="empty">Elige tus Pokémon para acomodarlos.</div>'; slot.classList.remove('board'); return; }
       const key = setup.size + '-' + setup.keeper;
       setup.spots[key] = setup.spots[key] || {};
-      const spots = PF.Board.spotsFor(setup.spots[key], defs, setup.keeper);
+      const spots = PF.Board.spotsFor(setup.spots[key], defs, setup.keeper, setup.size);
       const b = PF.Board.mount(slot, {
         defs, spots, mode: setup.keeper,
         onChange: (sp) => { PF.Board.storeSpots(setup.spots[key], defs, sp); PF.Save.save(); },
@@ -414,13 +415,13 @@ PF.UI = (() => {
       f.querySelectorAll('.subrow').forEach((x) => x.remove());
       b.querySelectorAll('.subrow').forEach((x) => x.remove());
       for (const p of PF.Match.teamOf(m, team)) {
-        const r = row(p.def, Math.round(p.stamina), PF.ROLES[p.pos].short + (p === m.keeper[team] ? ' · arquero' : ''));
+        const r = row(p.def, Math.round(PF.Match.energyPct(p)), PF.ROLES[p.pos].short + (p === m.keeper[team] ? ' · arquero' : ''));
         r.classList.toggle('on', p === out);
         r.onclick = () => { out = p; refresh(); };
         f.appendChild(r);
       }
       m.bench[team].forEach((seat, i) => {
-        const r = row(seat.def, Math.round(seat.stamina), PF.ROLES[PF.naturalRole(seat.def)].short);
+        const r = row(seat.def, Math.round(PF.Match.energyPct(seat)), PF.ROLES[PF.naturalRole(seat.def)].short);
         r.classList.toggle('on', i === inn);
         r.onclick = () => { inn = i; refresh(); };
         b.appendChild(r);

@@ -133,7 +133,7 @@ PF.CareerUI = (() => {
       d.innerHTML = `
         <div class="dl">
           <div class="name">${def.name} <small>${def.type} · Nv ${mb.level}</small></div>
-          <div class="nums">Vel ${def.speed} · Tiro ${def.power.toFixed(2)} · Peso ${def.mass.toFixed(2)}</div>
+          <div class="nums">Vel ${def.speed} · Tiro ${def.power.toFixed(2)} · Peso ${def.mass.toFixed(2)} · Energía ${def.stamina}</div>
           ${ivBar('IV Vel', mb.ivs.spd)}${ivBar('IV Tiro', mb.ivs.pow)}${ivBar('IV Peso', mb.ivs.mass)}
         </div>
         <div class="dr">

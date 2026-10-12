@@ -98,11 +98,23 @@ se guarda en el navegador (`localStorage`); en Opciones se puede borrar.
 
 ### Energía y cambios
 
-Cada Pokémon tiene energía (la barrita bajo sus pies). Se gasta corriendo,
+Los stats del Pokémon mandan en la cancha:
+
+| Stat | En la cancha |
+|---|---|
+| PS | Energía máxima (aguante) |
+| Velocidad | Velocidad de carrera y agilidad (acelerar, frenar, girar) |
+| Ataque | Fuerza de tiro |
+| PS + total de stats + tipo | Peso (choques, empujones) |
+
+Cada Pokémon tiene energía (la barrita bajo sus pies; su máximo sale de los
+PS y, en el modo historia, sube con el nivel). Se gasta corriendo,
 pateando, pasando, placando y con las habilidades (más las de recarga larga),
 y al recibir golpes: cuenta la **tabla de tipos**, así que un ataque súper
-eficaz cansa el doble (y uno poco eficaz, mucho menos). Se recupera trotando
-o quieto, y en el banco. Cansado (menos de 40) corre más lento, patea más
+eficaz cansa el doble (y uno poco eficaz, mucho menos). El gasto es igual
+para todos, así que a los de muchos PS (Snorlax, Lapras) les pesa menos que a
+los frágiles (Pikachu, Magikarp). Se recupera trotando o quieto, y en el
+banco. Cansado (menos de 40) corre más lento, patea más
 flojo y recarga la habilidad más despacio; agotado (0) no puede usarla.
 
 En el partido rápido se pueden elegir hasta 2 suplentes; en el modo historia,
