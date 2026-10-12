@@ -22,10 +22,10 @@ PF.AI = (() => {
    * tackleCd  recarga del placaje
    */
   const SKILLS = {
-    easy: { speed: 0.78, react: 0.5, aggro: 0.25, ability: 0.12, aim: 0.3, steal: 0.9, tackleCd: 2.6, keeper: 0.8 },
-    normal: { speed: 0.9, react: 0.28, aggro: 0.55, ability: 0.35, aim: 0.15, steal: 0.45, tackleCd: 1.6, keeper: 1 },
-    hard: { speed: 1.0, react: 0.14, aggro: 0.9, ability: 0.7, aim: 0.07, steal: 0.22, tackleCd: 1.15, keeper: 1.12 },
-    mate: { speed: 0.95, react: 0.2, aggro: 0.6, ability: 0.45, aim: 0.1, steal: 0.3, tackleCd: 1.3, keeper: 1 },
+    easy: { speed: 0.78, react: 0.5, aggro: 0.25, ability: 0.12, aim: 0.3, steal: 0.9, tackleCd: 2.6, keeper: 0.8, gkReact: 0.26, gkErr: 34 },
+    normal: { speed: 0.9, react: 0.28, aggro: 0.55, ability: 0.35, aim: 0.15, steal: 0.45, tackleCd: 1.6, keeper: 1, gkReact: 0.17, gkErr: 22 },
+    hard: { speed: 1.0, react: 0.14, aggro: 0.9, ability: 0.7, aim: 0.07, steal: 0.22, tackleCd: 1.15, keeper: 1.12, gkReact: 0.1, gkErr: 12 },
+    mate: { speed: 0.95, react: 0.2, aggro: 0.6, ability: 0.45, aim: 0.1, steal: 0.3, tackleCd: 1.3, keeper: 1, gkReact: 0.14, gkErr: 18 },
   };
 
   /**
@@ -108,12 +108,23 @@ PF.AI = (() => {
     const maxY = F.goalHalf - 8;
     it.aim = c.aimBall;
 
+    // tiro que viene al arco: reacciona un instante después de que sale (gkReact,
+    // distinto en cada tiro) y lee el tiro con algo de error (gkErr); mientras
+    // no reacciona se queda donde está (no sale corriendo a la pelota)
+    const ai = p.ai;
+    if (ai.kick !== b.kickT) {
+      ai.kick = b.kickT;
+      ai.gkr = (s.gkReact || 0.15) * U.rand(0.6, 1.6);
+      ai.gkErr = U.rand(-1, 1) * (s.gkErr ?? 18);
+    }
+    const seen = m.clock - (b.kickT || 0) >= ai.gkr;
+    if (!b.holder && b.vx * dir < -250 && !seen) return it;
     if (!b.holder && b.vx * dir < -250) {
       const t = (lineX - b.x) / b.vx;
       if (t > 0 && t < 0.9) {
         const yAt = b.y + b.vy * t;
         if (Math.abs(yAt - F.cy) < F.goalHalf + 40) {
-          const ty = U.clamp(yAt, F.cy - maxY - 12, F.cy + maxY + 12);
+          const ty = U.clamp(yAt + ai.gkErr, F.cy - maxY - 12, F.cy + maxY + 12);
           const far = U.dist(p.x, p.y, lineX, ty) > 26;
           if (far && t < 0.42 && p.dash <= 0 && Math.random() > s.react * 0.8) { it.dive = [lineX, ty]; return it; }
           moveTo(it, p, lineX, ty);

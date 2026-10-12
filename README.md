@@ -77,7 +77,9 @@ Cada partido sortea de qué lado juega tu equipo.
 
 El arquero lleva guantes verdes. En su área llega más lejos, atrapa los tiros
 que no sean demasiado fuertes para sus reflejos (los demás los desvía), se
-estira hacia donde va la pelota y, con ella en las manos, nadie se la puede
+estira hacia donde va la pelota (el de la CPU reacciona un instante después
+del tiro, a veces lo lee mal, y tras estirarse queda un momento en el piso:
+un tiro fuerte al palo contrario de donde está suele ser gol) y, con ella en las manos, nadie se la puede
 quitar (ni con placajes ni con habilidades) y nunca puede meterse un autogol:
 saca con un pase o un despeje. Mientras la tiene, los rivales vuelven a su
 puesto y le dejan espacio. Puede salir caminando del área con la pelota, pero

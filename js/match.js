@@ -49,6 +49,11 @@ PF.Match = (() => {
    * (unos 3 s si se usó entero). Así no conviene llevarlo apretado todo el rato.
    */
   const PRESS_MAX = 2;
+  /**
+   * Estirada del arquero: dura DIVE_TIME a DIVE_SPEED (~150 px), después queda
+   * DIVE_DOWN en el piso, y no puede volver a estirarse hasta DIVE_CD.
+   */
+  const DIVE_TIME = 0.26, DIVE_SPEED = 580, DIVE_DOWN = 0.35, DIVE_CD = 1.1;
   const pressCooldown = (t) => 0.8 + 1.1 * t;
   const NO_INTENT = { mx: 0, my: 0, pass: false, shootHold: false, ability: false, press: false };
 
@@ -206,7 +211,7 @@ PF.Match = (() => {
       stamina: PF.staminaMax(def), maxStamina: PF.staminaMax(def), agility: PF.agility(def),
       types: PF.typesOf(def), tiredWarned: false,
       gkHold: false, gkT: 0, assistFrom: null, assistT: 0, ctrl: null,
-      pressT: 0, pressCd: 0, pressCdMax: 1, pressLock: false,
+      pressT: 0, pressCd: 0, pressCdMax: 1, pressLock: false, diveCd: 0, down: 0,
       x: 0, y: 0, z: 0, vx: 0, vy: 0, facing: 0, r: def.radius,
       stun: 0, asleep: false, cd: def.ability.cd * 0.75, tackleCd: 0, dash: 0, dashDx: 0, dashDy: 0, dashSpeed: DASH_SPEED,
       pickupCd: 0, holdT: 0, stealT: 0, charge: -1, passCharge: -1, aimMy: 0,
@@ -775,7 +780,7 @@ PF.Match = (() => {
     const b = m.ball, st = m.stadium;
     const digging = p.dig > 0;
     for (const k of ['stun', 'tackleCd', 'pickupCd', 'phase', 'turbo', 'giant', 'slow', 'fireShot', 'wall', 'embers',
-      'slip', 'burnCd', 'dig', 'ram', 'spinT', 'magnet', 'diving', 'pressCd']) {
+      'slip', 'burnCd', 'dig', 'ram', 'spinT', 'magnet', 'diving', 'pressCd', 'diveCd', 'down']) {
       p[k] = Math.max(0, p[k] - dt);
     }
     // la habilidad sólo recarga con la pelota en juego (no en festejos ni saques)
@@ -795,6 +800,7 @@ PF.Match = (() => {
     if (digging && p.dig <= 0) popDig(m, p);
 
     let mx = it.mx, my = it.my;
+    if (p.down > 0 && p.dash <= 0) { mx = 0; my = 0; }   // en el piso tras estirarse
     if (p.human) p.aimMy = Math.abs(my) > 0.3 ? Math.sign(my) : 0;
 
     // presionar: limitado en tiempo y con enfriamiento (ver PRESS_MAX)
@@ -870,11 +876,14 @@ PF.Match = (() => {
 
     if (!active || p.stun > 0 || p.slam) { p.charge = -1; return; }
 
-    // arquero: estirada hacia donde va el tiro (la pide la IA)
-    if (it.dive && p.dash <= 0) {
+    // arquero: estirada hacia donde va el tiro (la pide la IA). Una sola: después
+    // queda un momento en el piso (DIVE_DOWN) y no puede volver a tirarse enseguida
+    if (it.dive && p.dash <= 0 && p.diveCd <= 0) {
       const dx = it.dive[0] - p.x, dy = it.dive[1] - p.y, d = Math.hypot(dx, dy) || 1;
-      p.dash = 0.28; p.diving = 0.35; p.dashSpeed = 640;
+      p.dash = DIVE_TIME; p.diving = DIVE_TIME + 0.08; p.dashSpeed = DIVE_SPEED;
       p.dashDx = dx / d; p.dashDy = dy / d;
+      p.diveCd = DIVE_CD;
+      p.down = DIVE_TIME + DIVE_DOWN;
       setAnim(p, 'Attack', true);
       PF.Audio.sfx.swoosh();
     }
@@ -995,6 +1004,7 @@ PF.Match = (() => {
   function release(m, p, vx, vy) {
     const b = m.ball;
     b.holder = null; b.last = p; b.vx = vx; b.vy = vy; b.vine = null; b.passTo = null; b.passFrom = null;
+    b.kickT = m.clock;   // cuándo salió (el arquero de la IA tarda un poco en reaccionar)
     p.pickupCd = 0.3;
     p.charge = -1;
     p.gkHold = false;
@@ -1506,13 +1516,15 @@ PF.Match = (() => {
       if (p === b.last && p.pickupCd > 0) continue;
       // el arquero en su área llega más lejos con las manos (y más aún estirándose)
       const keeper = playing && isActiveKeeper(m, p) && p.stun <= 0;
-      const pr = radius(p) * (keeper ? (p.diving > 0 ? 2.2 : 1.7) : 1);
+      const pr = radius(p) * (keeper ? (p.diving > 0 ? 2.0 : 1.6) : 1);
       const dx = b.x - p.x, dy = b.y - p.y, d = Math.hypot(dx, dy);
       if (d >= pr + b.r) continue;
       const nx = d > 0.001 ? dx / d : 1, ny = d > 0.001 ? dy / d : 0;
 
       if (keeper && b.fire <= 0 && p.pickupCd <= 0) {
-        const rel = Math.hypot(b.vx - p.vx, b.vy - p.vy);
+        // la velocidad del tiro, no la relativa: estirándose hacia donde va la
+        // pelota no se vuelve más fácil de atrapar un tiro fuerte
+        const rel = Math.hypot(b.vx, b.vy);
         if (rel < catchSpeed(m, p)) {
           const shot = b.last && b.last.team !== p.team && rel > 450;
           take(m, p);
