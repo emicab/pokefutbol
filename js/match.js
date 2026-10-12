@@ -35,13 +35,21 @@ PF.Match = (() => {
    * cansado (más lento, patea más flojo, recarga más lento); en 0 está
    * agotado y no puede usar su habilidad.
    */
-  const STAMINA = { run: 0.6, regen: 2.4, rest: 4, bench: 3, shot: 1.5, shotCharge: 2.5, pass: 0.5, tackle: 3, hit: 5, hitStun: 8, ability: 2, abilityCd: 0.35 };
+  const STAMINA = { press: 3, run: 0.6, regen: 2.4, rest: 4, bench: 3, shot: 1.5, shotCharge: 2.5, pass: 0.5, tackle: 3, hit: 5, hitStun: 8, ability: 2, abilityCd: 0.35 };
   const TIRED = 40;   // % de energía por debajo del cual está cansado
   /** Energía en % del máximo (el máximo sale de los PS: PF.staminaMax). */
   const energyPct = (x) => (100 * x.stamina) / x.maxStamina;
   /** Multiplicador por cansancio: 1 descansado, 0,65 agotado. */
   const fatigue = (p) => { const e = energyPct(p); return e >= TIRED ? 1 : 0.65 + (0.35 * Math.max(0, e)) / TIRED; };
   function spend(p, amount) { p.stamina = Math.max(0, Math.min(p.maxStamina, p.stamina - amount)); }
+  /**
+   * Presionar (correr solo a la pelota): cansa más (STAMINA.press por segundo,
+   * además de correr) y se sostiene como mucho PRESS_MAX segundos seguidos.
+   * Al soltar, o al agotarse, se enfría: 0,8 s + 1,1 s por segundo presionado
+   * (unos 3 s si se usó entero). Así no conviene llevarlo apretado todo el rato.
+   */
+  const PRESS_MAX = 2;
+  const pressCooldown = (t) => 0.8 + 1.1 * t;
   const NO_INTENT = { mx: 0, my: 0, pass: false, shootHold: false, ability: false, press: false };
 
   /**
@@ -198,6 +206,7 @@ PF.Match = (() => {
       stamina: PF.staminaMax(def), maxStamina: PF.staminaMax(def), agility: PF.agility(def),
       types: PF.typesOf(def), tiredWarned: false,
       gkHold: false, gkT: 0, assistFrom: null, assistT: 0, ctrl: null,
+      pressT: 0, pressCd: 0, pressCdMax: 1, pressLock: false,
       x: 0, y: 0, z: 0, vx: 0, vy: 0, facing: 0, r: def.radius,
       stun: 0, asleep: false, cd: def.ability.cd * 0.75, tackleCd: 0, dash: 0, dashDx: 0, dashDy: 0, dashSpeed: DASH_SPEED,
       pickupCd: 0, holdT: 0, stealT: 0, charge: -1, passCharge: -1, aimMy: 0,
@@ -348,7 +357,15 @@ PF.Match = (() => {
   /** El humano `h` (por defecto, el de esta pantalla) pasa a manejar a `p`, si no lo maneja otro. */
   function setControl(m, p, h = m.humans[m.view] || m.humans[0]) {
     if (!h || (p.human && p.ctrl !== h)) return;
-    if (h.controlled) { h.controlled.human = false; h.controlled.ctrl = null; }
+    const old = h.controlled;
+    if (old && old !== p) {
+      // el enfriamiento de presionar es del jugador humano, no del Pokémon:
+      // cambiar de Pokémon no lo reinicia
+      if (old.pressT > 0) endPress(m, old);
+      if (old.pressCd > p.pressCd) { p.pressCd = old.pressCd; p.pressCdMax = old.pressCdMax; }
+      p.pressLock = old.pressLock;
+    }
+    if (old) { old.human = false; old.ctrl = null; }
     h.controlled = p;
     p.human = true;
     p.ctrl = h;
@@ -748,7 +765,7 @@ PF.Match = (() => {
     const b = m.ball, st = m.stadium;
     const digging = p.dig > 0;
     for (const k of ['stun', 'tackleCd', 'pickupCd', 'phase', 'turbo', 'giant', 'slow', 'fireShot', 'wall', 'embers',
-      'slip', 'burnCd', 'dig', 'ram', 'spinT', 'magnet', 'diving']) {
+      'slip', 'burnCd', 'dig', 'ram', 'spinT', 'magnet', 'diving', 'pressCd']) {
       p[k] = Math.max(0, p[k] - dt);
     }
     // la habilidad sólo recarga con la pelota en juego (no en festejos ni saques)
@@ -770,9 +787,20 @@ PF.Match = (() => {
     let mx = it.mx, my = it.my;
     if (p.human) p.aimMy = Math.abs(my) > 0.3 ? Math.sign(my) : 0;
 
+    // presionar: limitado en tiempo y con enfriamiento (ver PRESS_MAX)
+    // (si se mantiene apretado, al terminar el enfriamiento hay que soltar y volver a apretar)
+    let pressing = false;
+    if (!it.press) p.pressLock = false;
+    if (it.press && active && p.stun <= 0 && b.holder !== p && p.pressCd <= 0 && !p.pressLock) {
+      pressing = true;
+      p.pressT += dt;
+      spend(p, STAMINA.press * dt);
+      if (p.pressT >= PRESS_MAX) endPress(m, p);
+    } else if (p.pressT > 0) endPress(m, p);
+
     // asistencias: presionar, o ir a buscar un pase que viene hacia mí
     const autoReceive = p.human && b.passTo === p && !b.holder && Math.hypot(mx, my) < 0.2;
-    if (active && p.stun <= 0 && b.holder !== p && (it.press || autoReceive)) {
+    if (active && p.stun <= 0 && b.holder !== p && (pressing || autoReceive)) {
       const [tx, ty] = ballTarget(m, p);
       const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy);
       if (d > 8) { mx = dx / d; my = dy / d; }
@@ -871,6 +899,12 @@ PF.Match = (() => {
       // si me están pasando la pelota, J no es placaje
       if (it.pass && p.tackleCd <= 0 && p.dash <= 0 && b.passTo !== p) tackle(m, p);
     }
+  }
+
+  function endPress(m, p) {
+    p.pressCd = p.pressCdMax = pressCooldown(p.pressT);
+    p.pressT = 0;
+    p.pressLock = true;
   }
 
   function movePlayers(m, dt) {
@@ -1026,6 +1060,7 @@ PF.Match = (() => {
     if (fire) {
       p.fireShot = 0;
       b.fire = 1.6;
+      b.fireTried = [];
       PF.Audio.sfx.fire();
       PF.FX.text(m.fx, p.x, p.y - 60, '¡FUEGO!', '#ff9a3d', 1.1);
       m.shake = Math.max(m.shake, 7);
@@ -1080,9 +1115,53 @@ PF.Match = (() => {
     try { return fn(); } finally { m.hit = prev; }
   }
 
+  /**
+   * Bola de fuego contra un rival: chance de frenarla según su tipo (resiste
+   * el fuego 65 %, neutro 15 %, débil nada; el arquero en su área +25 %).
+   * Se sortea una vez por rival y tiro. Si la frena, se apaga y pierde fuerza.
+   */
+  function stopsFire(m, p, b) {
+    if (b.fireTried && b.fireTried.includes(p)) return false;
+    (b.fireTried = b.fireTried || []).push(p);
+    const eff = PF.typeEffect('fire', p.types);
+    let chance = eff < 1 ? 0.65 : eff > 1 ? 0 : 0.15;
+    if (isActiveKeeper(m, p)) chance += 0.25;
+    if (Math.random() >= chance) return false;
+    b.fire = 0;
+    b.vx *= 0.3; b.vy *= 0.3;
+    const water = p.types.includes('water');
+    PF.FX.text(m.fx, p.x, p.y - 56, water ? '¡APAGADO!' : '¡LO FRENA!', water ? '#8fd8ff' : '#e8e0cc', 1);
+    for (let i = 0; i < 18; i++) {
+      PF.FX.particle(m.fx, b.x, b.y - 8, U.rand(-90, 90), U.rand(-160, -40), U.pick(['#e8f0ff', '#c9d6ea', '#9fb0c8']), U.rand(0.4, 0.8), U.rand(4, 7));
+    }
+    PF.Audio.sfx.water();
+    return true;
+  }
+
+  /**
+   * ¿Aguanta el golpe actual (m.hit) por su tipo? Inmune (x0, ej. Eléctrico
+   * contra Tierra): nunca le hace nada. Poco eficaz: 50 % de aguantarlo de pie.
+   * La tirada vale 0,6 s por víctima y tipo, para que un golpe que toca varios
+   * pasos seguidos (zonas, rayos) no se vuelva a sortear en cada uno.
+   */
+  function resists(m, v) {
+    const h = m.hit;
+    if (!h || !h.type) return false;
+    const immune = PF.typeImmune(h.type, v.types);
+    const eff = PF.typeEffect(h.type, v.types);
+    if (!immune && eff >= 1) return false;
+    const r = v.resist;
+    if (r && r.type === h.type && m.clock - r.t < 0.6) return r.ok;
+    const ok = immune || Math.random() < 0.5;
+    v.resist = { type: h.type, t: m.clock, ok };
+    if (ok) PF.FX.text(m.fx, v.x, v.y - 72, immune ? '¡No le afecta!' : '¡Resiste!', '#a9b6d3', 0.7, 0.9);
+    return ok;
+  }
+
   /** Empuja y aturde. Si tenía la pelota, la suelta. Devuelve false si no le afecta. */
   function knock(m, v, nx, ny, force, stun) {
     if (untouchable(v) || v.wall > 0 || v.gkHold) return false;   // al arquero con la pelota en las manos no se le toca
+    if (resists(m, v)) return false;
     if (m.ball.holder === v) loseBall(m, v, nx, ny);
     v.vx = nx * force; v.vy = ny * force;
     v.stun = Math.max(v.stun, stun * hurt(m, v, stun));
@@ -1093,6 +1172,7 @@ PF.Match = (() => {
 
   function stunInPlace(m, v, stun) {
     if (untouchable(v) || v.gkHold) return false;
+    if (resists(m, v)) return false;
     if (m.ball.holder === v) loseBall(m, v, Math.cos(v.facing), Math.sin(v.facing));
     v.vx *= 0.15; v.vy *= 0.15;
     v.stun = Math.max(v.stun, stun * hurt(m, v, stun));
@@ -1437,6 +1517,16 @@ PF.Match = (() => {
         continue;
       }
 
+      if (b.fire > 0 && b.last && p.team !== b.last.team && p.stun <= 0 && stopsFire(m, p, b)) {
+        // la frenó: si es el arquero, la ataja; si no, sigue como pelota común
+        if (keeper && p.pickupCd <= 0) {
+          take(m, p);
+          p.stats.saves++;
+          PF.FX.text(m.fx, p.x, p.y - 60, '¡ATAJADA!', '#9cff6b', 1.1);
+          PF.Audio.crowd('ooh', 0.8);
+          return true;
+        }
+      }
       if (b.fire > 0 && b.last) {
         // la bola de fuego atraviesa: derriba rivales e ignora compañeros
         if (p.team !== b.last.team && p.stun <= 0) {
@@ -1558,6 +1648,6 @@ PF.Match = (() => {
     // usados por abilities.js, ai.js y render.js
     radius, mass, untouchable, mateOf, matesOf, teamOf, setAnim, knock, stunInPlace, loseBall, shoot,
     addHazard, addProjectile, jump, nearestFoeDist, homeSpot, shotAim, passTarget, laneClear, bestShot,
-    updateCamera, hasHuman, makePlayer,
+    updateCamera, hasHuman, makePlayer, PRESS_MAX,
   };
 })();

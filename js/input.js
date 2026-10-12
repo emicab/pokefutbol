@@ -27,7 +27,7 @@ PF.Input = (() => {
   const ACTIONS = [
     ['up', 'Arriba'], ['down', 'Abajo'], ['left', 'Izquierda'], ['right', 'Derecha'],
     ['pass', 'Pase (mantén = más fuerte) · placaje'], ['shoot', 'Tiro (mantén para cargar)'],
-    ['ability', 'Habilidad'], ['press', 'Presionar'], ['swap', 'Cambiar de Pokémon'],
+    ['ability', 'Habilidad'], ['press', 'Presionar (máx. 2 s, se enfría)'], ['swap', 'Cambiar de Pokémon'],
     ['order', 'Orden al equipo'], ['subs', 'Cambios'], ['pause', 'Pausa'], ['mute', 'Silencio'],
   ];
   // Mando estándar: A pase/placaje · B tiro · Y o RB habilidad · X presionar · LB cambiar

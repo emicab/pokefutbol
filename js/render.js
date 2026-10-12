@@ -340,6 +340,20 @@ PF.Render = (() => {
     if (p.charge >= 0 && p.team === m.humanTeam) drawPowerBar(ctx, p, head);
     if (p.passCharge > PF.Match.PASS_HOLD_MIN && p.team === m.humanTeam) drawPassBar(ctx, p, head);
     if (!m.demo && m.state !== 'replay') drawStamina(ctx, m, p, r);
+    if (p.human && p.team === m.humanTeam && m.state !== 'replay' && (p.pressT > 0 || p.pressCd > 0)) drawPressBar(ctx, p, r);
+  }
+
+  /**
+   * Presionar, bajo la energía: naranja que se vacía mientras presionas,
+   * gris que se llena mientras se enfría.
+   */
+  function drawPressBar(ctx, p, r) {
+    const w = 30, x = p.x - w / 2, y = p.y + r * 0.6 + 11;
+    const using = p.pressT > 0;
+    const k = using ? 1 - p.pressT / PF.Match.PRESS_MAX : 1 - p.pressCd / p.pressCdMax;
+    ctx.fillStyle = '#141018'; ctx.fillRect(x - 1, y - 1, w + 2, 4);
+    ctx.fillStyle = using ? '#ff8a3d' : '#6d7896';
+    ctx.fillRect(x, y, w * Math.max(0, k), 2);
   }
 
   function drawHazards(ctx, m) {

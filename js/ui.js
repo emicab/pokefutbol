@@ -51,7 +51,7 @@ PF.UI = (() => {
           <div><kbd>${K.label('pass')}</kbd> pase (mantén: más fuerte) · sin pelota: placaje</div>
           <div><kbd>${K.label('shoot')}</kbd> tiro (mantén para cargar)</div>
           <div><kbd>${K.label('ability')}</kbd> habilidad del Pokémon</div>
-          <div><kbd>${K.label('press')}</kbd> presionar (ir a la pelota)</div>
+          <div><kbd>${K.label('press')}</kbd> presionar (ir a la pelota; máx. 2 s)</div>
           <div><kbd>${K.label('swap')}</kbd> cambiar de Pokémon</div>
           <div>al tirar, <kbd>${K.label('up')}</kbd>/<kbd>${K.label('down')}</kbd> eligen palo</div>
           <div><kbd>${K.label('order')}</kbd> orden al equipo: neutro, ataque o defensa</div>

@@ -22,7 +22,7 @@ y abre <http://localhost:8123>.
 | `J` / `Z` | Pase (toque = pase justo; mantén = más fuerte) · sin pelota: placaje |
 | `K` / `X` | Tiro: mantén para cargar, suelta para patear |
 | `L` / `C` | Habilidad del Pokémon |
-| `Espacio` / `I` | Presionar: correr solo hacia la pelota |
+| `Espacio` / `I` | Presionar: correr solo hacia la pelota (máx. 2 s, cansa y se enfría) |
 | `Q` / `Shift` | Cambiar al compañero más cerca de la pelota |
 | `T` | Orden al equipo: Neutro → Ataque → Defensa |
 | `R` | Cambios (suplentes) |
@@ -147,6 +147,20 @@ para todos, así que a los de muchos PS (Snorlax, Lapras) les pesa menos que a
 los frágiles (Pikachu, Magikarp). Se recupera trotando o quieto, y en el
 banco. Cansado (menos de 40) corre más lento, patea más
 flojo y recarga la habilidad más despacio; agotado (0) no puede usarla.
+
+**Presionar** (`Espacio`) cansa mucho más que correr y dura como mucho 2
+segundos seguidos; después se enfría (hasta unos 3 s; la barrita naranja bajo
+la energía muestra lo que queda y la gris, la recarga). Si la mantienes
+apretada, para volver a presionar hay que soltarla. Cambiar de Pokémon no
+reinicia el enfriamiento.
+
+Los tipos también deciden los golpes de las habilidades: si el rival es
+**inmune** («¡No le afecta!», por ejemplo el Impactrueno contra Onix, que es
+Tierra) no le hace nada, y si es **poco eficaz** tiene 50 % de aguantarlo de
+pie («¡Resiste!»). El **Tiro Ígneo** de Charmander ya no es imparable: cada
+rival que cruza puede frenarlo (65 % si resiste el fuego, como los de Agua o
+Roca; 15 % si es neutro; nunca si es débil) y el arquero en su área suma 25 %.
+Si lo frenan, el fuego se apaga y la pelota pierde fuerza.
 
 En el partido rápido se pueden elegir hasta 2 suplentes; en el modo historia,
 todo el club que no es titular está en el banco. Hay 3 cambios por partido,

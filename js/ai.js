@@ -78,6 +78,12 @@ PF.AI = (() => {
     const want = WANTS[p.def.ability.id];
     const r = want && want(c);
     if (!r) return false;
+    // no gastarla si todos los rivales cerca son inmunes a su tipo (ej. Impactrueno contra Onix)
+    const type = PF.ABILITY_TYPE[p.def.ability.id];
+    if (type) {
+      const near = m.players.filter((q) => q.team !== p.team && U.dist(p.x, p.y, q.x, q.y) < 420);
+      if (near.length && near.every((q) => PF.typeImmune(type, q.types))) return false;
+    }
     if (typeof r === 'number') it.aim = r;
     it.ability = true;
     return true;

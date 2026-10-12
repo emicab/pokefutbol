@@ -156,6 +156,11 @@
     }
     return k;
   };
+  /** ¿Inmune según la tabla? (ej. Eléctrico contra Tierra). typeEffect lo suaviza a ×0,25. */
+  PF.typeImmune = (att, defTypes) => {
+    const c = CHART[att];
+    return !!(c && c.zero && (defTypes || []).some((t) => c.zero.includes(t)));
+  };
 
   /** Tipo de cada habilidad (para la efectividad de sus golpes). */
   PF.ABILITY_TYPE = {
