@@ -144,6 +144,38 @@ PF.Match = (() => {
   }
 
   /**
+   * Qué tan libre está la línea de (ax,ay) a (bx,by) para el equipo `team`:
+   * distancia del rival (no aturdido) más cercano al segmento. Infinity si no hay nadie en medio.
+   */
+  function laneClear(m, team, ax, ay, bx, by) {
+    const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1;
+    let best = Infinity;
+    for (const q of m.players) {
+      if (q.team === team || q.stun > 0) continue;
+      const t = ((q.x - ax) * dx + (q.y - ay) * dy) / L2;
+      if (t < 0.05 || t > 1) continue;
+      best = Math.min(best, Math.hypot(ax + dx * t - q.x, ay + dy * t - q.y) - q.r);
+    }
+    return best;
+  }
+
+  /**
+   * Mejor punto de la boca del arco rival para tirar desde (x, y): prueba
+   * palos y centro y se queda con el de la línea más libre (el arquero cuenta).
+   * { y, clear }
+   */
+  function bestShot(m, p, x = p.x, y = p.y) {
+    const gx = p.side === 0 ? F.x1 + 10 : F.x0 - 10;
+    let best = { y: F.cy, clear: -Infinity };
+    for (const k of [-0.75, -0.35, 0.35, 0.75]) {
+      const ty = F.cy + k * F.goalHalf;
+      const clear = laneClear(m, p.team, x, y, gx, ty);
+      if (clear > best.clear) best = { y: ty, clear };
+    }
+    return best;
+  }
+
+  /**
    * Bonus por jugar en su puesto natural: arquero con mejores reflejos,
    * defensa más pesado, medio más rápido y con menos recarga, delantero con
    * más tiro. Fuera de puesto no hay castigo.
@@ -215,7 +247,13 @@ PF.Match = (() => {
         const ahead = (q.x - p.x) * dirOf(p.side);
         // al arquero sólo si no hay otra (pase atrás de seguridad)
         const backPass = m.keeper[q.team] === q ? 220 : 0;
-        const score = free + ahead * 0.4 - Math.max(0, d - 450) * 0.6 - backPass;
+        // línea de pase con un rival en medio: casi seguro que la cortan
+        const lane = laneClear(m, p.team, p.x, p.y, q.x, q.y);
+        const cut = lane < 40 ? 170 : lane < 80 ? 60 : 0;
+        // en el último tercio, premiar al que queda de cara al arco con la línea de tiro libre
+        const gx = q.side === 0 ? F.x1 : F.x0, dG = U.dist(q.x, q.y, gx, F.cy);
+        const shotBonus = !backPass && dG < 480 ? (480 - dG) * (bestShot(m, q).clear > 30 ? 0.5 : 0.12) : 0;
+        const score = free + ahead * 0.4 - Math.max(0, d - 450) * 0.6 - backPass - cut + shotBonus;
         if (score > bestScore) { best = q; bestScore = score; }
       }
     }
@@ -1471,6 +1509,6 @@ PF.Match = (() => {
     inBox, isActiveKeeper, keeperOf, ownGoalX, dirOf,
     // usados por abilities.js, ai.js y render.js
     radius, mass, untouchable, mateOf, matesOf, teamOf, setAnim, knock, stunInPlace, loseBall, shoot,
-    addHazard, addProjectile, jump, nearestFoeDist, homeSpot, shotAim, passTarget,
+    addHazard, addProjectile, jump, nearestFoeDist, homeSpot, shotAim, passTarget, laneClear, bestShot,
   };
 })();

@@ -210,6 +210,32 @@ PF.AI = (() => {
     return true;
   }
 
+  /**
+   * Desmarque: alrededor de su puesto (hx, hy), el punto con más aire, la línea
+   * de pase desde `holder` libre, algo más adelante y sin amontonarse con
+   * compañeros. Bonus si desde ahí hay tiro limpio.
+   */
+  function openSpot(p, m, holder, hx, hy, dirX, goalX) {
+    const M = PF.Match;
+    const mates = M.matesOf(m, p).filter((q) => q !== holder);
+    let best = [hx, hy], bestS = -Infinity;
+    for (const ax of [-100, 30, 160, 290]) {
+      for (const ay of [-200, -80, 80, 200]) {
+        const x = U.clamp(hx + ax * dirX, F.x0 + 80, F.x1 - 80);
+        const y = U.clamp(hy + ay, F.y0 + 50, F.y1 - 50);
+        if ((goalX - x) * dirX < 70) continue;   // no pegarse a la línea de fondo
+        let s = Math.min(260, M.nearestFoeDist(m, p, x, y));
+        s += Math.min(150, M.laneClear(m, p.team, holder.x, holder.y, x, y)) * 0.8;
+        s += U.clamp((x - holder.x) * dirX, -200, 320) * 0.35;
+        s -= U.dist(x, y, hx, hy) * 0.22;
+        for (const q of mates) if (U.dist(x, y, q.x, q.y) < 170) s -= 120;
+        if (U.dist(x, y, goalX, F.cy) < 420 && M.bestShot(m, p, x, y).clear > 30) s += 90;
+        if (s > bestS) { bestS = s; best = [x, y]; }
+      }
+    }
+    return best;
+  }
+
   /** Saque: mirar al mejor compañero y pasársela. */
   function kickoff(p, m) {
     const mate = PF.Match.passTarget(m, p);
@@ -285,31 +311,62 @@ PF.AI = (() => {
         return it;
       }
       if (p.gkHold) return keeperDistribute(p, m, it);
+      // de lejos la pelota llega frenada y el arquero la ataja: mejor acercarse
+      const range = teamSize >= 3 ? 400 : 440;
+      const facingGoal = (p.x - goalX) * dirX < -20;
       if (decide) {
         if (tryAbility(p, m, it, c)) return it;
-        if (c.dGoal < 440 && (p.x - goalX) * dirX < -20) {
-          ai.aim = c.aimGoal + U.rand(-s.aim, s.aim);
+        const shot = M.bestShot(m, p);
+        const shootAt = (ty) => {
+          ai.aim = Math.atan2(ty - p.y, goalX + dirX * 30 - p.x) + U.rand(-s.aim, s.aim);
           ai.shotT = U.lerp(0.12, M.CHARGE_MAX, U.clamp((c.dGoal - 120) / 320, 0, 1));
           it.shootHold = true;
           it.aim = ai.aim;
           return it;
+        };
+        if (c.dGoal < range && facingGoal) {
+          // línea libre a algún palo, muy cerca, o encima y sin salida: tiro
+          if (shot.clear > 26 || c.dGoal < 230 || (c.pressure < 70 && c.dGoal < 360)) return shootAt(shot.y);
+          // tapado: ¿hay un compañero con mejor tiro y la línea de pase libre?
+          const mate = M.passTarget(m, p);
+          if (mate && mate.stun <= 0 && M.laneClear(m, p.team, p.x, p.y, mate.x, mate.y) > 40 &&
+              M.bestShot(m, mate).clear > shot.clear + 20 && Math.random() < 0.75) { it.pass = true; return it; }
+          // si no, lo intenta igual de vez en cuando (si no, se queda trabado)
+          if (Math.random() < 0.25) return shootAt(shot.y);
+        } else if (facingGoal && c.dGoal < range * 1.2 && shot.clear > 90 && Math.random() < 0.1) {
+          return shootAt(shot.y);   // remate de media distancia con todo despejado
         }
         const mate = M.passTarget(m, p);
         if (mate && mate.stun <= 0) {
           const mateFree = M.nearestFoeDist(m, mate, mate.x, mate.y);
           const mateAhead = (mate.x - p.x) * dirX;
-          if (c.pressure < 90 && mateFree > 110 && Math.random() < 0.7) { it.pass = true; return it; }
-          if (mateAhead > 160 && mateFree > 170 && Math.random() < (teamSize > 2 ? 0.35 : 0.2)) { it.pass = true; return it; }
+          const lane = M.laneClear(m, p.team, p.x, p.y, mate.x, mate.y);
+          if (c.pressure < 90 && mateFree > 110 && lane > 30 && Math.random() < 0.7) { it.pass = true; return it; }
+          if (mateAhead > 160 && mateFree > 170 && lane > 45 && Math.random() < (teamSize > 2 ? 0.4 : 0.2)) { it.pass = true; return it; }
         }
       }
-      // conducir hacia el arco apartándose de los rivales
-      let vx = goalX - p.x, vy = gy - p.y;
+      // conducir hacia el arco apartándose de los rivales; en canchas grandes, si el
+      // centro está cargado, abrirse a la banda en vez de meterse en el embudo
+      let ty0 = gy;
+      if (teamSize >= 3 && c.dGoal > 260) {
+        const wall = foes.filter((q) => {
+          const ahead = (q.x - p.x) * dirX;
+          return ahead > 0 && ahead < 320 && Math.abs(q.y - F.cy) < F.goalHalf + 120;
+        }).length;
+        if (wall >= 2) {
+          ai.wing = ai.wing || (p.y < F.cy ? -1 : 1);
+          ty0 = F.cy + ai.wing * (F.y1 - F.y0) * 0.32;
+        } else ai.wing = 0;
+      }
+      let vx = goalX - p.x, vy = ty0 - p.y;
       const l = Math.hypot(vx, vy) || 1;
       vx /= l; vy /= l;
       for (const q of foes) {
         const dx = p.x - q.x, dy = p.y - q.y, d = Math.hypot(dx, dy);
-        if (d < 170 && d > 1) {
-          const w = ((170 - d) / 170) * 1.4;
+        // los que tengo delante pesan más (los esquivo antes de chocarlos)
+        const front = (q.x - p.x) * dirX > 0 ? 210 : 170;
+        if (d < front && d > 1) {
+          const w = ((front - d) / front) * 1.4;
           vx += (dx / d) * w; vy += (dy / d) * w;
         }
       }
@@ -365,8 +422,16 @@ PF.AI = (() => {
     if (holder && holder.team === p.team) {
       ai.chasing = false;
       let tx, ty;
-      if (teamSize > 2) [tx, ty] = M.homeSpot(m, p, shift);
-      else if (order === 'def') {
+      if (teamSize > 2) {
+        [tx, ty] = M.homeSpot(m, p, shift);
+        // medios y delanteros: con la pelota pasada la mitad de la cancha propia,
+        // buscan un hueco libre (línea de pase limpia, lejos de las marcas)
+        const progress = ((holder.x - ownX) * dirX) / (F.x1 - F.x0);
+        if (p.spot[0] >= 0.38 && progress > 0.3 && order !== 'def') {
+          if (decide || !ai.run) ai.run = openSpot(p, m, holder, tx, ty, dirX, goalX);
+          [tx, ty] = ai.run;
+        } else ai.run = null;
+      } else if (order === 'def') {
         // quedarse atrás, cubriendo el contraataque
         tx = holder.x - dirX * 240;
         ty = F.cy + (holder.y - F.cy) * -0.3;

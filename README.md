@@ -93,6 +93,12 @@ cada uno (al más peligroso primero), parados entre él y el arco. En 5 vs 5 la
 marca es más floja: sólo en el último tercio, dos marcadores como mucho y más
 separados.
 
+En ataque, la CPU tira al palo que tenga la línea más libre (y si está
+tapada, busca al compañero mejor ubicado), evita pases con un rival en el
+medio, se abre a la banda cuando el centro está cargado, y sus medios y
+delanteros se desmarcan buscando huecos con la línea de pase limpia. Lo
+mismo hacen tus compañeros.
+
 ### Puestos y pizarra
 
 Cada Pokémon tiene un puesto natural (arquero, defensa, medio o delantero)
