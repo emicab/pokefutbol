@@ -19,6 +19,7 @@ PF.Match = (() => {
   const BALL_R = 10;
   const CONTROL_SPEED = 700;     // por debajo de esto, la pelota se controla al tocarla
   const CHARGE_MAX = 0.7;        // segundos para el tiro a máxima potencia
+  const SHOT_TAP = 0.85, SHOT_FULL = 1.3;   // fuerza del tiro: con un toque y cargado a tope (× 1180 px/s)
   const DASH_SPEED = 660, DASH_TIME = 0.2, TACKLE_CD = 1.1;
   const PASS_CONE = 1.1;         // radianes: apuntando así de cerca de un compañero, el pase va a él
   const HUMAN_STEAL = 0.12;      // segundos de contacto para robar (las IA usan skill.steal)
@@ -250,12 +251,15 @@ PF.Match = (() => {
     const mates = matesOf(m, p).filter((q) => !q.slam && q.dig <= 0 && (p.human || q.stun <= 0));
     if (!mates.length) return null;
     let best = null, bestScore = p.human ? Infinity : -Infinity;
+    let nearest = null, nd = Infinity;
     for (const q of mates) {
       const d = U.dist(p.x, p.y, q.x, q.y);
       if (p.human) {
         const a = Math.abs(U.angDiff(p.facing, Math.atan2(q.y - p.y, q.x - p.x)));
         const score = a + d / 3000;
         if (a < PASS_CONE && score < bestScore) { best = q; bestScore = score; }
+        // si no apunta a nadie (aunque esté de espaldas), al más cercano que no esté aturdido
+        if (q.stun <= 0 && d < nd) { nd = d; nearest = q; }
       } else {
         const free = Math.min(250, nearestFoeDist(m, q, q.x, q.y));
         const ahead = (q.x - p.x) * dirOf(p.side);
@@ -271,7 +275,7 @@ PF.Match = (() => {
         if (score > bestScore) { best = q; bestScore = score; }
       }
     }
-    return best;
+    return best || (p.human ? nearest : null);
   }
 
   /**
@@ -814,12 +818,18 @@ PF.Match = (() => {
       if (p.pressT >= PRESS_MAX) endPress(m, p);
     } else if (p.pressT > 0) endPress(m, p);
 
-    // asistencias: presionar, o ir a buscar un pase que viene hacia mí
-    const autoReceive = p.human && b.passTo === p && !b.holder && Math.hypot(mx, my) < 0.2;
-    if (active && p.stun <= 0 && b.holder !== p && (pressing || autoReceive)) {
+    // asistencias: presionar, o ir a buscar un pase que viene hacia mí. Al
+    // recibir, el que la recibe va a la pelota aunque se esté moviendo (si no,
+    // la pelota pasaba de largo y quedaba suelta); la dirección sólo lo corre un poco
+    const receiving = p.human && b.passTo === p && !b.holder;
+    if (active && p.stun <= 0 && b.holder !== p && (pressing || receiving)) {
       const [tx, ty] = ballTarget(m, p);
       const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy);
-      if (d > 8) { mx = dx / d; my = dy / d; }
+      if (d > 8) {
+        const w = pressing ? 0 : Math.min(0.3, Math.hypot(mx, my) * 0.3);
+        mx = (dx / d) * (1 - w) + mx * w;
+        my = (dy / d) * (1 - w) + my * w;
+      }
     }
 
     const ml = Math.hypot(mx, my);
@@ -846,7 +856,11 @@ PF.Match = (() => {
       p.dash -= dt;
       p.vx = p.dashDx * p.dashSpeed;
       p.vy = p.dashDy * p.dashSpeed;
+      // la estirada del arquero termina en seco (si no, se seguía deslizando más allá de la pelota)
+      if (p.dash <= 0 && p.diving > 0) { const k = Math.max(0, p.dash + dt) / dt; p.vx *= k; p.vy *= k; }
       if (Math.random() < 0.6) PF.FX.particle(m.fx, p.x, p.y, -p.vx * 0.1, -p.vy * 0.1, '#e9e2c8', 0.3, 4);
+    } else if (p.down > 0) {
+      p.vx = 0; p.vy = 0;   // en el piso tras estirarse
     } else if (p.stun > 0) {
       const k = U.damp(p.slip > 0 ? 0.8 : st.traction * 0.32, dt);
       p.vx -= p.vx * k; p.vy -= p.vy * k;
@@ -880,10 +894,12 @@ PF.Match = (() => {
     // queda un momento en el piso (DIVE_DOWN) y no puede volver a tirarse enseguida
     if (it.dive && p.dash <= 0 && p.diveCd <= 0) {
       const dx = it.dive[0] - p.x, dy = it.dive[1] - p.y, d = Math.hypot(dx, dy) || 1;
-      p.dash = DIVE_TIME; p.diving = DIVE_TIME + 0.08; p.dashSpeed = DIVE_SPEED;
+      // lo justo para llegar al punto (como mucho DIVE_TIME): si no, se pasaba de largo
+      const dur = U.clamp(d / DIVE_SPEED, 0.08, DIVE_TIME);
+      p.dash = dur; p.diving = dur + 0.12; p.dashSpeed = DIVE_SPEED;
       p.dashDx = dx / d; p.dashDy = dy / d;
       p.diveCd = DIVE_CD;
-      p.down = DIVE_TIME + DIVE_DOWN;
+      p.down = dur + DIVE_DOWN;
       setAnim(p, 'Attack', true);
       PF.Audio.sfx.swoosh();
     }
@@ -893,10 +909,10 @@ PF.Match = (() => {
       if (p.gkT > 4) { pass(m, p); return; }
     }
 
+    // sin la energía que cuesta, no hay habilidad ni placaje
     if (it.ability && p.cd <= 0) {
-      if (p.stamina <= 0) {
-        if (p.human) PF.FX.text(m.fx, p.x, p.y - 60, 'sin energía...', '#ff8a8a', 0.7, 0.8);
-      } else useAbility(m, p);
+      if (p.stamina < abilityCost(p)) noEnergy(m, p);
+      else useAbility(m, p);
     }
     if (b.holder === p) {
       if (it.clear !== undefined) { clearance(m, p, it.clear); return; }
@@ -916,8 +932,20 @@ PF.Match = (() => {
       p.charge = -1;
       p.passCharge = -1;
       // si me están pasando la pelota, J no es placaje
-      if (it.pass && p.tackleCd <= 0 && p.dash <= 0 && b.passTo !== p) tackle(m, p);
+      if (it.pass && p.tackleCd <= 0 && p.dash <= 0 && b.passTo !== p) {
+        if (p.stamina < STAMINA.tackle) noEnergy(m, p);
+        else tackle(m, p);
+      }
     }
+  }
+
+  const abilityCost = (p) => STAMINA.ability + p.def.ability.cd * STAMINA.abilityCd;
+  /** Aviso de "sin energía" (como mucho uno por segundo). */
+  function noEnergy(m, p) {
+    if (!p.human || m.clock - (p.noEnergyT || -9) < 1) return;
+    p.noEnergyT = m.clock;
+    PF.FX.text(m.fx, p.x, p.y - 60, 'sin energía...', '#ff8a8a', 0.7, 0.8);
+    PF.Audio.sfx.fail();
   }
 
   function endPress(m, p) {
@@ -1068,10 +1096,11 @@ PF.Match = (() => {
     const b = m.ball;
     spend(p, STAMINA.shot + STAMINA.shotCharge * k);
     const aim = shotAim(p);
-    const power = U.lerp(0.42, 1, k) * p.def.power * p.bonus.power * m.mods[p.team].power * (b.big > 0 ? 0.85 : 1) * (0.75 + 0.25 * fatigue(p));
+    // un toque ya sale rápido (más que un pase); cargar le suma fuerza
+    const power = U.lerp(SHOT_TAP, SHOT_FULL, k) * p.def.power * p.bonus.power * m.mods[p.team].power * (b.big > 0 ? 0.85 : 1) * (0.75 + 0.25 * fatigue(p));
     let sp = 1180 * power;
     const fire = p.fireShot > 0;
-    if (fire) sp = 1450 * p.def.power;
+    if (fire) sp = 1600 * p.def.power;
     p.facing = aim.a;
     release(m, p, Math.cos(aim.a) * sp, Math.sin(aim.a) * sp);
     setAnim(p, 'Attack', true);
@@ -1241,7 +1270,7 @@ PF.Match = (() => {
     const id = p.def.ability.id;
     const fn = PF.Abilities[id];
     const ok = withHit(m, p, PF.ABILITY_TYPE[id], () => fn(m, p));
-    if (ok !== false) spend(p, STAMINA.ability + p.def.ability.cd * STAMINA.abilityCd);
+    if (ok !== false) spend(p, abilityCost(p));
     p.cd = ok === false ? 1.2 : p.def.ability.cd * p.bonus.cd * m.mods[p.team].cd;
     if (ok !== false && p.anim !== 'Attack') setAnim(p, 'Charge', true);
   }
@@ -1670,6 +1699,6 @@ PF.Match = (() => {
     // usados por abilities.js, ai.js y render.js
     radius, mass, untouchable, mateOf, matesOf, teamOf, setAnim, knock, stunInPlace, loseBall, shoot,
     addHazard, addProjectile, jump, nearestFoeDist, homeSpot, shotAim, passTarget, laneClear, bestShot,
-    updateCamera, hasHuman, makePlayer, PRESS_MAX, dropHuman,
+    updateCamera, hasHuman, makePlayer, PRESS_MAX, dropHuman, abilityCost,
   };
 })();

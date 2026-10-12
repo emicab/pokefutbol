@@ -20,7 +20,7 @@ y abre <http://localhost:8123>.
 |---|---|
 | `WASD` / flechas | Moverse (en el saque: apuntar) |
 | `J` / `Z` | Pase (toque = pase justo; mantén = más fuerte) · sin pelota: placaje |
-| `K` / `X` | Tiro: mantén para cargar, suelta para patear |
+| `K` / `X` | Tiro: un toque ya sale fuerte; mantén para cargar más |
 | `L` / `C` | Habilidad del Pokémon |
 | `Espacio` / `I` | Presionar: correr solo hacia la pelota (máx. 2 s, cansa y se enfría) |
 | `Q` / `Shift` | Cambiar al compañero más cerca de la pelota |
@@ -38,13 +38,17 @@ LT orden al equipo · Select cambios · Start pausa.
 - **Saque:** el que saca empieza con la pelota y nadie se mueve hasta que la
   juega. Sólo se puede pasar.
 - **Pases:** si miras más o menos hacia un compañero, la línea punteada indica
-  a quién va; el control pasa al que recibe y corre solo a buscarla. Si miras
-  a otro lado, es un pase al hueco. Un toque da el pase justo (la fuerza se
-  calcula para que llegue según la distancia y la cancha); manteniendo la
-  tecla aparece una barra azul y el pase sale más fuerte (hasta ×1,6), o más
-  largo si es al hueco.
-- **Tiro:** al cargar aparece la barra de potencia y, si apuntas al arco, una
-  mira en la boca. `↑`/`↓` al soltar eligen palo.
+  a quién va; si no apuntas a nadie (aunque estés de espaldas), va al más
+  cercano. El control pasa al que recibe, que va solo a buscarla aunque estés
+  apretando otra dirección (la dirección sólo lo corre un poco). Un toque da
+  el pase justo (la fuerza se calcula para que llegue según la distancia y la
+  cancha); manteniendo la tecla aparece una barra azul y el pase sale más
+  fuerte (hasta ×1,6).
+- **Tiro:** un toque ya sale rápido y fuerte (más que un pase); manteniendo
+  la tecla se carga la barra y sale todavía más fuerte. Si apuntas al arco
+  aparece una mira en la boca; `↑`/`↓` al soltar eligen palo.
+- **Sin energía** para lo que cuesta, no se puede placar ni usar la habilidad
+  («sin energía…»).
 - **Habilidad:** el anillo de tus Pokémon se va llenando mientras recarga y
   brilla cuando está lista. Sólo recarga con la pelota en juego.
 - **Órdenes al equipo** (panel de abajo y etiqueta sobre cada uno):

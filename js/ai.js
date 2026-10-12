@@ -75,6 +75,7 @@ PF.AI = (() => {
   /** Decide si usar la habilidad; si sí, rellena `it` y devuelve true. */
   function tryAbility(p, m, it, c) {
     if (p.cd > 0 || Math.random() > p.skill.ability) return false;
+    if (p.stamina < PF.Match.abilityCost(p)) return false;   // sin energía no hay habilidad
     const want = WANTS[p.def.ability.id];
     const r = want && want(c);
     if (!r) return false;
@@ -120,13 +121,16 @@ PF.AI = (() => {
     const seen = m.clock - (b.kickT || 0) >= ai.gkr;
     if (!b.holder && b.vx * dir < -250 && !seen) return it;
     if (!b.holder && b.vx * dir < -250) {
-      const t = (lineX - b.x) / b.vx;
+      // cuándo cruza la línea, con el frenado de la pelota en esta cancha
+      // (v·e^(-a·t)): si no, a los tiros lentos se estiraría antes de tiempo
+      const tLin = (lineX - b.x) / b.vx, a = 0.95 * m.stadium.friction;
+      const t = tLin <= 0 ? -1 : a > 0 ? (tLin * a < 1 ? -Math.log(1 - tLin * a) / a : Infinity) : tLin;
       if (t > 0 && t < 0.9) {
-        const yAt = b.y + b.vy * t;
+        const yAt = b.y + b.vy * tLin;   // la dirección no cambia: el punto de cruce es el mismo
         if (Math.abs(yAt - F.cy) < F.goalHalf + 40) {
           const ty = U.clamp(yAt + ai.gkErr, F.cy - maxY - 12, F.cy + maxY + 12);
           const far = U.dist(p.x, p.y, lineX, ty) > 26;
-          if (far && t < 0.42 && p.dash <= 0 && Math.random() > s.react * 0.8) { it.dive = [lineX, ty]; return it; }
+          if (far && t < 0.34 && p.dash <= 0 && Math.random() > s.react * 0.8) { it.dive = [lineX, ty]; return it; }
           moveTo(it, p, lineX, ty);
           return it;
         }
