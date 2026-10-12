@@ -27,14 +27,42 @@ PF.Match = (() => {
   const NO_INTENT = { mx: 0, my: 0, pass: false, shootHold: false, ability: false, press: false };
 
   /**
-   * Formaciones: [profundidad desde el arco propio (0..1), lateral (-1..1)].
-   * El slot 0 es el que saca.
+   * Formaciones por defecto: [profundidad desde el arco propio (0..1), lateral (-1..1)].
+   * Con arquero fijo, el que está casi en la línea (< 0.1) es el arquero.
+   * La pizarra (board.js) deja moverlas; el puesto sale de la profundidad (PF.zoneRole).
    */
-  const FORMATIONS = {
-    2: [[0.42, -0.3], [0.22, 0.28]],
-    3: [[0.55, -0.35], [0.45, 0.38], [0.22, 0]],
-    5: [[0.62, -0.33], [0.62, 0.33], [0.42, 0], [0.22, -0.42], [0.22, 0.42]],
+  const PRESETS = {
+    spider: {
+      2: [[0.42, -0.3], [0.22, 0.28]],
+      3: [[0.55, -0.35], [0.45, 0.38], [0.22, 0]],
+      5: [[0.62, -0.33], [0.62, 0.33], [0.42, 0], [0.22, -0.42], [0.22, 0.42]],
+    },
+    fixed: {
+      2: [[0.45, 0], [0.03, 0]],
+      3: [[0.55, -0.3], [0.35, 0.3], [0.03, 0]],
+      5: [[0.65, 0], [0.45, -0.38], [0.45, 0.38], [0.22, 0], [0.03, 0]],
+    },
   };
+  const KEEPER_DEPTH = 0.1;
+
+  /**
+   * Formación por defecto para unos Pokémon: reparte las posiciones según el
+   * puesto natural de cada uno (el más arquero al arco, el más delantero arriba).
+   * Devuelve [[d, f], ...] en el mismo orden que `defs`.
+   */
+  function autoFormation(defs, mode) {
+    const spots = (PRESETS[mode] || PRESETS.spider)[defs.length] || PRESETS.spider[2];
+    const sorted = spots.map((s, i) => ({ s, i })).sort((a, b) => a.s[0] - b.s[0]);   // del arco hacia arriba
+    const left = defs.map((d, i) => ({ d, i, sc: PF.roleScores(d) }));
+    const out = [];
+    for (const { s } of sorted) {
+      const role = PF.zoneRole(s[0]);
+      left.sort((a, b) => b.sc[role] - a.sc[role]);
+      const pick = left.shift();
+      out[pick.i] = s.slice();
+    }
+    return out;
+  }
 
   /** Órdenes a la IA del equipo humano (tecla T). Ver ai.js. */
   const ORDERS = [
@@ -55,7 +83,21 @@ PF.Match = (() => {
 
   // ---------------------------------------------------------------- helpers
   const radius = (p) => p.r * (p.giant > 0 ? 1.5 : 1);
-  const mass = (p) => p.def.mass * (p.giant > 0 ? 2.2 : 1) * (p.wall > 0 ? 20 : 1);
+  const mass = (p) => p.def.mass * p.bonus.mass * (p.giant > 0 ? 2.2 : 1) * (p.wall > 0 ? 20 : 1);
+
+  /** ¿El punto está dentro del área grande del equipo `team`? */
+  function inBox(team, x, y, pad = 0) {
+    if (Math.abs(y - F.cy) > F.boxH + pad) return false;
+    return team === 0 ? x < F.x0 + F.boxW + pad : x > F.x1 - F.boxW - pad;
+  }
+  /** Arquero de ese equipo en este momento y dentro de su área (puede usar las manos). */
+  const isActiveKeeper = (m, p) => m.keeper[p.team] === p && inBox(p.team, p.x, p.y, 6);
+  const keeperOf = (m, team) => m.keeper[team];
+
+  /** Reflejos del arquero: velocidad máxima de tiro que atrapa (más rápido, desvía). */
+  function catchSpeed(m, p) {
+    return 1050 * p.bonus.reflex * m.mods[p.team].reflex * (p.human ? 1 : p.skill.keeper || 1);
+  }
   const untouchable = (p) => p.phase > 0 || p.dig > 0 || !!p.slam;
   const teamOf = (m, team) => m.players.filter((q) => q.team === team);
   const matesOf = (m, p) => m.players.filter((q) => q.team === p.team && q !== p);
@@ -75,14 +117,32 @@ PF.Match = (() => {
     return best;
   }
 
-  function makePlayer(def, team, slot, skill) {
+  /**
+   * Bonus por jugar en su puesto natural: arquero con mejores reflejos,
+   * defensa más pesado, medio más rápido y con menos recarga, delantero con
+   * más tiro. Fuera de puesto no hay castigo.
+   */
+  function roleBonus(natural, pos) {
+    const b = { speed: 1, power: 1, mass: 1, reflex: 1, cd: 1 };
+    if (natural === 'POR') b.reflex = 1.25;                 // de arquero siempre (también araña)
+    if (natural !== pos) return b;
+    if (pos === 'DEF') b.mass = 1.15;
+    if (pos === 'MED') { b.speed = 1.04; b.cd = 0.9; }
+    if (pos === 'DEL') b.power = 1.08;
+    return b;
+  }
+
+  function makePlayer(def, team, slot, skill, spot) {
+    const natural = PF.naturalRole(def), pos = PF.zoneRole(spot[0]);
     return {
-      def, team, slot, skill,
+      def, team, slot, skill, spot, natural, pos, bonus: roleBonus(natural, pos),
+      stats: { goals: 0, assists: 0, tackles: 0, saves: 0 },
+      gkHold: false, gkT: 0, assistFrom: null, assistT: 0,
       x: 0, y: 0, z: 0, vx: 0, vy: 0, facing: team === 0 ? 0 : Math.PI, r: def.radius,
       stun: 0, asleep: false, cd: def.ability.cd * 0.75, tackleCd: 0, dash: 0, dashDx: 0, dashDy: 0, dashSpeed: DASH_SPEED,
       pickupCd: 0, holdT: 0, stealT: 0, charge: -1, aimMy: 0,
       fireShot: 0, phase: 0, turbo: 0, giant: 0, slow: 0, wall: 0, embers: 0, emberT: 0, slip: 0, burnCd: 0,
-      dig: 0, ram: 0, spinT: 0, magnet: 0,
+      dig: 0, ram: 0, spinT: 0, magnet: 0, diving: 0, fixedKeeper: false,
       slam: null, anim: 'Idle', animT: 0, animLock: 0, human: false,
       ai: { t: 0, chasing: false, shotT: 0, aim: 0 },
     };
@@ -98,8 +158,7 @@ PF.Match = (() => {
 
   /** Posición de un slot de la formación, desplazada con la pelota (ai.js). */
   function homeSpot(m, p, shift = 0) {
-    const n = teamOf(m, p.team).length;
-    const [d, f] = (FORMATIONS[n] || FORMATIONS[2])[p.slot] || [0.4, 0];
+    const [d, f] = p.spot;
     const len = F.x1 - F.x0, H = (F.y1 - F.y0) / 2, dir = dirOf(p.team), own = ownGoalX(p.team);
     const b = m.ball;
     const progress = U.clamp(((b.x - own) * dir) / len, 0, 1);
@@ -153,14 +212,19 @@ PF.Match = (() => {
    * opts.skills     [skill equipo 0, skill equipo 1] (ver PF.AI.SKILLS)
    * opts.stadium    id de PF.STADIUMS
    * opts.time       segundos · opts.replays  repetición de los goles
+   * opts.keeperMode 'spider' (arquero araña: ataja el más cercano a su arco) o 'fixed'
+   * opts.formations [[[d, f]...], [[d, f]...]] posiciones (si falta, autoFormation)
+   * opts.mods       [{speed, power, cd, reflex}, ...] multiplicadores por equipo (mejoras de la historia)
    * Antes hay que llamar a PF.configureField(n) con el tamaño del equipo.
    */
   function create(opts) {
+    const keeperMode = opts.keeperMode || 'spider';
+    const neutral = { speed: 1, power: 1, cd: 1, reflex: 1 };
     const m = {
       players: [],
       ball: {
         x: F.cx, y: F.cy, vx: 0, vy: 0, r: BALL_R, holder: null, last: null, fire: 0,
-        vine: null, vineT: 0, vineColor: '#7dff9e', passTo: null, passT: 0, spin: 0, big: 0, crazy: 0, curve: 1,
+        vine: null, vineT: 0, vineColor: '#7dff9e', passTo: null, passT: 0, passFrom: null, spin: 0, big: 0, crazy: 0, curve: 1,
       },
       score: [0, 0], time: opts.time ?? PF.MATCH_TIME, golden: false,
       state: 'kickoff', stateT: 0, clock: 0, kickoffTeam: Math.random() < 0.5 ? 0 : 1, kicker: null,
@@ -170,11 +234,23 @@ PF.Match = (() => {
       rec: [], replay: null, replays: opts.replays !== false, nearT: 0,
       stadium: PF.stadiumById(opts.stadium),
       humanTeam: opts.humanTeam, controlled: null, demo: !!opts.demo,
-      order: 0,
+      order: 0,   // índice en ORDERS
+      keeperMode, keeper: [null, null],
+      mods: [Object.assign({}, neutral, opts.mods && opts.mods[0]), Object.assign({}, neutral, opts.mods && opts.mods[1])],
     };
-    opts.teams.forEach((defs, team) => defs.forEach((d, i) => {
-      m.players.push(makePlayer(d, team, i, opts.skills[team]));
-    }));
+    opts.teams.forEach((defs, team) => {
+      const given = opts.formations && opts.formations[team];
+      const spots = given && given.length === defs.length ? given : autoFormation(defs, keeperMode);
+      defs.forEach((d, i) => m.players.push(makePlayer(d, team, i, opts.skills[team], spots[i])));
+    });
+    if (keeperMode === 'fixed') {
+      for (const team of [0, 1]) {
+        // el más pegado al arco es el arquero
+        const t = teamOf(m, team);
+        m.keeper[team] = t.reduce((a, b) => (b.spot[0] < a.spot[0] ? b : a));
+        m.keeper[team].fixedKeeper = true;
+      }
+    }
     kickoff(m);
     return m;
   }
@@ -190,27 +266,30 @@ PF.Match = (() => {
     Object.assign(b, { x: F.cx, y: F.cy, vx: 0, vy: 0, holder: null, last: null, fire: 0, vine: null, passTo: null, big: 0, crazy: 0 });
     const len = F.x1 - F.x0, H = (F.y1 - F.y0) / 2;
     for (const p of m.players) {
-      const n = teamOf(m, p.team).length;
-      const [d, f] = (FORMATIONS[n] || FORMATIONS[2])[p.slot] || [0.3, 0];
+      const [d, f] = p.spot;
       const dir = dirOf(p.team);
-      let x = ownGoalX(p.team) + dir * Math.min(d * 0.85, 0.42) * len;
-      const y = F.cy + f * H;
+      let x = ownGoalX(p.team) + dir * Math.max(0.02, Math.min(d * 0.85, 0.42)) * len;
+      const y = F.cy + f * H * (d < KEEPER_DEPTH ? 0 : 1);
       // fuera del círculo central
       if (U.dist(x, y, F.cx, F.cy) < 130) x = F.cx - dir * 130;
       Object.assign(p, {
         x, y, z: 0, vx: 0, vy: 0, stun: 0, asleep: false, dash: 0, charge: -1, slam: null,
         pickupCd: 0, holdT: 0, stealT: 0, phase: 0, wall: 0, embers: 0, slip: 0, dig: 0, ram: 0, spinT: 0,
+        gkHold: false, gkT: 0, assistFrom: null,
       });
       p.facing = p.team === 0 ? 0 : Math.PI;
       p.ai.chasing = false; p.ai.shotT = 0;
       setAnim(p, 'Idle');
     }
-    const kicker = m.players.find((p) => p.team === k && p.slot === 0);
+    // saca el jugador de campo más adelantado
+    const upfront = (team) => teamOf(m, team).filter((p) => !p.fixedKeeper).reduce((a, q) => (q.spot[0] > a.spot[0] ? q : a));
+    const kicker = upfront(k);
     kicker.x = F.cx - dirOf(k) * (radius(kicker) + BALL_R + 3);
     kicker.y = F.cy;
     b.holder = kicker; b.last = kicker;
     m.kicker = kicker;
-    if (m.humanTeam >= 0) setControl(m, m.players.find((p) => p.team === m.humanTeam && p.slot === 0));
+    if (m.humanTeam >= 0) setControl(m, upfront(m.humanTeam));
+    updateKeepers(m, true);
     m.items = [];
     m.projs = [];
     m.hazards = [];
@@ -251,6 +330,55 @@ PF.Match = (() => {
     const k = U.damp(4.5, dt);
     m.cam.x += (cx - m.cam.x) * k;
     m.cam.y += (cy - m.cam.y) * k;
+  }
+
+  // ---------------------------------------------------------------- arquero
+  /**
+   * Arquero araña: el que está más cerca de su arco (de los que pueden) pasa a
+   * ser el arquero. Sólo cambia si otro está claramente más cerca, para que no
+   * salte de uno a otro a cada paso. Con arquero fijo no hace nada.
+   */
+  function updateKeepers(m, reset = false) {
+    if (m.keeperMode === 'fixed') return;
+    for (const team of [0, 1]) {
+      const gx = ownGoalX(team);
+      const cur = reset ? null : m.keeper[team];
+      if (cur && cur.gkHold) continue;
+      let best = null, bd = Infinity;
+      for (const p of teamOf(m, team)) {
+        if (p.stun > 0 || p.slam || p.dig > 0 || m.ball.holder === p) continue;
+        const d = U.dist(p.x, p.y, gx, F.cy);
+        if (d < bd) { bd = d; best = p; }
+      }
+      if (!best) continue;
+      if (!cur || cur.stun > 0 || cur.slam || m.ball.holder === cur) { m.keeper[team] = best; continue; }
+      const dc = U.dist(cur.x, cur.y, gx, F.cy);
+      if (best !== cur && bd < dc * 0.75 - 10) m.keeper[team] = best;
+    }
+  }
+
+  /** El arquero no llega a atraparla: la desvía hacia fuera. */
+  function parry(m, p, b) {
+    const gx = ownGoalX(p.team);
+    const s = Math.hypot(b.vx, b.vy);
+    let a = Math.atan2(b.y - F.cy, b.x - gx);
+    if (Math.abs(b.y - F.cy) < 20) a += U.pick([-1, 1]) * 0.9;   // de frente: al córner
+    a += U.rand(-0.35, 0.35);
+    b.vx = Math.cos(a) * Math.max(320, s * 0.45);
+    b.vy = Math.sin(a) * Math.max(320, s * 0.45);
+    b.x = p.x + Math.cos(a) * (radius(p) * 1.8 + b.r + 2);
+    b.y = p.y + Math.sin(a) * (radius(p) * 1.8 + b.r + 2);
+    const shot = b.last && b.last.team !== p.team;
+    b.last = p;
+    p.pickupCd = 0.3;
+    if (shot) {
+      p.stats.saves++;
+      PF.FX.text(m.fx, p.x, p.y - 60, '¡DESVÍO!', '#9cff6b', 1);
+      PF.Audio.crowd('ooh', 0.7);
+    }
+    PF.FX.burst(m.fx, b.x, b.y, 10, '#ffffff', 200);
+    PF.Audio.sfx.bounce(700);
+    setAnim(p, 'Attack', true);
   }
 
   // ---------------------------------------------------------------- repetición
@@ -321,9 +449,10 @@ PF.Match = (() => {
     const playing = m.state === 'play';
     const kicking = m.state === 'kickoff';
     if (playing && hi && hi.swap) {
-      // al compañero más cerca de la pelota
+      // al compañero más cerca de la pelota (el arquero fijo no entra en la rotación)
       let best = null, bd = Infinity;
       for (const q of matesOf(m, m.controlled)) {
+        if (q.fixedKeeper) continue;
         const d = U.dist(q.x, q.y, m.ball.x, m.ball.y);
         if (d < bd) { bd = d; best = q; }
       }
@@ -359,6 +488,7 @@ PF.Match = (() => {
     }
     movePlayers(m, dt);
     collidePlayers(m);
+    if (playing) updateKeepers(m);
     updateBall(m, dt, playing || kicking);
     if (kicking && m.ball.holder !== m.kicker) {
       m.state = 'play';
@@ -381,7 +511,7 @@ PF.Match = (() => {
     const b = m.ball, st = m.stadium;
     const digging = p.dig > 0;
     for (const k of ['stun', 'tackleCd', 'pickupCd', 'phase', 'turbo', 'giant', 'slow', 'fireShot', 'wall', 'embers',
-      'slip', 'burnCd', 'dig', 'ram', 'spinT', 'magnet']) {
+      'slip', 'burnCd', 'dig', 'ram', 'spinT', 'magnet', 'diving']) {
       p[k] = Math.max(0, p[k] - dt);
     }
     // la habilidad sólo recarga con la pelota en juego (no en festejos ni saques)
@@ -409,7 +539,7 @@ PF.Match = (() => {
       else if (ml > 0.2) p.facing = Math.atan2(my, mx);
     }
 
-    let sp = p.def.speed * (p.human ? 1 : p.skill.speed) * st.speed;
+    let sp = p.def.speed * (p.human ? 1 : p.skill.speed) * st.speed * p.bonus.speed * m.mods[p.team].speed;
     if (b.holder === p) sp *= 0.9;
     if (p.charge >= 0) sp *= 0.55;
     if (p.turbo > 0) sp *= 1.4;
@@ -455,6 +585,20 @@ PF.Match = (() => {
 
     if (!active || p.stun > 0 || p.slam) { p.charge = -1; return; }
 
+    // arquero: estirada hacia donde va el tiro (la pide la IA)
+    if (it.dive && p.dash <= 0) {
+      const dx = it.dive[0] - p.x, dy = it.dive[1] - p.y, d = Math.hypot(dx, dy) || 1;
+      p.dash = 0.28; p.diving = 0.35; p.dashSpeed = 640;
+      p.dashDx = dx / d; p.dashDy = dy / d;
+      setAnim(p, 'Attack', true);
+      PF.Audio.sfx.swoosh();
+    }
+    // con la pelota en las manos no se puede quedar para siempre
+    if (p.gkHold) {
+      p.gkT += dt;
+      if (p.gkT > 4) { pass(m, p); return; }
+    }
+
     if (it.ability && p.cd <= 0) useAbility(m, p);
     if (b.holder === p) {
       if (it.pass) pass(m, p);
@@ -482,6 +626,12 @@ PF.Match = (() => {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       PF.Field.collide(p, radius(p), 0.2, false);
+      if (p.gkHold) {
+        // con la pelota en las manos no sale del área
+        const x0 = p.team === 0 ? F.x0 : F.x1 - F.boxW, x1 = p.team === 0 ? F.x0 + F.boxW : F.x1;
+        p.x = U.clamp(p.x, x0, x1);
+        p.y = U.clamp(p.y, F.cy - F.boxH, F.cy + F.boxH);
+      }
     }
   }
 
@@ -537,9 +687,10 @@ PF.Match = (() => {
   // ---------------------------------------------------------------- acciones
   function release(m, p, vx, vy) {
     const b = m.ball;
-    b.holder = null; b.last = p; b.vx = vx; b.vy = vy; b.vine = null; b.passTo = null;
+    b.holder = null; b.last = p; b.vx = vx; b.vy = vy; b.vine = null; b.passTo = null; b.passFrom = null;
     p.pickupCd = 0.3;
     p.charge = -1;
+    p.gkHold = false;
   }
 
   function pass(m, p) {
@@ -552,7 +703,7 @@ PF.Match = (() => {
       p.facing = Math.atan2(dy, dx);
       release(m, p, (dx / d) * sp, (dy / d) * sp);
       // el control pasa al que recibe, que va solo a buscarla
-      b.passTo = mate; b.passT = 2;
+      b.passTo = mate; b.passT = 2; b.passFrom = p;
       if (p.human) setControl(m, mate);
     } else {
       // pase al hueco: hacia donde miras; sigues controlando al mismo.
@@ -567,7 +718,7 @@ PF.Match = (() => {
   function shoot(m, p, k) {
     const b = m.ball;
     const aim = shotAim(p);
-    const power = U.lerp(0.42, 1, k) * p.def.power * (b.big > 0 ? 0.85 : 1);
+    const power = U.lerp(0.42, 1, k) * p.def.power * p.bonus.power * m.mods[p.team].power * (b.big > 0 ? 0.85 : 1);
     let sp = 1180 * power;
     const fire = p.fireShot > 0;
     if (fire) sp = 1450 * p.def.power;
@@ -602,6 +753,7 @@ PF.Match = (() => {
     if (a.ram <= 0) { a.dash = 0; a.vx *= 0.2; a.vy *= 0.2; }
     const ratio = Math.min(2.2, mass(a) / mass(v));
     if (!knock(m, v, nx, ny, 340 * ratio + 140, 0.9)) return;
+    a.stats.tackles++;
     PF.FX.text(m.fx, v.x, v.y - 50, U.pick(['¡ZAS!', '¡PAF!', '¡TOMA!', '¡CATAPLÁN!']), '#ffd23f');
     PF.FX.burst(m.fx, v.x, v.y - 12, 12, '#fff', 200);
     PF.Audio.sfx.tackle();
@@ -612,7 +764,7 @@ PF.Match = (() => {
 
   /** Empuja y aturde. Si tenía la pelota, la suelta. Devuelve false si no le afecta. */
   function knock(m, v, nx, ny, force, stun) {
-    if (untouchable(v) || v.wall > 0) return false;
+    if (untouchable(v) || v.wall > 0 || v.gkHold) return false;   // al arquero con la pelota en las manos no se le toca
     if (m.ball.holder === v) loseBall(m, v, nx, ny);
     v.vx = nx * force; v.vy = ny * force;
     v.stun = Math.max(v.stun, stun);
@@ -622,7 +774,7 @@ PF.Match = (() => {
   }
 
   function stunInPlace(m, v, stun) {
-    if (untouchable(v)) return false;
+    if (untouchable(v) || v.gkHold) return false;
     if (m.ball.holder === v) loseBall(m, v, Math.cos(v.facing), Math.sin(v.facing));
     v.vx *= 0.15; v.vy *= 0.15;
     v.stun = Math.max(v.stun, stun);
@@ -633,7 +785,8 @@ PF.Match = (() => {
 
   function loseBall(m, p, nx, ny) {
     const b = m.ball;
-    b.holder = null; b.last = p; b.passTo = null;
+    b.holder = null; b.last = p; b.passTo = null; b.passFrom = null;
+    p.gkHold = false;
     const a = Math.atan2(ny, nx) + U.rand(-0.7, 0.7);
     b.vx = Math.cos(a) * 260 + p.vx * 0.2;
     b.vy = Math.sin(a) * 260 + p.vy * 0.2;
@@ -643,9 +796,15 @@ PF.Match = (() => {
 
   function take(m, p) {
     const b = m.ball;
-    if (b.holder && b.holder !== p) b.holder.charge = -1;
-    b.holder = p; b.last = p; b.vine = null; b.fire = 0; b.passTo = null;
+    if (b.holder && b.holder !== p) { b.holder.charge = -1; b.holder.gkHold = false; }
+    // asistencia: si me la pasó un compañero, el gol que haga cuenta para él
+    p.assistFrom = b.passFrom && b.passFrom.team === p.team && b.passFrom !== p ? b.passFrom : null;
+    p.assistT = m.clock;
+    b.holder = p; b.last = p; b.vine = null; b.fire = 0; b.passTo = null; b.passFrom = null;
     p.holdT = 0;
+    // el arquero en su área la agarra con las manos
+    p.gkHold = isActiveKeeper(m, p) && m.state === 'play';
+    p.gkT = 0;
     PF.Audio.sfx.touch();
     if (m.humanTeam === p.team && m.controlled !== p && m.state === 'play') setControl(m, p);
   }
@@ -653,7 +812,7 @@ PF.Match = (() => {
   function useAbility(m, p) {
     const fn = PF.Abilities[p.def.ability.id];
     const ok = fn(m, p);
-    p.cd = ok === false ? 1.2 : p.def.ability.cd;
+    p.cd = ok === false ? 1.2 : p.def.ability.cd * p.bonus.cd * m.mods[p.team].cd;
     if (ok !== false && p.anim !== 'Attack') setAnim(p, 'Charge', true);
   }
 
@@ -818,7 +977,7 @@ PF.Match = (() => {
       b.spin += (Math.hypot(p.vx, p.vy) * dt) / b.r;
       PF.Field.collide(b, b.r, 0, true);
       // robo: un rival que aguanta en contacto con la pelota se la queda
-      if (playing && p.phase <= 0 && p.dig <= 0) {
+      if (playing && p.phase <= 0 && p.dig <= 0 && !p.gkHold) {
         for (const q of m.players) {
           if (q.team === p.team) continue;
           const touching = q.stun <= 0 && !untouchable(q) && q.pickupCd <= 0 &&
@@ -914,10 +1073,28 @@ PF.Match = (() => {
     for (const p of m.players) {
       if (p.slam || p.dig > 0) continue;
       if (p === b.last && p.pickupCd > 0) continue;
-      const pr = radius(p);
+      // el arquero en su área llega más lejos con las manos (y más aún estirándose)
+      const keeper = playing && isActiveKeeper(m, p) && p.stun <= 0;
+      const pr = radius(p) * (keeper ? (p.diving > 0 ? 2.2 : 1.7) : 1);
       const dx = b.x - p.x, dy = b.y - p.y, d = Math.hypot(dx, dy);
       if (d >= pr + b.r) continue;
       const nx = d > 0.001 ? dx / d : 1, ny = d > 0.001 ? dy / d : 0;
+
+      if (keeper && b.fire <= 0 && p.pickupCd <= 0) {
+        const rel = Math.hypot(b.vx - p.vx, b.vy - p.vy);
+        if (rel < catchSpeed(m, p)) {
+          const shot = b.last && b.last.team !== p.team && rel > 450;
+          take(m, p);
+          if (shot) {
+            p.stats.saves++;
+            PF.FX.text(m.fx, p.x, p.y - 60, '¡ATAJADA!', '#9cff6b', 1.1);
+            PF.Audio.crowd('ooh', 0.6);
+          }
+          return true;
+        }
+        parry(m, p, b);
+        continue;
+      }
 
       if (b.fire > 0 && b.last) {
         // la bola de fuego atraviesa: derriba rivales e ignora compañeros
@@ -977,6 +1154,11 @@ PF.Match = (() => {
     m.kickoffTeam = 1 - team;
     m.ownGoal = !!(b.last && b.last.team !== team);
     m.scorer = b.last;
+    if (b.last && !m.ownGoal) {
+      b.last.stats.goals++;
+      const a = b.last.assistFrom;
+      if (a && m.clock - b.last.assistT < 10) a.stats.assists++;
+    }
     const color = PF.TEAM_COLORS[team];
     PF.FX.text(m.fx, m.cam.x + PF.W / 2, m.cam.y + PF.H / 2 - 30, m.ownGoal ? '¡AUTOGOL!' : '¡GOOOOL!', color, 3, 2.2);
     PF.FX.confetti(m.fx, [color, '#fff', '#ffd23f'], m.cam);
@@ -1028,7 +1210,8 @@ PF.Match = (() => {
   const orderOf = (m, p) => (p.team === m.humanTeam && !p.human ? ORDERS[m.order].id : 'neutral');
 
   return {
-    create, step, CHARGE_MAX, ORDERS, orderOf,
+    create, step, CHARGE_MAX, ORDERS, orderOf, PRESETS, KEEPER_DEPTH, autoFormation,
+    inBox, isActiveKeeper, keeperOf, ownGoalX, dirOf,
     // usados por abilities.js, ai.js y render.js
     radius, mass, untouchable, mateOf, matesOf, teamOf, setAnim, knock, stunInPlace, loseBall, shoot,
     addHazard, addProjectile, jump, nearestFoeDist, homeSpot, shotAim, passTarget,

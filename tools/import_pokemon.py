@@ -4,9 +4,10 @@ Uso:
     python tools/import_pokemon.py RUTA_A_POKESURVIVOR 25 4 7 ...
 
 Copia assets/pokemon/{dex}/*.png (sin shinies), y regenera
-js/sprites-meta.js y CREDITS.md con TODOS los dex presentes en
-assets/pokemon/ de este proyecto.
+js/sprites-meta.js, js/pokedex.js (nombre, tipos y stats) y CREDITS.md con
+TODOS los dex presentes en assets/pokemon/ de este proyecto.
 """
+import json
 import re
 import shutil
 import sys
@@ -46,6 +47,24 @@ def main():
     out += [f"  {lines[d].strip()}," for d in have if d in lines]
     out.append("};")
     (ROOT / "js" / "sprites-meta.js").write_text("\n".join(out) + "\n", encoding="utf-8")
+
+    # pokédex: tipos y stats de juego de PokéSurvivor (derivados de PokeAPI)
+    dex_src = (src / "js" / "data" / "pokedex.js").read_text(encoding="utf-8")
+    entries = {}
+    for line in dex_src.splitlines():
+        line = line.strip().rstrip(",")
+        if line.startswith("{") and '"dex"' in line:
+            e = json.loads(line)
+            entries[e["dex"]] = {k: e[k] for k in ("dex", "name", "types", "hp", "spd", "atk", "bst")}
+    out = [
+        "/* pokedex.js — GENERADO por tools/import_pokemon.py, no editar a mano.",
+        " * Tipos y stats de PokéSurvivor (hp/spd/atk derivados de los base stats de PokeAPI).",
+        " * species.js los convierte en stats de cancha. */",
+        "PF.POKEDEX = {",
+    ]
+    out += [f"  {d}: {json.dumps(entries[d], ensure_ascii=False)}," for d in have if d in entries]
+    out.append("};")
+    (ROOT / "js" / "pokedex.js").write_text("\n".join(out) + "\n", encoding="utf-8")
 
     # créditos: artistas de esos dex
     credits = (src / "CREDITS.md").read_text(encoding="utf-8")

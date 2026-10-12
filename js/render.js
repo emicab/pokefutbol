@@ -72,7 +72,7 @@ PF.Render = (() => {
     g.fillRect(F.cx - 4, F.cy - 4, 8, 8);
     for (const side of [0, 1]) {
       const s = side ? -1 : 1, x = side ? F.x1 : F.x0;
-      const bw = 150 * k, bh = 175 * k, sw = 60 * k, sh = 115 * k;
+      const bw = F.boxW, bh = F.boxH, sw = 60 * k, sh = 115 * k;
       g.strokeRect(Math.min(x, x + s * bw), F.cy - bh, bw, bh * 2);
       g.strokeRect(Math.min(x, x + s * sw), F.cy - sh, sw, sh * 2);
       g.beginPath(); g.arc(x + s * bw, F.cy, 60 * k, side ? Math.PI / 2 : -Math.PI / 2, side ? 1.5 * Math.PI : Math.PI / 2); g.stroke();
@@ -223,6 +223,21 @@ PF.Render = (() => {
     if (k > 0.95) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(x - 3, y - 3, w + 6, h + 6); }
   }
 
+  /** Guantes verdes a los lados: éste es el arquero (en araña, el de ahora). */
+  function drawGloves(ctx, m, p, head, r) {
+    const y = (p.y + head) / 2 + 4;
+    const wave = p.gkHold ? 0 : Math.sin(m.clock * 8) * 2;
+    for (const s of [-1, 1]) {
+      const x = p.x + s * (r + 5);
+      ctx.fillStyle = '#141018'; ctx.fillRect(x - 6, y - 6 + wave * s, 12, 12);
+      ctx.fillStyle = '#9cff6b'; ctx.fillRect(x - 4, y - 4 + wave * s, 8, 8);
+    }
+    if (p.gkHold) {
+      ctx.font = '12px Pixelify, monospace'; ctx.textAlign = 'center';
+      ctx.fillStyle = '#9cff6b'; ctx.fillText('MANOS', p.x, p.y + r + 14);
+    }
+  }
+
   function drawPlayer(ctx, m, p) {
     const sc = (p.giant > 0 ? 1.5 : 1) * (p.def.scale || 1);
     const r = PF.Match.radius(p);
@@ -260,6 +275,7 @@ PF.Render = (() => {
     ctx.globalAlpha = 1;
 
     const head = p.y - z - PF.Sprites.headHeight(p.def.dex) * sc;
+    if (m.keeper && m.keeper[p.team] === p) drawGloves(ctx, m, p, head, r);
     if (p.stun > 0) (p.asleep ? drawZzz : drawStars)(ctx, p.x, head, m.clock);
     if (p.slow > 0 && p.stun <= 0) {
       ctx.font = '14px Pixelify, monospace'; ctx.textAlign = 'center';

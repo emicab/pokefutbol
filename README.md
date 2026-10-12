@@ -1,17 +1,17 @@
 # PokéFútbol
 
 Fútbol con Pokémon, arcade y de dibujos animados: placajes, rayos, bolas de
-fuego y cajas sorpresa. 2 vs 2, 3 vs 3 o 5 vs 5, en cuatro estadios, con
-Pokémon que se desbloquean jugando. HTML + CSS + JavaScript vanilla sobre
-Canvas 2D, sin dependencias ni build; la música y los sonidos se generan en
-el navegador.
+fuego y cajas sorpresa. Partido rápido 2 vs 2, 3 vs 3 o 5 vs 5 en cuatro
+estadios, y un **modo historia** con club propio, niveles, IVs, evoluciones y
+gimnasios. HTML + CSS + JavaScript vanilla sobre Canvas 2D, sin dependencias
+ni build; la música y los sonidos se generan en el navegador.
 
 ## Jugar
 
-Doble clic en `index.html`, o sirve la carpeta:
+Doble clic en `index.html`, o sirve la carpeta (sin caché, para desarrollar):
 
 ```bash
-python -m http.server 8123
+python tools/serve.py
 ```
 
 y abre <http://localhost:8123>.
@@ -50,8 +50,29 @@ LT orden al equipo · Start pausa.
 ## Partido
 
 En la selección se elige formato (2, 3 o 5 por equipo), duración (1 a 5
-minutos), dificultad del rival y cancha. La cancha crece con el formato; si
-no entra en pantalla, la cámara sigue la jugada y aparece un minimapa.
+minutos), dificultad del rival, arquero y cancha. La cancha crece con el
+formato; si no entra en pantalla, la cámara sigue la jugada y aparece un
+minimapa.
+
+### Arquero
+
+- **Araña** (por defecto en 2 y 3 por equipo): ataja el que esté más cerca de
+  su arco en ese momento; cuando sale, lo reemplaza el siguiente.
+- **Fijo** (por defecto en 5 vs 5): uno del equipo se queda en el arco.
+
+El arquero lleva guantes verdes. En su área llega más lejos, atrapa los tiros
+que no sean demasiado fuertes para sus reflejos (los demás los desvía), se
+estira hacia donde va la pelota y, con ella en las manos, nadie se la puede
+quitar: saca con un pase o un despeje. `Q` nunca te pasa al arquero fijo.
+
+### Puestos y pizarra
+
+Cada Pokémon tiene un puesto natural (arquero, defensa, medio o delantero)
+que sale de sus stats: pesados atrás, buen tiro arriba, rápidos y
+equilibrados en el medio. En la **pizarra** de la selección se arrastra a cada
+uno a su posición; la profundidad decide el puesto y la ★ indica que es el
+suyo, lo que da un bonus: arquero con mejores reflejos, defensa más pesado,
+medio más rápido y con menos recarga, delantero con más tiro.
 
 | Cancha | Efecto | Precio |
 |---|---|---|
@@ -69,6 +90,33 @@ Cada partido da monedas: por jugar, ganar o empatar, cada gol y la valla
 invicta, multiplicadas por la dificultad y la duración. Con ellas se compran
 Pokémon y canchas en la selección. Algunos Pokémon se ganan con retos. Todo
 se guarda en el navegador (`localStorage`); en Opciones se puede borrar.
+
+## Modo historia
+
+Tu club es persistente; cada gimnasio se juega como una copa.
+
+- **Club:** empiezas con un inicial (Charmander, Squirtle, Bulbasaur o
+  Pikachu) y dos Pokémon más. Hasta 9 en el club y 3 titulares (3 vs 3), con
+  su propia pizarra y modo de arquero.
+- **Niveles e IVs:** cada partido da experiencia según lo que hizo cada uno
+  (goles, asistencias, placajes, atajadas, y la victoria); los suplentes
+  entrenan un poco. Cada nivel sube velocidad, tiro y peso, y cada Pokémon
+  nace con IVs (0-31) que lo hacen único. La segunda habilidad se desbloquea
+  al nivel 12.
+- **Evoluciones:** al llegar al nivel, evolucionan (Charmander 16 →
+  Charmeleon 36 → Charizard, Magikarp 20 → Gyarados, Eevee 25 → Vaporeon,
+  Jolteon o Flareon a elección...).
+- **Gimnasios:** 7 copas (Brock, Misty, Lt. Surge, Erika, Sabrina, Blaine y
+  la Liga) de 3 partidos: dos entrenadores y el líder. Entre partido y
+  partido eliges una mejora temporal (velocidad, tiro, recarga, reflejos,
+  experiencia, monedas o una Poción que da otra oportunidad). Si pierdes, la
+  copa se termina, pero tu club conserva la experiencia. Al ganarle al líder
+  te llevas la medalla y reclutas a uno de su equipo; a veces, además, un
+  Pokémon salvaje pide unirse.
+
+Las especies del modo historia salen de la Pokédex (`js/pokedex.js`): stats
+de cancha y habilidades por tipo se calculan solos (`js/species.js`), así que
+cualquier Pokémon importado se puede usar.
 
 ## Plantel
 
@@ -97,21 +145,27 @@ Cada Pokémon tiene dos habilidades; se elige cuál llevar en la selección.
 
 ```
 js/core.js        espacio de nombres, medidas de la cancha por formato, utilidades
-js/save.js        progreso y opciones (localStorage)
-js/roster.js      Pokémon jugables, desbloqueos y retos
+js/save.js        progreso, opciones y club (localStorage)
+js/pokedex.js     tipos y stats (generado)
+js/roster.js      Pokémon del partido rápido, desbloqueos y retos
+js/species.js     especies del modo historia, puestos, evoluciones y gimnasios
 js/stadiums.js    canchas
 js/abilities.js   una función por habilidad
-js/match.js       reglas, física, pelota, goles, cajas, proyectiles, cámara, repetición
-js/ai.js          IA de compañeros y rivales
+js/match.js       reglas, física, arquero, pelota, goles, cajas, proyectiles, cámara, repetición
+js/ai.js          IA de compañeros, rivales y arqueros
 js/field.js       paredes de la cancha y choques
 js/render.js      dibujo de cancha, jugadores, pelota, HUD y minimapa
 js/fx.js          partículas, onomatopeyas, ondas, rayos
 js/sprites.js     hojas de sprites de Mundo Misterioso
 js/audio.js       efectos, música y público sintetizados (WebAudio)
 js/input.js       teclado y mando
+js/board.js       pizarra táctica (arrastrar a cada Pokémon a su puesto)
 js/ui.js          pantallas (título, opciones, selección, pausa, resultado)
+js/career.js      modo historia: club, experiencia, evoluciones, copas
+js/ui-career.js   pantallas del modo historia
 js/main.js        bucle a 60 Hz fijo, flujo de pantallas y premios
-tools/import_pokemon.py   copia sprites desde PokéSurvivor y regenera metadatos y créditos
+tools/import_pokemon.py   copia sprites desde PokéSurvivor y regenera metadatos, Pokédex y créditos
+tools/serve.py            servidor local sin caché
 ```
 
 Para añadir un Pokémon, con una copia de
@@ -121,8 +175,10 @@ Para añadir un Pokémon, con una copia de
 python tools/import_pokemon.py RUTA_A_POKESURVIVOR 448 658
 ```
 
-y luego agrégalo a `js/roster.js` con dos habilidades de `js/abilities.js`
-(y su entrada en `WANTS` de `js/ai.js` si es una habilidad nueva).
+Con eso ya existe como especie para el modo historia (stats y habilidades
+automáticas). Para usarlo en el partido rápido, agrégalo a `js/roster.js` con
+dos habilidades de `js/abilities.js` (y su entrada en `WANTS` de `js/ai.js`
+si es una habilidad nueva); para que evolucione, a `EVOLVE` de `js/species.js`.
 
 ## Licencia
 

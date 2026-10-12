@@ -1,6 +1,6 @@
 /* ============ save.js — progreso y opciones en localStorage ============
- * Monedas, Pokémon y estadios desbloqueados, estadísticas, opciones y la
- * última configuración de partido. Si el navegador no deja guardar (modo
+ * Monedas, Pokémon y estadios desbloqueados, estadísticas, opciones, la
+ * última configuración de partido y el club del modo historia. Si el navegador no deja guardar (modo
  * privado, archivo local con almacenamiento bloqueado...), el juego sigue
  * funcionando y sólo se pierde al cerrar.
  */
@@ -13,7 +13,8 @@ PF.Save = (() => {
     stadiums: ['estadio'],
     stats: { played: 0, won: 0, goals: 0, hardWins: 0, bigWins: 0 },
     settings: { music: 0.5, sfx: 0.8, aids: true, replays: true },
-    setup: { size: 2, time: 120, diff: 'normal', stadium: 'estadio', picks: [], abil: {} },
+    setup: { size: 2, time: 120, diff: 'normal', stadium: 'estadio', picks: [], abil: {}, keeper: 'spider', spots: {} },
+    career: null,                 // modo historia (career.js)
   });
 
   function load() {
@@ -29,6 +30,7 @@ PF.Save = (() => {
         stats: Object.assign(d.stats, s.stats),
         settings: Object.assign(d.settings, s.settings),
         setup: Object.assign(d.setup, s.setup),
+        career: s.career && Array.isArray(s.career.club) ? s.career : null,
       };
     } catch (e) {
       return d;

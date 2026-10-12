@@ -23,9 +23,8 @@ PF.Sprites = (() => {
     return s;
   }
 
-  function preloadAll() {
-    for (const r of PF.ROSTER) for (const a of ANIMS) sheet(r.dex, a);
-  }
+  function preload(dex) { for (const a of ANIMS) sheet(dex, a); }
+  function preloadAll() { for (const r of PF.ROSTER) preload(r.dex); }
 
   function anim(dex, name) {
     const m = PF.SPRITE_META[dex];
@@ -78,5 +77,5 @@ PF.Sprites = (() => {
       Math.round(x - a.ax * k), Math.round(y - a.ay * k), a.w * k, a.h * k);
   }
 
-  return { PX, preloadAll, duration, headHeight, draw };
+  return { PX, preload, preloadAll, duration, headHeight, draw };
 })();

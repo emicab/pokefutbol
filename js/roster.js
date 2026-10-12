@@ -4,6 +4,7 @@
  * mass       empuja y aguanta los choques (Snorlax no se mueve)
  * radius     tamaño del cuerpo en la cancha
  * scale      tamaño del dibujo (sprites muy grandes, como Onix, se achican)
+ * role       puesto natural (opcional; si no, sale de los stats: PF.naturalRole)
  * abilities  dos opciones; en la selección se elige cuál llevar.
  *            Cada `id` es una función de abilities.js.
  * unlock     sin él: disponible desde el principio.
@@ -43,7 +44,7 @@ PF.ROSTER = [
   },
   {
     id: 'bulbasaur', dex: 1, name: 'Bulbasaur', type: 'Planta', color: '#5fd68a',
-    speed: 300, power: 0.96, mass: 1.15, radius: 19,
+    speed: 300, power: 0.96, mass: 1.15, radius: 19, role: 'DEF',
     abilities: [
       { id: 'vine', name: 'Látigo Cepa', cd: 8,
         desc: 'Atrapa la pelota a distancia con un látigo, aunque la tenga un rival.' },
@@ -105,7 +106,7 @@ PF.ROSTER = [
   },
   {
     id: 'machamp', dex: 68, name: 'Machamp', type: 'Lucha', color: '#9fb6d6',
-    speed: 285, power: 1.22, mass: 1.8, radius: 23, unlock: { coins: 350 },
+    speed: 285, power: 1.22, mass: 1.8, radius: 23, role: 'DEF', unlock: { coins: 350 },
     abilities: [
       { id: 'throw', name: 'Sísmico', cd: 9,
         desc: 'Agarra al rival más cercano y lo lanza lejos.' },

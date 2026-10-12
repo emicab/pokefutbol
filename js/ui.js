@@ -24,7 +24,7 @@ PF.UI = (() => {
   }
 
   // ---------------------------------------------------------------- título
-  function title(onPlay, onOptions) {
+  function title(onPlay, onCareer, onOptions) {
     clear();
     const s = el(`
       <div class="screen title">
@@ -32,7 +32,8 @@ PF.UI = (() => {
         <div class="logo">Poké<span>Fútbol</span></div>
         <div class="tagline">fútbol de dibujos animados · sin reglas, con rayos</div>
         <div class="row">
-          <button class="btn big" data-act="play">¡A jugar!</button>
+          <button class="btn big" data-act="play">Partido rápido</button>
+          <button class="btn big story" data-act="career">Modo Historia</button>
           <button class="btn" data-act="opts">Opciones</button>
         </div>
         <div class="box controls">
@@ -49,6 +50,7 @@ PF.UI = (() => {
         <div class="foot">Sprites de SpriteCollab (CC BY-NC 4.0) · proyecto de fans sin ánimo de lucro · ver CREDITS.md</div>
       </div>`);
     s.querySelector('[data-act=play]').onclick = onPlay;
+    s.querySelector('[data-act=career]').onclick = onCareer;
     s.querySelector('[data-act=opts]').onclick = onOptions;
     root().appendChild(s);
     s.querySelector('button').focus();
@@ -117,10 +119,17 @@ PF.UI = (() => {
           ${chips('Formato', [[2, '2 vs 2'], [3, '3 vs 3'], [5, '5 vs 5']], setup.size)}
           ${chips('Tiempo', [[60, '1 min'], [120, '2 min'], [180, '3 min'], [300, '5 min']], setup.time)}
           ${chips('Rival', [['easy', 'Fácil'], ['normal', 'Normal'], ['hard', 'Difícil']], setup.diff)}
+          ${chips('Arquero', [['spider', 'Araña'], ['fixed', 'Fijo']], setup.keeper)}
         </div>
         <div class="setup stadiums"></div>
         <div class="grid"></div>
-        <div class="detail box"></div>
+        <div class="lower">
+          <div class="detail box"></div>
+          <div class="boardbox box">
+            <div class="bt">Pizarra <small>arrastra a cada uno · ★ = su puesto</small></div>
+            <div class="boardslot"></div>
+          </div>
+        </div>
         <div class="row foot-row">
           <div class="team"></div>
           <button class="btn" data-act="back">Volver</button>
@@ -159,9 +168,14 @@ PF.UI = (() => {
       g.querySelectorAll('button').forEach((b) => {
         b.onclick = () => {
           const name = g.dataset.name, v = b.dataset.v;
-          if (name === 'Formato') { setup.size = +v; while (setup.picks.length > setup.size) setup.picks.pop(); }
+          if (name === 'Formato') {
+            setup.size = +v;
+            while (setup.picks.length > setup.size) setup.picks.pop();
+            setup.keeper = setup.size >= 5 ? 'fixed' : 'spider';   // lo habitual en cada formato
+          }
           if (name === 'Tiempo') setup.time = +v;
           if (name === 'Rival') setup.diff = v;
+          if (name === 'Arquero') setup.keeper = v;
           PF.Audio.sfx.click();
           PF.Save.save();
           refresh();
@@ -213,10 +227,11 @@ PF.UI = (() => {
       const unlocked = PF.isUnlocked(r);
       const ai = setup.abil[r.id] || 0;
       d.style.setProperty('--tc', r.color);
+      const role = PF.ROLES[PF.naturalRole(r)];
       d.innerHTML = `
         <canvas width="120" height="104"></canvas>
         <div class="info">
-          <div class="name">${r.name} <small>${r.type}</small></div>
+          <div class="name">${r.name} <small>${r.type}</small> <span class="rolechip" style="background:${role.color}">${role.short}</span></div>
           ${statBar('Velocidad', (r.speed - 200) / 150)}
           ${statBar('Tiro', (r.power - 0.7) / 0.6)}
           ${statBar('Peso', r.mass / 2.8)}
@@ -244,12 +259,26 @@ PF.UI = (() => {
       }
     }
 
+    function refreshBoard() {
+      const slot = s.querySelector('.boardslot');
+      const defs = setup.picks.map((id) => Object.assign(PF.withAbility(PF.rosterById(id), setup.abil[id] || 0)));
+      if (!defs.length) { slot.innerHTML = '<div class="empty">Elige tus Pokémon para acomodarlos.</div>'; slot.classList.remove('board'); return; }
+      const key = setup.size + '-' + setup.keeper;
+      setup.spots[key] = setup.spots[key] || {};
+      const spots = PF.Board.spotsFor(setup.spots[key], defs, setup.keeper);
+      const b = PF.Board.mount(slot, {
+        defs, spots, mode: setup.keeper,
+        onChange: (sp) => { PF.Board.storeSpots(setup.spots[key], defs, sp); PF.Save.save(); },
+      });
+      portraits.push(...b.canvases);
+    }
+
     function refresh() {
-      // retratos: quitar el del detalle viejo (se vuelve a añadir)
-      portraits = portraits.filter((p) => !p.big);
+      // retratos: quitar los del detalle y la pizarra viejos (se vuelven a añadir)
+      portraits = portraits.filter((p) => !p.big && !p.small);
       s.querySelectorAll('.chips[data-name]').forEach((g) => {
         const name = g.dataset.name;
-        const val = name === 'Formato' ? setup.size : name === 'Tiempo' ? setup.time : setup.diff;
+        const val = { Formato: setup.size, Tiempo: setup.time, Rival: setup.diff, Arquero: setup.keeper }[name];
         g.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === String(val)));
       });
       s.querySelectorAll('.mini').forEach((c) => {
@@ -263,6 +292,7 @@ PF.UI = (() => {
       s.querySelector('.selhead .coins').outerHTML = coinHTML(save.coins);
       refreshStadiums();
       refreshDetail();
+      refreshBoard();
       const team = s.querySelector('.team');
       team.innerHTML = `<span>Tu equipo</span>` + Array.from({ length: setup.size }, (_, i) => {
         const r = setup.picks[i] && PF.rosterById(setup.picks[i]);
@@ -280,18 +310,47 @@ PF.UI = (() => {
     refresh();
   }
 
+  /** Retrato animado de una especie (modo historia). */
+  function addPortrait(canvas, dex, sc = 1) {
+    portraits.push({ canvas, dex, sc: sc * PF.species(dex).scale });
+  }
+  function clearPortraits() { portraits = []; }
+
+  /** Animación de evolución: parpadea entre las dos formas cada vez más rápido. */
+  function addEvolution(canvas, from, to, onDone) {
+    portraits.push({ canvas, evo: { from, to, t0: null, onDone } });
+  }
+
   function tickPortraits(t) {
     for (const p of portraits) {
+      if (!p.canvas.isConnected) continue;
       const g = p.canvas.getContext('2d');
       g.imageSmoothingEnabled = false;
       g.clearRect(0, 0, p.canvas.width, p.canvas.height);
-      const sc = (p.big ? 1 : 0.8) * (p.r.scale || 1);
-      PF.Sprites.draw(g, p.r.dex, 'Idle', t, true, Math.PI / 2, p.canvas.width / 2, p.canvas.height - 10, sc);
+      const cx = p.canvas.width / 2, by = p.canvas.height - 10;
+      if (p.evo) {
+        const e = p.evo;
+        if (e.t0 === null) e.t0 = t;
+        const k = Math.min(1, (t - e.t0) / 3.2);
+        const showTo = k >= 1 || Math.sin((t - e.t0) * (4 + k * k * 40)) > 0;
+        const dex = showTo ? e.to : e.from;
+        PF.Sprites.draw(g, dex, 'Idle', t, true, Math.PI / 2, cx, by, 1.3 * PF.species(dex).scale);
+        if (k < 1) {
+          g.globalCompositeOperation = 'source-atop';
+          g.fillStyle = `rgba(255,255,255,${0.35 + 0.5 * k})`;
+          g.fillRect(0, 0, p.canvas.width, p.canvas.height);
+          g.globalCompositeOperation = 'source-over';
+        } else if (e.onDone) { const cb = e.onDone; e.onDone = null; cb(); }
+        continue;
+      }
+      if (p.dex) { PF.Sprites.draw(g, p.dex, 'Idle', t, true, Math.PI / 2, cx, by, p.sc); continue; }
+      const sc = (p.big ? 1 : p.small ? 0.55 : 0.8) * (p.r.scale || 1);
+      PF.Sprites.draw(g, p.r.dex, 'Idle', t, true, Math.PI / 2, cx, by, sc);
     }
   }
 
   // ---------------------------------------------------------------- pausa / resultado
-  function pause(onResume, onRestart, onQuit) {
+  function pause(onResume, onRestart, onQuit, quitLabel = 'Salir al menú') {
     clear();
     const s = el(`
       <div class="screen">
@@ -299,7 +358,7 @@ PF.UI = (() => {
           <h2>Pausa</h2>
           <button class="btn" data-act="resume">Seguir</button>
           <button class="btn" data-act="restart">Reiniciar partido</button>
-          <button class="btn" data-act="quit">Salir al menú</button>
+          <button class="btn" data-act="quit">${quitLabel}</button>
           <div class="hint">J pase/placaje · K tiro · L habilidad · Espacio presionar · Q cambiar · T orden</div>
         </div>
       </div>`);
@@ -336,5 +395,5 @@ PF.UI = (() => {
     s.querySelector('button').focus();
   }
 
-  return { clear, title, options, select, tickPortraits, pause, result, toast };
+  return { clear, title, options, select, tickPortraits, addPortrait, clearPortraits, addEvolution, pause, result, toast };
 })();

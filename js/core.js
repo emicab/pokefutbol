@@ -32,6 +32,10 @@ PF.configureField = (size) => {
   });
   PF.FIELD.cx = (PF.FIELD.x0 + PF.FIELD.x1) / 2;
   PF.FIELD.cy = (PF.FIELD.y0 + PF.FIELD.y1) / 2;
+  // área grande (donde el arquero ataja con las manos); crece con la cancha
+  const k = s.h / 616;
+  PF.FIELD.boxW = 150 * k;
+  PF.FIELD.boxH = 175 * k;
   PF.WORLD.w = s.w + marginX * 2;
   PF.WORLD.h = s.h + top + bottom;
   if (PF.Field) PF.Field.rebuild();

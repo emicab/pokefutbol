@@ -22,10 +22,10 @@ PF.AI = (() => {
    * tackleCd  recarga del placaje
    */
   const SKILLS = {
-    easy: { speed: 0.78, react: 0.5, aggro: 0.25, ability: 0.12, aim: 0.3, steal: 0.9, tackleCd: 2.6 },
-    normal: { speed: 0.9, react: 0.28, aggro: 0.55, ability: 0.35, aim: 0.15, steal: 0.45, tackleCd: 1.6 },
-    hard: { speed: 1.0, react: 0.14, aggro: 0.9, ability: 0.7, aim: 0.07, steal: 0.22, tackleCd: 1.15 },
-    mate: { speed: 0.95, react: 0.2, aggro: 0.6, ability: 0.45, aim: 0.1, steal: 0.3, tackleCd: 1.3 },
+    easy: { speed: 0.78, react: 0.5, aggro: 0.25, ability: 0.12, aim: 0.3, steal: 0.9, tackleCd: 2.6, keeper: 0.8 },
+    normal: { speed: 0.9, react: 0.28, aggro: 0.55, ability: 0.35, aim: 0.15, steal: 0.45, tackleCd: 1.6, keeper: 1 },
+    hard: { speed: 1.0, react: 0.14, aggro: 0.9, ability: 0.7, aim: 0.07, steal: 0.22, tackleCd: 1.15, keeper: 1.12 },
+    mate: { speed: 0.95, react: 0.2, aggro: 0.6, ability: 0.45, aim: 0.1, steal: 0.3, tackleCd: 1.3, keeper: 1 },
   };
 
   /**
@@ -81,6 +81,63 @@ PF.AI = (() => {
     return true;
   }
 
+  // ------------------------------------------------------------------ arquero
+  /**
+   * Arquero (fijo, o araña con la pelota en su mitad):
+   *   1) tiro que viene al arco → ir al punto por donde cruza; estirarse si no llega
+   *   2) pelota suelta en el área y nadie más cerca → salir a por ella
+   *   3) rival con la pelota cerca dentro del área → achicar (y placar si puede)
+   *   4) si no, sobre la línea, entre la pelota y el centro del arco
+   */
+  function keeperThink(p, m, it, c) {
+    const M = PF.Match, b = m.ball, s = p.skill;
+    const dir = M.dirOf(p.team), gx = M.ownGoalX(p.team);
+    const lineX = gx + dir * 34;
+    const maxY = F.goalHalf - 8;
+    it.aim = c.aimBall;
+
+    if (!b.holder && b.vx * dir < -250) {
+      const t = (lineX - b.x) / b.vx;
+      if (t > 0 && t < 0.9) {
+        const yAt = b.y + b.vy * t;
+        if (Math.abs(yAt - F.cy) < F.goalHalf + 40) {
+          const ty = U.clamp(yAt, F.cy - maxY - 12, F.cy + maxY + 12);
+          const far = U.dist(p.x, p.y, lineX, ty) > 26;
+          if (far && t < 0.42 && p.dash <= 0 && Math.random() > s.react * 0.8) { it.dive = [lineX, ty]; return it; }
+          moveTo(it, p, lineX, ty);
+          return it;
+        }
+      }
+    }
+    if (!b.holder && M.inBox(p.team, b.x, b.y) && c.dMe < 170) {
+      moveTo(it, p, b.x, b.y);
+      return it;
+    }
+    if (c.foeHolder && M.inBox(p.team, b.x, b.y, 50) && c.dHolder < 170) {
+      moveTo(it, p, U.lerp(gx, b.x, 0.6), U.lerp(F.cy, b.y, 0.6));
+      if (c.dHolder < 75 && p.tackleCd <= 0 && Math.random() < s.aggro) { it.aim = c.aimHolder; it.pass = true; }
+      return it;
+    }
+    const depth = 30 + Math.min(40, c.dMe * 0.05);
+    moveTo(it, p, gx + dir * depth, F.cy + U.clamp((b.y - F.cy) * 0.45, -maxY, maxY));
+    if (Math.hypot(it.mx, it.my) < 0.05) it.aim = c.aimBall;
+    return it;
+  }
+
+  /** Arquero con la pelota en las manos: pase a un compañero libre o despeje largo. */
+  function keeperDistribute(p, m, it) {
+    const M = PF.Match, ai = p.ai, dirX = M.dirOf(p.team);
+    if (p.gkT < 0.7 + (p.slot % 3) * 0.15) return it;
+    const mate = M.passTarget(m, p);
+    if (mate && M.nearestFoeDist(m, mate, mate.x, mate.y) > 120) { it.pass = true; return it; }
+    // despeje: hacia la banda contraria a donde está el rival más cercano
+    ai.aim = Math.atan2((p.y < F.cy ? 1 : -1) * 0.5, dirX);
+    ai.shotT = 0.45;
+    it.shootHold = true;
+    it.aim = ai.aim;
+    return it;
+  }
+
   /** Saque: mirar al mejor compañero y pasársela. */
   function kickoff(p, m) {
     const mate = PF.Match.passTarget(m, p);
@@ -98,6 +155,7 @@ PF.AI = (() => {
     const mates = PF.Match.matesOf(m, p).filter((q) => q.stun <= 0 && !q.slam);
     let dOtherAI = Infinity, otherChasing = false, dHuman = Infinity;
     for (const q of mates) {
+      if (PF.Match.keeperOf(m, q.team) === q && !q.human) continue;   // el arquero no sale a perseguir
       const d = U.dist(q.x, q.y, b.x, b.y);
       if (q.human) dHuman = d;
       else { dOtherAI = Math.min(dOtherAI, d); if (q.ai.chasing && d < dMe * 1.25) otherChasing = true; }
@@ -153,6 +211,7 @@ PF.AI = (() => {
         it.aim = ai.aim;
         return it;
       }
+      if (p.gkHold) return keeperDistribute(p, m, it);
       if (decide) {
         if (tryAbility(p, m, it, c)) return it;
         if (c.dGoal < 440 && (p.x - goalX) * dirX < -20) {
@@ -189,6 +248,17 @@ PF.AI = (() => {
       return it;
     }
     ai.shotT = 0;
+
+    // ---------------------------------------------- arquero
+    if (M.keeperOf(m, p.team) === p) {
+      const ownHalf = (b.x - ownX) * dirX < (F.x1 - F.x0) * 0.5;
+      if (p.fixedKeeper || ownHalf) return keeperThink(p, m, it, c);
+      // araña con la pelota lejos: líbero, atrás y sin salir a perseguir
+      ai.chasing = false;
+      const [tx, ty] = M.homeSpot(m, p, -0.25);
+      moveTo(it, p, tx, ty);
+      return it;
+    }
 
     // ---------------------------------------------- me la pasan: ir a buscarla
     if (b.passTo === p && !holder) {
