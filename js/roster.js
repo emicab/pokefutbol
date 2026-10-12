@@ -230,11 +230,14 @@ PF.canBuy = (r) => {
  * siempre fase 1; si entre los elegidos hay de fase 2 o 3, suben un poco
  * esas chances. Devuelve ids.
  */
-PF.randomFill = (picks, n) => {
+PF.randomFill = (picks, n, level = null) => {
   const tiers = picks.map((id) => (PF.rosterById(id) || {}).tier);
   const hasF2 = tiers.includes('f2'), hasF3 = tiers.some((t) => t === 'f3' || t === 'strong' || t === 'elite');
   // peso por Pokémon de cada tier (hay 65 de fase 1, 55 de fase 2, 15 de fase 3…)
   const W = { f1: 75, f2: 16 * (hasF2 ? 1.6 : 1) * (hasF3 ? 1.2 : 1), f3: 5 * (hasF3 ? 3.5 : 1), strong: 3 * (hasF3 ? 3 : 1), elite: 0.6, legend: 0 };
+  // rivales de la CPU: más evolucionados en Difícil, casi todos de fase 1 en Fácil
+  if (level === 'hard') { W.f2 *= 2.5; W.f3 *= 4; W.strong *= 4; W.elite *= 4; }
+  if (level === 'easy') { W.f2 *= 0.5; W.f3 *= 0.3; W.strong *= 0.3; W.elite = 0; }
   const out = [];
   const pool = PF.ROSTER.filter((r) => !picks.includes(r.id));
   while (out.length < n && pool.length) {

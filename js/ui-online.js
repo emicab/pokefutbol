@@ -1,5 +1,7 @@
 /* ============ ui-online.js — sala online y menú durante el partido ============
  * Sólo pinta; main.js maneja la conexión (PF.Net) y avisa con los callbacks.
+ * En la sala hay tres lugares: equipo A, equipo B y espectadores. Todos
+ * entran mirando y cada uno elige dónde ir; hasta 4 jugadores en total.
  */
 PF.OnlineUI = (() => {
   const root = () => document.getElementById('ui');
@@ -8,44 +10,56 @@ PF.OnlineUI = (() => {
     t.innerHTML = html.trim();
     return t.content.firstElementChild;
   }
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-  const MODES = { pvp: 'Uno contra otro (JcJ)', coop: 'Cooperativo contra la CPU' };
   const DIFF = { easy: 'Fácil', normal: 'Normal', hard: 'Difícil' };
+  const PLACES = [
+    { id: 'A', label: 'Equipo A', color: PF.TEAM_COLORS[0] },
+    { id: 'B', label: 'Equipo B', color: PF.TEAM_COLORS[1] },
+    { id: 'spec', label: 'Mirando', color: '#a9b6d3' },
+  ];
 
   /** Resumen del formato elegido por el anfitrión. */
-  function setupLine(s, mode) {
+  function setupLine(s) {
     const st = PF.stadiumById(s.stadium);
-    return `${s.size} vs ${s.size} · ${s.time / 60} min · arquero ${s.keeper === 'fixed' ? 'fijo' : 'dinámico'} · ${st ? st.name : s.stadium}` +
-      (mode === 'coop' ? ` · rival ${DIFF[s.diff] || s.diff}` : '');
+    return `${s.size} vs ${s.size} · ${s.time / 60} min · arquero ${s.keeper === 'fixed' ? 'fijo' : 'dinámico'} · ${st ? st.name : s.stadium}`;
   }
 
-  /** Tu equipo (el del partido rápido), con lo que hace falta para el modo. */
-  function teamLine(picks, need) {
+  /** Qué partido sale con la sala como está: "2 contra 2", "cooperativo contra la CPU"... */
+  function matchLine(room) {
+    const a = room.members.filter((x) => x.place === 'A').length, b = room.members.filter((x) => x.place === 'B').length;
+    const cpu = `la CPU (${DIFF[room.setup.diff] || room.setup.diff})`;
+    if (!a && !b) return 'Elijan un equipo para jugar.';
+    if (!a || !b) {
+      const n = a || b;
+      return n === 1 ? `Uno contra ${cpu}` : `Cooperativo: ${n} contra ${cpu}`;
+    }
+    return `${a} contra ${b}`;
+  }
+
+  /** Tu equipo (el del partido rápido). */
+  function teamLine(picks, n) {
     const names = picks.map((id) => (PF.rosterById(id) || { name: id }).name);
-    const miss = need - picks.length;
-    return `${names.slice(0, need).join(', ') || '—'}` +
-      (picks.length > need ? ` <small>(banco: ${names.slice(need).join(', ')})</small>` : '') +
-      (miss > 0 ? ` <em>faltan ${miss}: se completa al azar</em>` : '');
+    return `${names.slice(0, n).join(', ') || '—'}` + (names.length < n ? ` <em>+${n - names.length} 🎲</em>` : '');
   }
 
   /**
-   * st: { phase: idle|creating|hosting|joining|joined, code, mode, connected, info, guestPicks }
-   * cb: { onHost, onJoin(code), onMode(mode), onStart, onTeam, onBack }
+   * st: { phase: idle|creating|joining|room, code, me, room }
+   * cb: { onHost, onJoin(code), onStart, onTeam, onBack, onPlace(place), onName(name) }
    */
   function lobby(st, cb) {
     root().innerHTML = '';
     const setup = PF.Save.data.setup;
-    const hostSide = st.phase === 'hosting' || st.phase === 'creating';
-    const info = hostSide || st.phase === 'idle' ? Object.assign({ mode: st.mode }, setup) : st.info;
-    const mode = (info && info.mode) || st.mode;
-    const need = !info ? setup.size : mode === 'coop' ? (hostSide || st.phase === 'idle' ? Math.ceil(info.size / 2) : info.size - Math.ceil(info.size / 2)) : info.size;
+    const room = st.room;
+    const isHost = st.me === 'host';
+    const name = PF.Save.data.settings.name || '';
     let body = '';
     if (st.phase === 'idle') {
       body = `
         <div class="netcols">
           <div class="box netcard">
             <h3>Crear sala</h3>
-            <p>Te damos un código para pasarle a tu amigo. Tú eliges el modo y el formato.</p>
+            <p>Te damos un código para pasarle a tus amigos (hasta 4 jugadores, y los que quieran mirar).</p>
             <button class="btn big" data-act="host">Crear sala</button>
           </div>
           <div class="box netcard">
@@ -55,29 +69,32 @@ PF.OnlineUI = (() => {
             <button class="btn big" data-act="join">Unirse</button>
           </div>
         </div>`;
-    } else if (st.phase === 'creating' || st.phase === 'joining') {
+    } else if (st.phase === 'creating' || st.phase === 'joining' || !room) {
       body = `<div class="box netcard wide"><p class="wait">Conectando…</p></div>`;
-    } else if (st.phase === 'hosting') {
+    } else {
+      const cols = PLACES.map((pl) => {
+        const who = room.members.filter((x) => x.place === pl.id);
+        const mine = who.some((x) => x.id === st.me);
+        const cap = pl.id === 'spec' ? '' : ` <small>${who.length}/${room.setup.size}</small>`;
+        return `
+          <div class="place" style="--pc:${pl.color}">
+            <div class="ph">${pl.label}${cap}</div>
+            <div class="who">${who.map((x) => `<div class="${x.id === st.me ? 'me' : ''}">${esc(x.name)}${x.host ? ' 👑' : ''}${x.id === st.me ? ' (tú)' : ''}</div>`).join('') || '<div class="none">—</div>'}</div>
+            ${mine ? '' : `<button class="btn small" data-place="${pl.id}">${pl.id === 'spec' ? 'Mirar' : 'Ir acá'}</button>`}
+          </div>`;
+      }).join('');
       body = `
-        <div class="box netcard wide">
-          <div class="codebig">${st.code}</div>
-          <p>Pásale este código a tu amigo para que se una.</p>
-          <div class="chips" data-name="modo"><span>Modo</span>
-            ${Object.entries(MODES).map(([k, v]) => `<button data-v="${k}" class="${k === st.mode ? 'on' : ''}">${v}</button>`).join('')}
+        <div class="box netcard wide room">
+          <div class="roomhead">
+            <div class="codebig ${isHost ? '' : 'small'}">${st.code}</div>
+            <div>
+              <p class="setupline">${setupLine(room.setup)}</p>
+              <p class="matchline">${matchLine(room)}</p>
+              ${isHost ? '<p class="tiny">Pásales el código. El formato se cambia en «Armar equipo».</p>' : '<p class="tiny">Elige tu lugar. El anfitrión empieza el partido.</p>'}
+            </div>
           </div>
-          <p class="setupline">${setupLine(setup, st.mode)} <small>(se cambia en «Armar equipo»)</small></p>
-          <p class="status ${st.connected ? 'ok' : ''}">${st.connected
-            ? `¡Tu amigo está conectado! Su equipo: ${st.guestPicks ? teamLine(st.guestPicks.map((x) => x.id), st.mode === 'coop' ? setup.size - Math.ceil(setup.size / 2) : setup.size) : '…'}`
-            : 'Esperando a que se una alguien…'}</p>
-          <button class="btn big" data-act="start" ${st.connected ? '' : 'disabled'}>¡Empezar!</button>
-        </div>`;
-    } else if (st.phase === 'joined') {
-      body = `
-        <div class="box netcard wide">
-          <div class="codebig small">${st.code}</div>
-          <p class="status ok">Conectado a la sala.</p>
-          <p class="setupline">${info ? `${MODES[mode]} · ${setupLine(info, mode)}` : '…'}</p>
-          <p class="wait">Esperando a que el anfitrión empiece el partido…</p>
+          <div class="places">${cols}</div>
+          ${isHost ? `<button class="btn big" data-act="start" ${room.members.some((x) => x.place !== 'spec') ? '' : 'disabled'}>¡Empezar!</button>` : '<p class="wait">Esperando a que el anfitrión empiece…</p>'}
         </div>`;
     }
     const s = el(`
@@ -85,7 +102,8 @@ PF.OnlineUI = (() => {
         <div class="selhead"><h2>Online</h2></div>
         ${body}
         <div class="box netteam">
-          <b>Tu equipo</b> ${teamLine(setup.picks, need)}
+          <label>Nombre <input class="pname" maxlength="14" value="${esc(name)}" placeholder="Entrenador" spellcheck="false" autocomplete="off"></label>
+          <b>Tu equipo</b> ${teamLine(setup.picks, setup.size)}
           <button class="btn small" data-act="team">Armar equipo</button>
         </div>
         <div class="row">
@@ -96,6 +114,9 @@ PF.OnlineUI = (() => {
     const q = (sel) => s.querySelector(sel);
     q('[data-act=back]').onclick = cb.onBack;
     q('[data-act=team]').onclick = cb.onTeam;
+    const pname = q('.pname');
+    pname.onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') pname.blur(); };
+    pname.onchange = () => cb.onName(pname.value);
     if (q('[data-act=host]')) q('[data-act=host]').onclick = cb.onHost;
     if (q('[data-act=join]')) {
       const inp = q('input.code');
@@ -105,7 +126,7 @@ PF.OnlineUI = (() => {
       inp.oninput = () => { inp.value = inp.value.toUpperCase(); };
     }
     if (q('[data-act=start]')) q('[data-act=start]').onclick = cb.onStart;
-    s.querySelectorAll('[data-name=modo] button').forEach((b) => { b.onclick = () => cb.onMode(b.dataset.v); });
+    s.querySelectorAll('[data-place]').forEach((b) => { b.onclick = () => cb.onPlace(b.dataset.place); });
     root().appendChild(s);
   }
 
@@ -126,5 +147,5 @@ PF.OnlineUI = (() => {
     root().appendChild(s);
   }
 
-  return { lobby, menu, MODES };
+  return { lobby, menu };
 })();

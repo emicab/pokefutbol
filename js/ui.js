@@ -568,12 +568,12 @@ PF.UI = (() => {
     const s = el(`
       <div class="screen">
         <div class="box menu result">
-          <h2 class="${won ? 'won' : lost ? 'lost' : ''}">${won ? '¡Ganaste!' : lost ? 'Perdiste...' : 'Empate'}</h2>
+          <h2 class="${extra.title ? '' : won ? 'won' : lost ? 'lost' : ''}">${extra.title || (won ? '¡Ganaste!' : lost ? 'Perdiste...' : 'Empate')}</h2>
           <div class="final"><span style="color:${PF.TEAM_COLORS[0]}">${m.score[0]}</span> - <span style="color:${PF.TEAM_COLORS[1]}">${m.score[1]}</span></div>
-          <div class="reward">
+          ${reward.lines.length ? `<div class="reward">
             ${reward.lines.map(([t, c]) => `<div><span>${t}</span><b>+${c}</b></div>`).join('')}
             <div class="total"><span>Total</span>${coinHTML('+' + reward.coins)}</div>
-          </div>
+          </div>` : ''}
           ${reward.unlocked.map((n) => `<div class="new">¡Nuevo Pokémon desbloqueado: <b>${n}</b>!</div>`).join('')}
           ${extra.note ? `<div class="hint">${extra.note}</div>` : ''}
           ${onRematch ? `<button class="btn big" data-act="rematch">${extra.rematch || 'Revancha'}</button>` : ''}

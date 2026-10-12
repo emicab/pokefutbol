@@ -315,9 +315,9 @@ PF.Match = (() => {
       stadium: PF.stadiumById(opts.stadium),
       // humanos: cada uno maneja un Pokémon de su equipo (dos en el mismo = cooperativo).
       // humanTeam = el equipo de quien mira esta pantalla (HUD, colores, cambios).
-      humans: (opts.humans || (opts.humanTeam >= 0 ? [{ team: opts.humanTeam }] : [])).map((h, idx) => ({ idx, team: h.team, controlled: null })),
-      view: opts.view || 0,
-      humanTeam: opts.humanTeam ?? (opts.humans && opts.humans.length ? opts.humans[opts.view || 0].team : -1),
+      humans: (opts.humans || (opts.humanTeam >= 0 ? [{ team: opts.humanTeam }] : [])).map((h, idx) => ({ idx, team: h.team, name: h.name || '', controlled: null })),
+      view: opts.view ?? 0,   // -1: espectador (no maneja a nadie)
+      humanTeam: opts.humanTeam ?? (opts.humans && opts.humans[opts.view ?? 0] ? opts.humans[opts.view ?? 0].team : -1),
       demo: !!opts.demo, autoSubs: !!opts.autoSubs,
       orders: [0, 0],   // orden (índice en ORDERS) de cada equipo con humanos
       tactic: ['neutral', 'neutral'], coachT: 4, rotateT: 2,   // táctica de los equipos de la CPU
@@ -354,7 +354,7 @@ PF.Match = (() => {
     return m;
   }
 
-  const hasHuman = (m, team) => m.humans.some((h) => h.team === team);
+  const hasHuman = (m, team) => m.humans.some((h) => h.team === team && !h.gone);
 
   /** El humano `h` (por defecto, el de esta pantalla) pasa a manejar a `p`, si no lo maneja otro. */
   function setControl(m, p, h = m.humans[m.view] || m.humans[0]) {
@@ -375,6 +375,13 @@ PF.Match = (() => {
   function releaseControl(h) {
     if (h.controlled) { h.controlled.human = false; h.controlled.ctrl = null; }
     h.controlled = null;
+  }
+  /** Un jugador online se fue: su Pokémon pasa a la IA y no vuelve a tomar control. */
+  function dropHuman(m, i) {
+    const h = m.humans[i];
+    if (!h) return;
+    h.gone = true;
+    releaseControl(h);
   }
 
   function kickoff(m) {
@@ -407,6 +414,7 @@ PF.Match = (() => {
     // cada humano toma al más adelantado que quede libre (el primero, el que saca)
     for (const h of m.humans) releaseControl(h);
     for (const h of m.humans) {
+      if (h.gone) continue;
       const free = teamOf(m, h.team).filter((p) => !p.human && (!p.fixedKeeper || teamOf(m, h.team).length <= 2));
       const pick = free.find((p) => p === kicker) || free.reduce((a, q) => (!a || q.spot[0] > a.spot[0] ? q : a), null);
       if (pick) setControl(m, pick, h);
@@ -1211,7 +1219,7 @@ PF.Match = (() => {
     if (!p.human && m.state === 'play') {
       let h = null, hd = Infinity;
       for (const x of m.humans) {
-        if (x.team !== p.team) continue;
+        if (x.team !== p.team || x.gone) continue;
         const d = x.controlled ? U.dist(x.controlled.x, x.controlled.y, p.x, p.y) : 0;
         if (d < hd) { hd = d; h = x; }
       }
@@ -1650,6 +1658,6 @@ PF.Match = (() => {
     // usados por abilities.js, ai.js y render.js
     radius, mass, untouchable, mateOf, matesOf, teamOf, setAnim, knock, stunInPlace, loseBall, shoot,
     addHazard, addProjectile, jump, nearestFoeDist, homeSpot, shotAim, passTarget, laneClear, bestShot,
-    updateCamera, hasHuman, makePlayer, PRESS_MAX,
+    updateCamera, hasHuman, makePlayer, PRESS_MAX, dropHuman,
   };
 })();

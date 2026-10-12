@@ -332,7 +332,7 @@ PF.Render = (() => {
       // con varios humanos: quién es quién (el tuyo, en amarillo)
       if (m.humans.length > 1 && p.ctrl) {
         ctx.font = '13px Pixelify, monospace'; ctx.textAlign = 'center';
-        const lbl = 'J' + (p.ctrl.idx + 1);
+        const lbl = p.ctrl.name || 'J' + (p.ctrl.idx + 1);
         ctx.fillStyle = '#141018'; ctx.fillText(lbl, p.x + 1, y - 15);
         ctx.fillStyle = p.ctrl.idx === m.view ? '#ffd23f' : '#fff'; ctx.fillText(lbl, p.x, y - 16);
       }

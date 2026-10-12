@@ -196,30 +196,33 @@ cualquier Pokémon importado se puede usar.
 
 ## Online
 
-Dos jugadores, cada uno en su compu, con una conexión directa entre
-navegadores (WebRTC con [PeerJS](https://peerjs.com), que se descarga sólo al
-entrar en Online; el resto del juego funciona sin internet).
+Hasta **4 jugadores** (y los que quieran mirar), cada uno en su compu, con
+una conexión directa entre navegadores (WebRTC con [PeerJS](https://peerjs.com),
+que se descarga sólo al entrar en Online; el resto del juego funciona sin
+internet). Se juega desde https://emicab.github.io/pokefutbol/.
 
-1. Uno toca **Online → Crear sala** y le pasa el código de 5 letras al otro.
-2. El otro toca **Online**, escribe el código y **Unirse**.
-3. El anfitrión elige el modo y empieza:
-   - **Uno contra otro (JcJ)**: cada uno con su equipo (el que tenga armado
-     en partido rápido; si le faltan Pokémon, se completa al azar).
-   - **Cooperativo contra la CPU**: los dos en el mismo equipo (la mitad de
-     los Pokémon de cada uno) contra un rival de la dificultad elegida.
+1. Uno toca **Online → Crear sala** y le pasa el código de 5 letras a los demás.
+2. Los demás tocan **Online**, escriben el código y **Unirse**.
+3. En la sala todos entran **mirando**, y cada uno elige su lugar: **Equipo
+   A**, **Equipo B** o **Mirar**. Con eso sale el partido: 1 contra 1, 2
+   contra 2, 3 contra 1, o todos en un equipo contra la CPU (un equipo sin
+   jugadores lo maneja la CPU, con la dificultad del anfitrión).
+4. El anfitrión toca **¡Empezar!**
 
-El formato, el tiempo, la cancha y el arquero son los del partido rápido del
-anfitrión (se cambian con «Armar equipo» desde la sala). Sobre tu Pokémon
-aparece **J1** (anfitrión) o **J2** (invitado); el tuyo, en amarillo.
+En cada equipo, cada jugador pone su parte de Pokémon (de su equipo del
+partido rápido; el formato se reparte entre los del mismo lado) y lo que
+falta se completa al azar. El formato, el tiempo, la cancha y el arquero son
+los del anfitrión (los cambia con «Armar equipo» desde la sala). Sobre cada
+Pokémon manejado por alguien aparece su **nombre** (el tuyo, en amarillo); el
+nombre se pone en la sala. Los que miran ven el partido en vivo.
 
-Cómo funciona: el anfitrión corre el partido y el invitado le manda sus
-teclas y recibe el estado en cada paso, así que **el invitado juega con un
-poco de retraso** según la conexión. El anfitrión tiene que dejar la ventana
-del juego visible (si la minimiza, el navegador frena el partido). Online no
-hay pausa (`Esc` abre un menú para abandonar) y los cambios de suplentes son
-automáticos. Si los dos están detrás de routers muy cerrados, la conexión
-puede no establecerse. Para jugar con alguien, los dos necesitan la misma
-versión del juego (por ejemplo, compartiendo la carpeta).
+Cómo funciona: el anfitrión corre el partido y los demás le mandan sus teclas
+y reciben el estado en cada paso, así que **los invitados juegan con un poco
+de retraso** según la conexión. El anfitrión tiene que dejar la ventana del
+juego visible (si la minimiza, el navegador frena el partido). Si alguien se
+va en pleno partido, su Pokémon lo sigue la IA. Online no hay pausa (`Esc`
+abre un menú para abandonar) y los cambios de suplentes son automáticos. Si
+hay routers muy cerrados, la conexión puede no establecerse.
 
 ## Plantel
 
@@ -300,7 +303,7 @@ js/ui.js          pantallas (título, opciones, selección, pausa, resultado)
 js/career.js      modo historia: club, experiencia, evoluciones, copas
 js/ui-career.js   pantallas del modo historia
 js/net.js         online: conexión (PeerJS), sincronización del estado, teclas del invitado
-js/ui-online.js   sala online y menú durante el partido online
+js/ui-online.js   sala online (equipos A/B y espectadores) y menú durante el partido
 js/main.js        bucle a 60 Hz fijo, flujo de pantallas, online y premios
 tools/import_pokemon.py   copia sprites desde PokéSurvivor y regenera metadatos, Pokédex y créditos
 tools/serve.py            servidor local sin caché

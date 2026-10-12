@@ -66,12 +66,12 @@
   function restartMatch() { playMatch(current.cfg, current.onEnd, current.quit); }
 
   // ---------------------------------------------------------------- partido rápido
-  /** Rival: Pokémon que no elegiste (repite si no alcanzan). Puede usar bloqueados. */
-  function pickRival(picks, n) {
-    const free = PF.U.shuffle(PF.ROSTER.filter((r) => !picks.includes(r.id)));
-    const out = [];
-    for (let i = 0; i < n; i++) out.push(free[i % free.length]);
-    return out;
+  /**
+   * Rival: Pokémon que no elegiste (puede usar bloqueados), sobre todo de
+   * fase 1 y 2; más evolucionados cuanto más difícil. Nunca legendarios.
+   */
+  function pickRival(picks, n, diff = PF.Save.data.setup.diff) {
+    return PF.randomFill(picks, n, diff).map(PF.rosterById);
   }
 
   function quickMatch() {
@@ -241,17 +241,24 @@
   }
 
   // ---------------------------------------------------------------- online
-  // El anfitrión corre el partido; el invitado manda sus teclas y dibuja lo
-  // que le llega (ver net.js). Jugador 1 = anfitrión, jugador 2 = invitado.
+  // Hasta 4 jugadores (y espectadores). El anfitrión corre el partido; cada
+  // invitado manda sus teclas y dibuja lo que le llega (ver net.js). En la
+  // sala todos entran mirando y cada uno elige su lugar: equipo A, equipo B o
+  // mirar. Un equipo sin jugadores lo maneja la CPU.
   const N = PF.Net;
-  let online = null;   // { phase, mode, code, connected, info, guestPicks, view, inbuf, pack }
+  const MAX_PLAYERS = 4;
+  // online = { phase: idle|creating|joining|room, code, me (mi id en la sala), room, view,
+  //            menu, humanIds (id de cada humano del partido), inbufs, pack }
+  let online = null;
 
   const myPicks = () => PF.Save.data.setup.picks.map((id) => ({ id, a: PF.Save.data.setup.abil[id] || 0 }));
-  const infoMsg = () => Object.assign({ mode: online.mode }, PF.Save.data.setup);
+  const myName = () => PF.Save.data.settings.name || 'Entrenador';
+  const roomSetup = () => { const s = PF.Save.data.setup; return { size: s.size, time: s.time, keeper: s.keeper, stadium: s.stadium, diff: s.diff }; };
+  const hello = () => N.send({ t: 'hello', v: N.VERSION, name: myName(), picks: myPicks() });
 
   function toOnline() {
     toMenu();
-    if (!online) online = { phase: 'idle', mode: 'pvp' };
+    if (!online) online = { phase: 'idle' };
     drawLobby();
   }
   function drawLobby() {
@@ -259,34 +266,112 @@
     online.view = 'lobby';
     PF.OnlineUI.lobby(online, {
       onHost: hostRoom, onJoin: joinRoom, onStart: startOnlineHost, onTeam: onlineTeam, onBack: leaveOnline,
-      onMode: (mode) => { online.mode = mode; N.send({ t: 'info', setup: infoMsg() }); PF.Audio.sfx.click(); drawLobby(); },
+      onPlace: choosePlace, onName: setName,
     });
   }
   const redrawLobby = () => { if (online && online.view === 'lobby') drawLobby(); };
 
+  // ---- anfitrión
+  /** Manda a todos cómo está la sala (y la redibuja acá). */
+  function pushRoom() {
+    online.room.setup = roomSetup();
+    N.send({ t: 'room', room: online.room });
+    redrawLobby();
+  }
   function hostRoom() {
     online.phase = 'creating';
     drawLobby();
     N.host(
-      (code) => { online.phase = 'hosting'; online.code = code; redrawLobby(); },
-      () => { online.connected = true; N.send({ t: 'info', setup: infoMsg() }); PF.Audio.sfx.coin(); redrawLobby(); },
-      (err) => { PF.UI.toast(err); N.close(); online = { phase: 'idle', mode: online.mode }; redrawLobby(); },
+      (code) => {
+        Object.assign(online, { phase: 'room', code, me: 'host' });
+        online.room = { code, members: [{ id: 'host', name: myName(), place: 'A', picks: myPicks(), host: true }], setup: roomSetup() };
+        redrawLobby();
+      },
+      (id) => {
+        online.room.members.push({ id, name: 'Invitado', place: 'spec', picks: [] });
+        N.sendTo(id, { t: 'welcome', id });
+        PF.Audio.sfx.coin();
+        pushRoom();
+      },
+      (err) => { PF.UI.toast(err); N.close(); online = { phase: 'idle' }; redrawLobby(); },
     );
   }
+  /** Mover a alguien de lugar, si hay espacio (4 jugadores como mucho; por equipo, hasta el formato). */
+  function tryPlace(id, place) {
+    const room = online.room, mb = room.members.find((x) => x.id === id);
+    if (!mb || !['A', 'B', 'spec'].includes(place) || mb.place === place) return;
+    if (place !== 'spec') {
+      const playing = room.members.filter((x) => x !== mb && x.place !== 'spec').length;
+      const there = room.members.filter((x) => x !== mb && x.place === place).length;
+      if (playing >= MAX_PLAYERS || there >= room.setup.size) {
+        if (id === 'host') PF.UI.toast('No hay lugar ahí.'); else N.sendTo(id, { t: 'nope', text: 'No hay lugar ahí.' });
+        return;
+      }
+    }
+    mb.place = place;
+    pushRoom();
+  }
+  N.on('hello', (msg, from) => {
+    if (!online || !online.room || N.role !== 'host') return;
+    const mb = online.room.members.find((x) => x.id === from);
+    if (!mb) return;
+    if (msg.v !== N.VERSION) { N.sendTo(from, { t: 'nope', text: 'Tienes otra versión del juego: recarga la página.' }); return; }
+    mb.name = String(msg.name || 'Invitado').slice(0, 14);
+    mb.picks = Array.isArray(msg.picks) ? msg.picks.filter((x) => x && PF.rosterById(x.id)) : [];
+    pushRoom();
+  });
+  N.on('place', (msg, from) => { if (online && online.room && N.role === 'host') tryPlace(from, msg.place); });
+  N.on('leave', (msg, from) => {
+    if (!online || !online.room) return;
+    const mb = online.room.members.find((x) => x.id === from);
+    online.room.members = online.room.members.filter((x) => x.id !== from);
+    if (mb) PF.UI.toast(`${mb.name} se fue.`);
+    // en pleno partido, su Pokémon pasa a la IA
+    if (match && match.online === 'host' && online.humanIds) {
+      const i = online.humanIds.indexOf(from);
+      if (i >= 0) PF.Match.dropHuman(match, i);
+    }
+    pushRoom();
+  });
+
+  // ---- invitado
   function joinRoom(code) {
     online.phase = 'joining';
     online.code = code;
     drawLobby();
     N.join(code,
-      () => { online.phase = 'joined'; online.connected = true; N.send({ t: 'hello', v: N.VERSION, picks: myPicks() }); redrawLobby(); },
-      (err) => { PF.UI.toast(err); N.close(); online = { phase: 'idle', mode: 'pvp' }; redrawLobby(); });
+      () => { online.phase = 'room'; hello(); redrawLobby(); },
+      (err) => { PF.UI.toast(err); N.close(); online = { phase: 'idle' }; redrawLobby(); });
+  }
+  N.on('welcome', (msg) => { if (online) { online.me = msg.id; redrawLobby(); } });
+  N.on('room', (msg) => { if (online) { online.room = msg.room; online.phase = 'room'; redrawLobby(); } });
+  N.on('nope', (msg) => PF.UI.toast(msg.text));
+  N.on('full', () => { PF.UI.toast('Esa sala ya está completa.'); N.close(); online = { phase: 'idle' }; redrawLobby(); });
+  N.on('close', () => {
+    PF.UI.toast('Se cortó la conexión con el anfitrión.');
+    online = null;
+    if (match && match.online) match = null;
+    toTitle();
+  });
+
+  // ---- los dos
+  function choosePlace(place) {
+    PF.Audio.sfx.click();
+    if (N.role === 'host') tryPlace('host', place);
+    else N.send({ t: 'place', place });
+  }
+  function setName(name) {
+    PF.Save.data.settings.name = String(name).trim().slice(0, 14);
+    PF.Save.save();
+    if (N.role === 'host' && online.room) { online.room.members[0].name = myName(); pushRoom(); }
+    else if (N.role === 'guest') hello();
   }
   /** Armar el equipo con la pantalla del partido rápido y volver a la sala. */
   function onlineTeam() {
     online.view = 'team';
     const back = () => {
-      if (N.role === 'host') N.send({ t: 'info', setup: infoMsg() });
-      if (N.role === 'guest') N.send({ t: 'hello', v: N.VERSION, picks: myPicks() });
+      if (N.role === 'host' && online.room) { online.room.members[0].picks = myPicks(); pushRoom(); }
+      if (N.role === 'guest') hello();
       drawLobby();
     };
     PF.UI.select(back, back, 'Listo');
@@ -297,86 +382,86 @@
     toTitle();
   }
 
-  N.on('hello', (msg) => {
-    if (msg.v !== N.VERSION) { PF.UI.toast('Tu amigo tiene otra versión del juego.'); return; }
-    online.guestPicks = msg.picks;
-    redrawLobby();
-  });
-  N.on('info', (msg) => { if (online) { online.info = msg.setup; online.mode = msg.setup.mode; redrawLobby(); } });
-  N.on('start', (msg) => startOnline(msg.cfg, 1));
-  N.on('in', (msg) => { if (online && online.inbuf) online.inbuf.push(msg.i); });
+  N.on('start', (msg) => startOnline(msg.cfg, msg.view));
+  N.on('in', (msg, from) => { if (online && online.inbufs && online.inbufs[from]) online.inbufs[from].push(msg.i); });
   N.on('s', (msg) => { if (match && match.online === 'guest') N.applySync(match, msg); });
   N.on('lobby', () => { if (online) toOnline(); });
-  N.on('full', () => { PF.UI.toast('Esa sala ya está completa.'); N.close(); online = { phase: 'idle', mode: 'pvp' }; redrawLobby(); });
-  N.on('close', () => {
-    PF.UI.toast('Se cortó la conexión con tu amigo.');
-    online = null;
-    if (match && match.online) { match = null; toTitle(); } else toTitle();
-  });
 
-  /** El anfitrión arma el partido con los dos equipos y se lo manda al invitado. */
+  /**
+   * El anfitrión arma el partido según la sala: en cada equipo con jugadores,
+   * cada uno pone su parte de Pokémon (el formato repartido entre ellos) y lo
+   * que falta se completa al azar; un equipo sin jugadores es de la CPU.
+   */
   function startOnlineHost() {
-    if (!N.connected()) return;
-    const s = PF.Save.data.setup, size = s.size, pvp = online.mode === 'pvp';
+    const room = online.room, s = PF.Save.data.setup, size = s.size;
+    room.members[0].picks = myPicks();
+    const players = room.members.filter((x) => x.place !== 'spec');
+    if (!players.length) { PF.UI.toast('Alguien tiene que estar en un equipo.'); return; }
     const key = (x) => x.id + ':' + x.a;
-    const fill = (picks, n) => {
-      const out = picks.filter((x) => PF.rosterById(x.id));
-      for (const id of PF.randomFill(out.map((x) => x.id), n - out.length)) out.push({ id, a: 0 });
-      return out;
-    };
-    const nHost = pvp ? size : Math.ceil(size / 2), nGuest = size - (pvp ? 0 : nHost);
-    const host = fill(myPicks(), nHost), guest = fill(online.guestPicks || [], pvp ? size : nGuest);
-    const hostDefs = host.slice(0, nHost).map((x) => N.defOf(key(x)));
-    let cfg;
-    if (pvp) {
-      cfg = {
-        teams: [host.slice(0, size).map(key), guest.slice(0, size).map(key)],
-        bench: [host.slice(size, size + 2).map(key), guest.slice(size, size + 2).map(key)],
-        humans: [{ team: 0 }, { team: 1 }], skills: ['mate', 'mate'],
-        formations: [PF.Board.spotsFor(s.spots[size + '-' + s.keeper] || {}, hostDefs, s.keeper), null],
-      };
-    } else {
-      const ids = host.concat(guest).map((x) => x.id);
-      const rival = pickRival(ids, size + 2).map((r) => r.id + ':' + (Math.random() < 0.5 ? 0 : 1));
-      cfg = {
-        teams: [host.slice(0, nHost).concat(guest.slice(0, nGuest)).map(key), rival.slice(0, size)],
-        bench: [[], rival.slice(size)],
-        humans: [{ team: 0 }, { team: 0 }], skills: ['mate', s.diff],
-        formations: [null, null],
-      };
-    }
-    Object.assign(cfg, {
-      mode: online.mode, size, time: s.time, stadium: s.stadium, keeperMode: s.keeper,
-      flip: Math.random() < 0.5, replays: PF.Save.data.settings.replays,
+    const teams = [[], []], bench = [[], []], formations = [null, null], humans = [], humanIds = [], skills = [];
+    ['A', 'B'].forEach((place, team) => {
+      const side = players.filter((x) => x.place === place);
+      skills[team] = side.length ? 'mate' : s.diff;
+      if (!side.length) {
+        const taken = players.flatMap((x) => x.picks.map((p) => p.id));
+        const rival = pickRival(taken, size + 2).map((r) => r.id + ':' + (Math.random() < 0.5 ? 0 : 1));
+        teams[team] = rival.slice(0, size);
+        bench[team] = rival.slice(size);
+        return;
+      }
+      const picks = [];
+      side.forEach((mb, i) => {
+        const share = Math.floor(size / side.length) + (i < size % side.length ? 1 : 0);
+        picks.push(...mb.picks.filter((p) => !picks.some((q) => q.id === p.id)).slice(0, share));
+      });
+      for (const id of PF.randomFill(picks.map((p) => p.id), size - picks.length)) picks.push({ id, a: 0 });
+      teams[team] = picks.map(key);
+      if (side.length === 1) {
+        bench[team] = side[0].picks.slice(size, size + 2).map(key);
+        if (side[0].id === 'host') formations[team] = PF.Board.spotsFor(s.spots[size + '-' + s.keeper] || {}, picks.map((p) => N.defOf(key(p))), s.keeper);
+      }
+      for (const mb of side) { humans.push({ team, name: mb.name }); humanIds.push(mb.id); }
     });
-    N.send({ t: 'start', cfg });
-    startOnline(cfg, 0);
+    const cfg = {
+      size, time: s.time, stadium: s.stadium, keeperMode: s.keeper, flip: Math.random() < 0.5,
+      replays: PF.Save.data.settings.replays, teams, bench, formations, humans, skills,
+    };
+    online.humanIds = humanIds;
+    for (const mb of room.members) if (mb.id !== 'host') N.sendTo(mb.id, { t: 'start', cfg, view: humanIds.indexOf(mb.id) });
+    startOnline(cfg, humanIds.indexOf('host'));
   }
 
-  /** Arranca el partido online (view 0 = anfitrión, 1 = invitado). */
+  /** Arranca el partido online. view = mi humano en cfg.humans (-1: miro). */
   function startOnline(cfg, view) {
     const defs = (arr) => arr.map(N.defOf);
     PF.configureField(cfg.size);
     match = PF.Match.create({
       teams: cfg.teams.map(defs), bench: cfg.bench.map(defs), formations: cfg.formations,
       keeperMode: cfg.keeperMode, humans: cfg.humans, view, autoSubs: true,
+      humanTeam: view >= 0 ? cfg.humans[view].team : -1,
       time: cfg.time, stadium: cfg.stadium, replays: cfg.replays, flip: cfg.flip,
       skills: cfg.skills.map((k) => PF.AI.SKILLS[k]),
     });
-    match.online = view === 0 ? 'host' : 'guest';
+    match.online = N.role === 'host' ? 'host' : 'guest';
     match.netCfg = cfg;
     online.view = 'match';
     online.menu = false;
-    if (view === 0) { online.inbuf = N.makeInputBuffer(); online.pack = N.makeSync(); }
+    if (match.online === 'host') {
+      online.inbufs = {};
+      for (const id of online.humanIds) if (id !== 'host') online.inbufs[id] = N.makeInputBuffer();
+      online.pack = N.makeSync();
+    }
     current = { cfg, onEnd: onlineResult, quit: { label: 'Abandonar', fn: leaveOnline } };
     screen = 'match';
     PF.UI.clear();
     PF.Audio.music('match');
     PF.Audio.setAmbience(1);
+    if (view < 0) PF.UI.toast('Estás mirando el partido.');
   }
 
   function onlineReward(m) {
     const team = m.humanTeam, save = PF.Save.data;
+    if (team < 0) return { coins: 0, lines: [], unlocked: [] };   // espectador
     const lines = [['Partido online', 30]];
     if (m.winner === team) lines.push(['Victoria', 70]);
     else if (m.winner === -1) lines.push(['Empate', 30]);
@@ -397,7 +482,10 @@
       host ? startOnlineHost : null,
       host ? () => { N.send({ t: 'lobby' }); toOnline(); } : null,
       leaveOnline,
-      { team: 'Volver a la sala', menu: 'Salir', note: host ? '' : 'Esperando a que el anfitrión elija revancha o volver a la sala…' });
+      {
+        team: 'Volver a la sala', menu: 'Salir', title: m.humanTeam < 0 ? 'Final' : null,
+        note: host ? '' : 'Esperando a que el anfitrión elija revancha o volver a la sala…',
+      });
   }
 
   function toggleNetMenu() {
@@ -491,7 +579,7 @@
     let steps = 0;
     if (net === 'guest') {
       // invitado: manda sus teclas una vez por frame y sólo anima efectos y cámara
-      if (screen === 'match') N.send({ t: 'in', i: humanIntent() });
+      if (screen === 'match' && match.view >= 0) N.send({ t: 'in', i: humanIntent() });
       PF.Input.endStep();
       acc += dt;
       while (acc >= STEP && steps < 5) {
@@ -505,7 +593,8 @@
       // anfitrión: corre el partido con las teclas de los dos y manda lo que cambió
       acc += dt;
       while (acc >= STEP && steps < 5) {
-        const ins = [screen === 'match' ? humanIntent() : null, online.inbuf.take()];
+        const ins = online.humanIds.map((id) => (id === 'host' ? (screen === 'match' ? humanIntent() : null)
+          : online.inbufs[id] ? online.inbufs[id].take() : null));
         const events = N.capture(match, () => PF.Match.step(match, STEP, ins));
         N.send(online.pack(match, events));
         acc -= STEP;

@@ -1,33 +1,37 @@
-/* ============ net.js — partido online entre dos navegadores ============
+/* ============ net.js — partido online (hasta 4 jugadores y espectadores) ============
  * Conexión directa (WebRTC) con PeerJS: el anfitrión crea una sala con un
- * código de 5 letras y el invitado se une con ese código. PeerJS se carga
- * sólo al entrar en Online (el resto del juego sigue funcionando sin internet).
+ * código de 5 letras y los demás se unen con ese código (estrella: todos
+ * hablan con el anfitrión). PeerJS se carga sólo al entrar en Online (el
+ * resto del juego sigue funcionando sin internet).
  *
- * Modelo: el anfitrión corre el partido de verdad. El invitado manda sus
+ * Modelo: el anfitrión corre el partido de verdad. Cada invitado manda sus
  * teclas (intención) y recibe, en cada paso, lo que cambió del estado
  * (jugadores, pelota, marcador...) más los efectos y sonidos que hubo, y
- * con eso dibuja su copia del partido.
+ * con eso dibuja su copia del partido. Los espectadores sólo reciben.
  *
- * Mensajes { t: tipo, ... }:
- *   hello  invitado → anfitrión  { v, picks }          al conectar o cambiar de equipo
- *   info   anfitrión → invitado  { setup }             formato, tiempo, modo...
- *   start  anfitrión → invitado  { cfg }               arranca un partido
+ * Mensajes { t: tipo, ... } (los handlers reciben (msg, deQuién)):
+ *   hello  invitado → anfitrión  { v, name, picks }     al conectar o cambiar de equipo
+ *   place  invitado → anfitrión  { place }              quiere ir al equipo A, B o mirar
+ *   room   anfitrión → todos     { room }              quién está, dónde, y el formato
+ *   start  anfitrión → cada uno  { cfg, view }         arranca un partido (view = su humano, -1 mira)
  *   in     invitado → anfitrión  { i }                 intención de este frame
- *   s      anfitrión → invitado  { p, m, b, h, e }     estado (sólo lo que cambió) y eventos
- *   lobby  anfitrión → invitado                        volver a la sala
+ *   s      anfitrión → todos     { p, m, b, h, e }     estado (sólo lo que cambió) y eventos
+ *   lobby  anfitrión → todos                          volver a la sala
  */
 PF.Net = (() => {
-  const VERSION = 'pf-net-1';
+  const VERSION = 'pf-net-2';
   const LIB = 'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js';
   const PREFIX = 'pokefutbol-sala-';
   const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const MAX_PEERS = 7;          // invitados conectados (jugadores + espectadores)
 
-  let peer = null, conn = null;
+  let peer = null, conn = null; // conn: la del invitado con el anfitrión
+  const conns = new Map();      // anfitrión: id del invitado → conexión
   let role = null;              // 'host' | 'guest' | null
   const handlers = {};
 
   function on(type, fn) { handlers[type] = fn; }
-  function emit(type, msg) { if (handlers[type]) handlers[type](msg); }
+  function emit(type, msg, from) { if (handlers[type]) handlers[type](msg, from); }
 
   let libPromise = null;
   function loadLib() {
@@ -46,15 +50,8 @@ PF.Net = (() => {
 
   const newCode = () => Array.from({ length: 5 }, () => ALPHA[Math.floor(Math.random() * ALPHA.length)]).join('');
 
-  function attach(c) {
-    conn = c;
-    c.on('data', (msg) => { if (msg && msg.t) emit(msg.t, msg); });
-    c.on('close', () => { if (conn === c) { conn = null; emit('close'); } });
-    c.on('error', () => {});
-  }
-
-  /** Crea una sala. onCode(código) cuando está lista; onGuest() cuando entra alguien. */
-  async function host(onCode, onGuest, onError) {
+  /** Crea una sala. onCode(código) cuando está lista; onJoin(id) / 'leave' cuando entra o sale alguien. */
+  async function host(onCode, onJoin, onError) {
     close();
     try { await loadLib(); } catch (e) { onError(e.message); return; }
     role = 'host';
@@ -63,12 +60,19 @@ PF.Net = (() => {
       peer = new window.Peer(PREFIX + code, { debug: 0 });
       peer.on('open', () => onCode(code));
       peer.on('connection', (c) => {
-        if (conn && conn.open) { c.on('open', () => { c.send({ t: 'full' }); setTimeout(() => c.close(), 300); }); return; }
-        c.on('open', () => { attach(c); onGuest(); });
+        c.on('open', () => {
+          if (conns.size >= MAX_PEERS) { c.send({ t: 'full' }); setTimeout(() => c.close(), 300); return; }
+          const id = c.peer;
+          conns.set(id, c);
+          c.on('data', (msg) => { if (msg && msg.t) emit(msg.t, msg, id); });
+          c.on('close', () => { if (conns.get(id) === c) { conns.delete(id); emit('leave', null, id); } });
+          c.on('error', () => {});
+          onJoin(id);
+        });
       });
       peer.on('error', (e) => {
         if (e.type === 'unavailable-id' && tries > 0) { peer.destroy(); tryOpen(tries - 1); }
-        else onError(errorText(e));
+        else if (e.type !== 'peer-unavailable') onError(errorText(e));
       });
       peer.on('disconnected', () => { if (peer && !peer.destroyed) peer.reconnect(); });
     };
@@ -83,7 +87,13 @@ PF.Net = (() => {
     peer = new window.Peer({ debug: 0 });
     peer.on('open', () => {
       const c = peer.connect(PREFIX + code.toUpperCase().trim(), { reliable: true, serialization: 'json' });
-      c.on('open', () => { attach(c); onOpen(); });
+      c.on('open', () => {
+        conn = c;
+        c.on('data', (msg) => { if (msg && msg.t) emit(msg.t, msg, 'host'); });
+        c.on('close', () => { if (conn === c) { conn = null; emit('close'); } });
+        c.on('error', () => {});
+        onOpen();
+      });
     });
     peer.on('error', (e) => onError(errorText(e)));
   }
@@ -95,25 +105,23 @@ PF.Net = (() => {
     return 'Error de conexión: ' + (e.type || e.message || e);
   }
 
-  function send(msg) { if (conn && conn.open) conn.send(msg); }
-  const connected = () => !!(conn && conn.open);
+  /** Invitado: al anfitrión. Anfitrión: a todos. */
+  function send(msg) {
+    if (role === 'guest') { if (conn && conn.open) conn.send(msg); return; }
+    for (const c of conns.values()) if (c.open) c.send(msg);
+  }
+  /** Anfitrión: a un invitado. */
+  function sendTo(id, msg) { const c = conns.get(id); if (c && c.open) c.send(msg); }
+  const connected = () => (role === 'guest' ? !!(conn && conn.open) : conns.size > 0);
 
   function close() {
-    const c = conn;
+    const all = [conn, ...conns.values()];
     conn = null;
-    if (c) try { c.close(); } catch (e) { /* ya cerrada */ }
+    conns.clear();
+    for (const c of all) if (c) try { c.close(); } catch (e) { /* ya cerrada */ }
     if (peer) try { peer.destroy(); } catch (e) { /* idem */ }
     peer = null;
     role = null;
-  }
-
-  /** Para pruebas: dos extremos conectados en la misma página. */
-  function loopback() {
-    const mk = () => ({ open: true, fns: {}, on(ev, fn) { this.fns[ev] = fn; }, close() { this.open = false; } });
-    const a = mk(), b = mk();
-    a.send = (msg) => setTimeout(() => b.fns.data && b.fns.data(JSON.parse(JSON.stringify(msg))));
-    b.send = (msg) => setTimeout(() => a.fns.data && a.fns.data(JSON.parse(JSON.stringify(msg))));
-    return [a, b];
   }
 
   // ------------------------------------------------------------ estado del partido
@@ -280,7 +288,7 @@ PF.Net = (() => {
   }
 
   return {
-    VERSION, on, host, join, send, close, connected, loopback, attach,
+    VERSION, on, host, join, send, sendTo, close, connected,
     get role() { return role; },
     defKey, defOf, makeSync, applySync, capture, makeInputBuffer,
   };
