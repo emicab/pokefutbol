@@ -1,15 +1,17 @@
-/* ============ match.js — un partido 2 vs 2: reglas, física y acciones ============
+/* ============ match.js — un partido N vs N: reglas, física y acciones ============
  * Equipo 0 ataca hacia la derecha, equipo 1 hacia la izquierda.
  * Estados: kickoff (saque: el que saca apunta, el resto quieto) → play
- *          → goal (festejo) → kickoff ... → end.
+ *          → goal (festejo) → replay (repetición, opcional) → kickoff ... → end.
  *
  * Cada paso, cada Pokémon recibe una "intención" (del teclado o de ai.js):
  *   { mx, my, pass, shootHold, ability, press, aim? }
- *   pass       con pelota: pase (al compañero si apuntas hacia él, si no al hueco)
+ *   pass       con pelota: pase (al compañero hacia el que apuntas, si no al hueco)
  *              sin pelota: placaje
  *   shootHold  mantener para cargar el tiro; al soltar, dispara
  *   press      mantener: correr solo hacia la pelota
  *   aim        (sólo IA) hacia dónde mira
+ * El humano manda además: swap (cambiar de Pokémon), order (orden a la IA
+ * del equipo) y skip (saltar la repetición).
  */
 PF.Match = (() => {
   const U = PF.U, F = PF.FIELD;
@@ -18,12 +20,23 @@ PF.Match = (() => {
   const CONTROL_SPEED = 700;     // por debajo de esto, la pelota se controla al tocarla
   const CHARGE_MAX = 0.7;        // segundos para el tiro a máxima potencia
   const DASH_SPEED = 660, DASH_TIME = 0.2, TACKLE_CD = 1.1;
-  const PASS_CONE = 1.1;         // radianes: apuntando así de cerca del compañero, el pase va a él
+  const PASS_CONE = 1.1;         // radianes: apuntando así de cerca de un compañero, el pase va a él
   const HUMAN_STEAL = 0.12;      // segundos de contacto para robar (las IA usan skill.steal)
   const KICKOFF_WAIT = 0.4, KICKOFF_MAX = 6;
+  const REC_FRAMES = 150;        // 2,5 s de repetición
   const NO_INTENT = { mx: 0, my: 0, pass: false, shootHold: false, ability: false, press: false };
 
-  /** Órdenes al compañero de la IA en el equipo humano (tecla T). Ver ai.js. */
+  /**
+   * Formaciones: [profundidad desde el arco propio (0..1), lateral (-1..1)].
+   * El slot 0 es el que saca.
+   */
+  const FORMATIONS = {
+    2: [[0.42, -0.3], [0.22, 0.28]],
+    3: [[0.55, -0.35], [0.45, 0.38], [0.22, 0]],
+    5: [[0.62, -0.33], [0.62, 0.33], [0.42, 0], [0.22, -0.42], [0.22, 0.42]],
+  };
+
+  /** Órdenes a la IA del equipo humano (tecla T). Ver ai.js. */
   const ORDERS = [
     { id: 'neutral', label: 'NEUTRO', short: '', color: '#e8f0ff' },
     { id: 'atk', label: 'ATAQUE', short: 'ATQ', color: '#ff8a3d' },
@@ -35,17 +48,31 @@ PF.Match = (() => {
     { id: 'turbo', label: '¡TURBO!', color: '#ffd23f' },
     { id: 'gigante', label: '¡GIGANTE!', color: '#ff8a3d' },
     { id: 'lento', label: '¡RIVALES LENTOS!', color: '#c77dff' },
+    { id: 'gigaball', label: '¡PELOTA GIGANTE!', color: '#ffffff' },
+    { id: 'loca', label: '¡PELOTA LOCA!', color: '#ff5ab0' },
+    { id: 'iman', label: '¡IMÁN!', color: '#b0b8c8' },
   ];
 
   // ---------------------------------------------------------------- helpers
   const radius = (p) => p.r * (p.giant > 0 ? 1.5 : 1);
   const mass = (p) => p.def.mass * (p.giant > 0 ? 2.2 : 1) * (p.wall > 0 ? 20 : 1);
-  const mateOf = (m, p) => m.players.find((q) => q.team === p.team && q !== p);
+  const untouchable = (p) => p.phase > 0 || p.dig > 0 || !!p.slam;
+  const teamOf = (m, team) => m.players.filter((q) => q.team === team);
+  const matesOf = (m, p) => m.players.filter((q) => q.team === p.team && q !== p);
+  const mateOf = (m, p) => matesOf(m, p)[0];
+  const ownGoalX = (team) => (team === 0 ? F.x0 : F.x1);
+  const dirOf = (team) => (team === 0 ? 1 : -1);
 
   function setAnim(p, name, lock = false) {
     p.anim = name;
     p.animT = 0;
     p.animLock = lock ? PF.Sprites.duration(p.def.dex, name) : 0;
+  }
+
+  function nearestFoeDist(m, p, x, y) {
+    let best = Infinity;
+    for (const q of m.players) if (q.team !== p.team && q.stun <= 0) best = Math.min(best, U.dist(x, y, q.x, q.y));
+    return best;
   }
 
   function makePlayer(def, team, slot, skill) {
@@ -55,6 +82,7 @@ PF.Match = (() => {
       stun: 0, asleep: false, cd: def.ability.cd * 0.75, tackleCd: 0, dash: 0, dashDx: 0, dashDy: 0, dashSpeed: DASH_SPEED,
       pickupCd: 0, holdT: 0, stealT: 0, charge: -1, aimMy: 0,
       fireShot: 0, phase: 0, turbo: 0, giant: 0, slow: 0, wall: 0, embers: 0, emberT: 0, slip: 0, burnCd: 0,
+      dig: 0, ram: 0, spinT: 0, magnet: 0,
       slam: null, anim: 'Idle', animT: 0, animLock: 0, human: false,
       ai: { t: 0, chasing: false, shotT: 0, aim: 0 },
     };
@@ -68,12 +96,40 @@ PF.Match = (() => {
     return [b.x + b.vx * t * 0.7, b.y + b.vy * t * 0.7];
   }
 
-  /** ¿El pase de p iría al compañero? (si no, es un pase al hueco) */
-  function passGoesToMate(m, p) {
-    const mate = mateOf(m, p);
-    if (!mate) return false;
-    if (!p.human) return true;
-    return Math.abs(U.angDiff(p.facing, Math.atan2(mate.y - p.y, mate.x - p.x))) < PASS_CONE;
+  /** Posición de un slot de la formación, desplazada con la pelota (ai.js). */
+  function homeSpot(m, p, shift = 0) {
+    const n = teamOf(m, p.team).length;
+    const [d, f] = (FORMATIONS[n] || FORMATIONS[2])[p.slot] || [0.4, 0];
+    const len = F.x1 - F.x0, H = (F.y1 - F.y0) / 2, dir = dirOf(p.team), own = ownGoalX(p.team);
+    const b = m.ball;
+    const progress = U.clamp(((b.x - own) * dir) / len, 0, 1);
+    const attacking = b.holder && b.holder.team === p.team;
+    const depth = U.clamp(d * 0.65 + progress * 0.45 + (attacking ? 0.1 : -0.08) + shift, 0.06, 0.9);
+    return [own + dir * depth * len, F.cy + f * H * 0.8 + (b.y - F.cy) * 0.3];
+  }
+
+  /**
+   * ¿A quién iría el pase? Humano: al compañero hacia el que apunta (o null:
+   * pase al hueco). IA: al más libre y adelantado.
+   */
+  function passTarget(m, p) {
+    const mates = matesOf(m, p).filter((q) => !q.slam && q.dig <= 0);
+    if (!mates.length) return null;
+    let best = null, bestScore = p.human ? Infinity : -Infinity;
+    for (const q of mates) {
+      const d = U.dist(p.x, p.y, q.x, q.y);
+      if (p.human) {
+        const a = Math.abs(U.angDiff(p.facing, Math.atan2(q.y - p.y, q.x - p.x)));
+        const score = a + d / 3000;
+        if (a < PASS_CONE && score < bestScore) { best = q; bestScore = score; }
+      } else {
+        const free = Math.min(250, nearestFoeDist(m, q, q.x, q.y));
+        const ahead = (q.x - p.x) * dirOf(p.team);
+        const score = free + ahead * 0.4 - Math.max(0, d - 450) * 0.6 - (q.stun > 0 ? 999 : 0);
+        if (score > bestScore) { best = q; bestScore = score; }
+      }
+    }
+    return best;
   }
 
   /**
@@ -92,21 +148,29 @@ PF.Match = (() => {
 
   // ---------------------------------------------------------------- creación
   /**
-   * opts.teams      [[def, def], [def, def]]  (def = PF.withAbility(...))
+   * opts.teams      [[def...], [def...]]  (def = PF.withAbility(...)), mismo largo
    * opts.humanTeam  0, o -1 para CPU contra CPU (fondo del menú)
    * opts.skills     [skill equipo 0, skill equipo 1] (ver PF.AI.SKILLS)
+   * opts.stadium    id de PF.STADIUMS
+   * opts.time       segundos · opts.replays  repetición de los goles
+   * Antes hay que llamar a PF.configureField(n) con el tamaño del equipo.
    */
   function create(opts) {
     const m = {
       players: [],
-      ball: { x: F.cx, y: F.cy, vx: 0, vy: 0, r: BALL_R, holder: null, last: null, fire: 0, vine: null, vineT: 0, passTo: null, passT: 0, spin: 0 },
+      ball: {
+        x: F.cx, y: F.cy, vx: 0, vy: 0, r: BALL_R, holder: null, last: null, fire: 0,
+        vine: null, vineT: 0, vineColor: '#7dff9e', passTo: null, passT: 0, spin: 0, big: 0, crazy: 0, curve: 1,
+      },
       score: [0, 0], time: opts.time ?? PF.MATCH_TIME, golden: false,
       state: 'kickoff', stateT: 0, clock: 0, kickoffTeam: Math.random() < 0.5 ? 0 : 1, kicker: null,
-      goalTeam: -1, ownGoal: false, winner: -1,
-      items: [], itemT: 7, hazards: [],
-      fx: PF.FX.create(), shake: 0, freeze: 0,
+      goalTeam: -1, ownGoal: false, winner: -1, scorer: null,
+      items: [], itemT: 7, hazards: [], projs: [],
+      fx: PF.FX.create(), shake: 0, freeze: 0, cam: { x: 0, y: 0 },
+      rec: [], replay: null, replays: opts.replays !== false, nearT: 0,
+      stadium: PF.stadiumById(opts.stadium),
       humanTeam: opts.humanTeam, controlled: null, demo: !!opts.demo,
-      order: 0,   // índice en ORDERS
+      order: 0,
     };
     opts.teams.forEach((defs, team) => defs.forEach((d, i) => {
       m.players.push(makePlayer(d, team, i, opts.skills[team]));
@@ -123,28 +187,42 @@ PF.Match = (() => {
 
   function kickoff(m) {
     const k = m.kickoffTeam, b = m.ball;
-    Object.assign(b, { x: F.cx, y: F.cy, vx: 0, vy: 0, holder: null, last: null, fire: 0, vine: null, passTo: null });
+    Object.assign(b, { x: F.cx, y: F.cy, vx: 0, vy: 0, holder: null, last: null, fire: 0, vine: null, passTo: null, big: 0, crazy: 0 });
+    const len = F.x1 - F.x0, H = (F.y1 - F.y0) / 2;
     for (const p of m.players) {
-      const s = p.team === 0 ? -1 : 1;
-      const x = F.cx + s * (p.slot === 0 ? 170 : 340), y = F.cy + (p.slot === 0 ? -90 : 100);
+      const n = teamOf(m, p.team).length;
+      const [d, f] = (FORMATIONS[n] || FORMATIONS[2])[p.slot] || [0.3, 0];
+      const dir = dirOf(p.team);
+      let x = ownGoalX(p.team) + dir * Math.min(d * 0.85, 0.42) * len;
+      const y = F.cy + f * H;
+      // fuera del círculo central
+      if (U.dist(x, y, F.cx, F.cy) < 130) x = F.cx - dir * 130;
       Object.assign(p, {
         x, y, z: 0, vx: 0, vy: 0, stun: 0, asleep: false, dash: 0, charge: -1, slam: null,
-        pickupCd: 0, holdT: 0, stealT: 0, phase: 0, wall: 0, embers: 0, slip: 0,
+        pickupCd: 0, holdT: 0, stealT: 0, phase: 0, wall: 0, embers: 0, slip: 0, dig: 0, ram: 0, spinT: 0,
       });
       p.facing = p.team === 0 ? 0 : Math.PI;
       p.ai.chasing = false; p.ai.shotT = 0;
       setAnim(p, 'Idle');
     }
     const kicker = m.players.find((p) => p.team === k && p.slot === 0);
-    kicker.x = F.cx + (k === 0 ? -1 : 1) * (radius(kicker) + BALL_R + 3);
+    kicker.x = F.cx - dirOf(k) * (radius(kicker) + BALL_R + 3);
     kicker.y = F.cy;
     b.holder = kicker; b.last = kicker;
     m.kicker = kicker;
     if (m.humanTeam >= 0) setControl(m, m.players.find((p) => p.team === m.humanTeam && p.slot === 0));
     m.items = [];
+    m.projs = [];
     m.hazards = [];
+    const st = m.stadium;
+    for (const [fx, fy] of st.hazards) {
+      addHazard(m, { kind: 'lava', x: F.cx + fx * (F.x1 - F.x0) / 2, y: F.cy + fy * H, r: 46 + H * 0.06, life: Infinity, team: -1 });
+    }
+    m.rec = [];
+    m.replay = null;
     m.state = 'kickoff';
     m.stateT = 0;
+    updateCamera(m, 0, true);
   }
 
   function finish(m) {
@@ -152,7 +230,57 @@ PF.Match = (() => {
     m.stateT = 0;
     m.winner = m.score[0] > m.score[1] ? 0 : m.score[1] > m.score[0] ? 1 : -1;
     PF.Audio.sfx.whistle(true);
-    PF.FX.text(m.fx, F.cx, F.cy - 40, '¡FINAL!', '#fff', 2.2, 2.5);
+    PF.Audio.crowd('cheer', 0.6);
+    PF.FX.text(m.fx, m.cam.x + PF.W / 2, m.cam.y + PF.H / 2 - 40, '¡FINAL!', '#fff', 2.2, 2.5);
+  }
+
+  function afterGoal(m) {
+    if (m.golden) finish(m);
+    else kickoff(m);
+  }
+
+  // ---------------------------------------------------------------- cámara
+  function updateCamera(m, dt, snap = false) {
+    const W = PF.W, H = PF.H, Wd = PF.WORLD, b = m.ball;
+    let tx = b.x, ty = b.y;
+    const c = m.controlled;
+    if (c && m.state !== 'replay') { tx = tx * 0.7 + c.x * 0.3; ty = ty * 0.7 + c.y * 0.3; }
+    const cx = Wd.w <= W ? (Wd.w - W) / 2 : U.clamp(tx - W / 2, 0, Wd.w - W);
+    const cy = Wd.h <= H ? (Wd.h - H) / 2 : U.clamp(ty - H / 2 + 20, 0, Wd.h - H);
+    if (snap) { m.cam.x = cx; m.cam.y = cy; return; }
+    const k = U.damp(4.5, dt);
+    m.cam.x += (cx - m.cam.x) * k;
+    m.cam.y += (cy - m.cam.y) * k;
+  }
+
+  // ---------------------------------------------------------------- repetición
+  function snapshot(m) {
+    const b = m.ball;
+    return {
+      p: m.players.map((p) => [p.x, p.y, p.z, p.facing, p.anim, p.animT, p.stun, p.asleep, p.phase, p.wall, p.giant, p.dig, p.charge]),
+      b: [b.x, b.y, b.spin, b.fire, b.big],
+    };
+  }
+
+  function applySnapshot(m, s) {
+    s.p.forEach((v, i) => {
+      const p = m.players[i];
+      [p.x, p.y, p.z, p.facing, p.anim, p.animT, p.stun, p.asleep, p.phase, p.wall, p.giant, p.dig] = v;
+      p.charge = -1;
+      p.animLock = 0;
+    });
+    const b = m.ball;
+    [b.x, b.y, b.spin, b.fire, b.big] = s.b;
+    b.holder = null; b.vine = null;
+  }
+
+  function stepReplay(m, dt, hi) {
+    const r = m.replay;
+    r.i += 0.5;                                    // cámara lenta
+    const idx = Math.floor(r.i);
+    if (idx >= r.frames.length || (hi && (hi.skip || hi.pass))) { afterGoal(m); return; }
+    applySnapshot(m, r.frames[idx]);
+    updateCamera(m, dt);
   }
 
   // ---------------------------------------------------------------- bucle
@@ -161,14 +289,19 @@ PF.Match = (() => {
     if (m.shake > 0) m.shake = Math.max(0, m.shake - dt * 40);
     if (m.freeze > 0) { m.freeze -= dt; return; }
     m.clock += dt;
+    m.nearT = Math.max(0, m.nearT - dt);
+
+    if (m.state === 'replay') { stepReplay(m, dt, hi); return; }
 
     if (m.state === 'kickoff') {
       m.stateT += dt;
     } else if (m.state === 'goal') {
       m.stateT -= dt;
       if (m.stateT <= 0) {
-        if (m.golden) finish(m);
-        else kickoff(m);
+        if (m.replays && !m.demo && m.rec.length > 40) {
+          m.state = 'replay';
+          m.replay = { frames: m.rec.slice(-REC_FRAMES), i: 0 };
+        } else afterGoal(m);
       }
     } else if (m.state === 'end') {
       m.stateT += dt;
@@ -180,7 +313,7 @@ PF.Match = (() => {
         else {
           m.golden = true;
           PF.Audio.sfx.whistle();
-          PF.FX.text(m.fx, F.cx, F.cy - 60, '¡GOL DE ORO!', '#ffd23f', 1.8, 2);
+          PF.FX.text(m.fx, m.cam.x + PF.W / 2, m.cam.y + PF.H / 2 - 60, '¡GOL DE ORO!', '#ffd23f', 1.8, 2);
         }
       }
     }
@@ -188,13 +321,18 @@ PF.Match = (() => {
     const playing = m.state === 'play';
     const kicking = m.state === 'kickoff';
     if (playing && hi && hi.swap) {
-      const other = mateOf(m, m.controlled);
-      if (other) setControl(m, other);
+      // al compañero más cerca de la pelota
+      let best = null, bd = Infinity;
+      for (const q of matesOf(m, m.controlled)) {
+        const d = U.dist(q.x, q.y, m.ball.x, m.ball.y);
+        if (d < bd) { bd = d; best = q; }
+      }
+      if (best) setControl(m, best);
     }
-    if (hi && hi.order && m.state !== 'end') {
+    if (hi && hi.order && m.state !== 'end' && m.humanTeam >= 0) {
       m.order = (m.order + 1) % ORDERS.length;
-      const o = ORDERS[m.order], mate = mateOf(m, m.controlled);
-      if (mate) PF.FX.text(m.fx, mate.x, mate.y - 70, '¡' + o.label + '!', o.color, 0.9, 0.9);
+      const o = ORDERS[m.order];
+      for (const q of matesOf(m, m.controlled)) PF.FX.text(m.fx, q.x, q.y - 70, '¡' + o.label + '!', o.color, 0.8, 0.9);
       PF.Audio.sfx.touch();
     }
 
@@ -226,21 +364,31 @@ PF.Match = (() => {
       m.state = 'play';
       PF.Audio.sfx.whistle();
     }
+    updateProjectiles(m, dt, playing);
     updateHazards(m, dt, playing);
-    if (playing) { checkGoal(m); updateItems(m, dt); }
+    if (playing) {
+      checkGoal(m);
+      updateItems(m, dt);
+      m.rec.push(snapshot(m));
+      if (m.rec.length > REC_FRAMES + 30) m.rec.shift();
+    }
     for (const p of m.players) animate(m, p, dt);
+    updateCamera(m, dt);
   }
 
   // ---------------------------------------------------------------- jugadores
   function applyIntent(m, p, it, dt, active) {
-    const b = m.ball;
-    for (const k of ['stun', 'tackleCd', 'pickupCd', 'phase', 'turbo', 'giant', 'slow', 'fireShot', 'wall', 'embers', 'slip', 'burnCd']) {
+    const b = m.ball, st = m.stadium;
+    const digging = p.dig > 0;
+    for (const k of ['stun', 'tackleCd', 'pickupCd', 'phase', 'turbo', 'giant', 'slow', 'fireShot', 'wall', 'embers',
+      'slip', 'burnCd', 'dig', 'ram', 'spinT', 'magnet']) {
       p[k] = Math.max(0, p[k] - dt);
     }
     // la habilidad sólo recarga con la pelota en juego (no en festejos ni saques)
     if (m.state === 'play') p.cd = Math.max(0, p.cd - dt);
     if (p.stun <= 0) p.asleep = false;
     if (b.holder === p) p.holdT += dt; else p.holdT = 0;
+    if (digging && p.dig <= 0) popDig(m, p);
 
     let mx = it.mx, my = it.my;
     if (p.human) p.aimMy = Math.abs(my) > 0.3 ? Math.sign(my) : 0;
@@ -255,17 +403,19 @@ PF.Match = (() => {
 
     const ml = Math.hypot(mx, my);
     if (ml > 1) { mx /= ml; my /= ml; }
-    if (p.dash <= 0 && !p.slam && p.stun <= 0) {
+    if (p.spinT > 0) p.facing += dt * 16;
+    else if (p.dash <= 0 && !p.slam && p.stun <= 0) {
       if (it.aim !== undefined) p.facing = it.aim;
       else if (ml > 0.2) p.facing = Math.atan2(my, mx);
     }
 
-    let sp = p.def.speed * (p.human ? 1 : p.skill.speed);
+    let sp = p.def.speed * (p.human ? 1 : p.skill.speed) * st.speed;
     if (b.holder === p) sp *= 0.9;
     if (p.charge >= 0) sp *= 0.55;
     if (p.turbo > 0) sp *= 1.4;
     if (p.giant > 0) sp *= 0.9;
     if (p.phase > 0) sp *= 1.2;
+    if (p.dig > 0) sp *= 1.3;
     if (p.slow > 0) sp *= 0.55;
     if (p.wall > 0) sp *= 0.3;
 
@@ -277,10 +427,10 @@ PF.Match = (() => {
       p.vy = p.dashDy * p.dashSpeed;
       if (Math.random() < 0.6) PF.FX.particle(m.fx, p.x, p.y, -p.vx * 0.1, -p.vy * 0.1, '#e9e2c8', 0.3, 4);
     } else if (p.stun > 0) {
-      const k = U.damp(p.slip > 0 ? 0.8 : 3.5, dt);
+      const k = U.damp(p.slip > 0 ? 0.8 : st.traction * 0.32, dt);
       p.vx -= p.vx * k; p.vy -= p.vy * k;
     } else {
-      const k = U.damp(p.slip > 0 ? 1.3 : 11, dt);
+      const k = U.damp(p.slip > 0 ? 1.3 : st.traction, dt);
       p.vx += (mx * sp - p.vx) * k;
       p.vy += (my * sp - p.vy) * k;
     }
@@ -291,6 +441,9 @@ PF.Match = (() => {
     }
     if (p.turbo > 0 && Math.hypot(p.vx, p.vy) > 100 && Math.random() < 0.5) {
       PF.FX.particle(m.fx, p.x, p.y - 10, -p.vx * 0.2, -p.vy * 0.2, '#ffe066', 0.25, 3);
+    }
+    if (p.dig > 0 && Math.random() < 0.7) {
+      PF.FX.particle(m.fx, p.x + U.rand(-12, 12), p.y, U.rand(-40, 40), U.rand(-90, -30), U.pick(['#8a6a4a', '#a98762', '#6b5038']), 0.4, 4, 300);
     }
     if (p.embers > 0) {
       p.emberT -= dt;
@@ -322,8 +475,8 @@ PF.Match = (() => {
         const k = Math.min(1, s.t / s.dur);
         p.x = U.lerp(s.x0, s.x1, k);
         p.y = U.lerp(s.y0, s.y1, k);
-        p.z = Math.sin(k * Math.PI) * 80;
-        if (k >= 1) { p.slam = null; p.z = 0; landSlam(m, p); }
+        p.z = Math.sin(k * Math.PI) * s.h;
+        if (k >= 1) { p.slam = null; p.z = 0; landSlam(m, p, s.soft); }
         continue;
       }
       p.x += p.vx * dt;
@@ -337,7 +490,7 @@ PF.Match = (() => {
     for (let i = 0; i < P.length; i++) {
       for (let j = i + 1; j < P.length; j++) {
         const a = P[i], c = P[j];
-        if (a.slam || c.slam || a.phase > 0 || c.phase > 0) continue;
+        if (untouchable(a) || untouchable(c)) continue;
         const min = radius(a) + radius(c);
         let dx = c.x - a.x, dy = c.y - a.y, d = Math.hypot(dx, dy);
         if (d >= min) continue;
@@ -390,11 +543,12 @@ PF.Match = (() => {
   }
 
   function pass(m, p) {
-    const mate = mateOf(m, p), b = m.ball;
-    if (passGoesToMate(m, p)) {
+    const b = m.ball;
+    const mate = passTarget(m, p);
+    if (mate) {
       const tx = mate.x + mate.vx * 0.35, ty = mate.y + mate.vy * 0.35;
       const dx = tx - b.x, dy = ty - b.y, d = Math.hypot(dx, dy) || 1;
-      const sp = U.clamp(d * 1.5 + 260, 380, 820);
+      const sp = U.clamp(d * 1.5 + 260, 380, 900);
       p.facing = Math.atan2(dy, dx);
       release(m, p, (dx / d) * sp, (dy / d) * sp);
       // el control pasa al que recibe, que va solo a buscarla
@@ -413,7 +567,7 @@ PF.Match = (() => {
   function shoot(m, p, k) {
     const b = m.ball;
     const aim = shotAim(p);
-    const power = U.lerp(0.42, 1, k) * p.def.power;
+    const power = U.lerp(0.42, 1, k) * p.def.power * (b.big > 0 ? 0.85 : 1);
     let sp = 1180 * power;
     const fire = p.fireShot > 0;
     if (fire) sp = 1450 * p.def.power;
@@ -445,20 +599,20 @@ PF.Match = (() => {
   }
 
   function tackleHit(m, a, v, nx, ny) {
-    a.dash = 0;
-    a.vx *= 0.2; a.vy *= 0.2;
+    if (a.ram <= 0) { a.dash = 0; a.vx *= 0.2; a.vy *= 0.2; }
     const ratio = Math.min(2.2, mass(a) / mass(v));
     if (!knock(m, v, nx, ny, 340 * ratio + 140, 0.9)) return;
     PF.FX.text(m.fx, v.x, v.y - 50, U.pick(['¡ZAS!', '¡PAF!', '¡TOMA!', '¡CATAPLÁN!']), '#ffd23f');
     PF.FX.burst(m.fx, v.x, v.y - 12, 12, '#fff', 200);
     PF.Audio.sfx.tackle();
+    if (Math.random() < 0.35) PF.Audio.crowd('oh', 0.5);
     m.freeze = 0.07;
     m.shake = Math.max(m.shake, 5);
   }
 
   /** Empuja y aturde. Si tenía la pelota, la suelta. Devuelve false si no le afecta. */
   function knock(m, v, nx, ny, force, stun) {
-    if (v.phase > 0 || v.slam || v.wall > 0) return false;
+    if (untouchable(v) || v.wall > 0) return false;
     if (m.ball.holder === v) loseBall(m, v, nx, ny);
     v.vx = nx * force; v.vy = ny * force;
     v.stun = Math.max(v.stun, stun);
@@ -468,7 +622,7 @@ PF.Match = (() => {
   }
 
   function stunInPlace(m, v, stun) {
-    if (v.phase > 0 || v.slam) return false;
+    if (untouchable(v)) return false;
     if (m.ball.holder === v) loseBall(m, v, Math.cos(v.facing), Math.sin(v.facing));
     v.vx *= 0.15; v.vy *= 0.15;
     v.stun = Math.max(v.stun, stun);
@@ -503,7 +657,21 @@ PF.Match = (() => {
     if (ok !== false && p.anim !== 'Attack') setAnim(p, 'Charge', true);
   }
 
-  function landSlam(m, p) {
+  /** Salto: lo usan Golpe Cuerpo y Salto (soft = sin onda expansiva). */
+  function jump(m, p, dist, soft) {
+    const x1 = U.clamp(p.x + Math.cos(p.facing) * dist, F.x0 + 40, F.x1 - 40);
+    const y1 = U.clamp(p.y + Math.sin(p.facing) * dist, F.y0 + 40, F.y1 - 40);
+    p.slam = { t: 0, dur: soft ? 0.7 : 0.5, x0: p.x, y0: p.y, x1, y1, h: soft ? 160 : 80, soft };
+    p.vx = 0; p.vy = 0;
+  }
+
+  function landSlam(m, p, soft) {
+    if (soft) {
+      PF.FX.burst(m.fx, p.x, p.y, 14, '#d9c9a8', 200, 0.4, 4);
+      PF.FX.text(m.fx, p.x, p.y - 60, '¡PLOF!', '#fff', 0.9);
+      PF.Audio.sfx.bounce(500);
+      return;
+    }
     const R = 165, b = m.ball;
     for (const q of m.players) {
       if (q.team === p.team) continue;
@@ -523,12 +691,74 @@ PF.Match = (() => {
     PF.FX.burst(m.fx, p.x, p.y, 30, '#d9c9a8', 340, 0.5, 5);
     PF.FX.text(m.fx, p.x, p.y - 70, '¡PATAPUM!', '#fff', 1.3);
     PF.Audio.sfx.slam();
+    PF.Audio.crowd('oh', 0.6);
     m.shake = Math.max(m.shake, 14);
     m.freeze = 0.08;
     setAnim(p, 'Attack', true);
   }
 
-  // ---------------------------------------------------------------- zonas (fuego, charco, esporas)
+  /** Onix sale de bajo tierra. */
+  function popDig(m, p) {
+    const R = 115;
+    for (const q of m.players) {
+      if (q.team === p.team) continue;
+      const dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy);
+      if (d < R + radius(q)) knock(m, q, d > 1 ? dx / d : 1, d > 1 ? dy / d : 0, 480, 0.9);
+    }
+    PF.FX.burst(m.fx, p.x, p.y, 28, '#8a6a4a', 300, 0.5, 5, 400);
+    PF.FX.ring(m.fx, p.x, p.y, R * 1.3, '#a98762', 0.4, 8);
+    PF.FX.text(m.fx, p.x, p.y - 70, '¡BRRUM!', '#e8d2b0', 1.2);
+    PF.Audio.sfx.slam();
+    m.shake = Math.max(m.shake, 9);
+    setAnim(p, 'Attack', true);
+  }
+
+  // ---------------------------------------------------------------- proyectiles
+  /** pr: { x, y, vx, vy, team, kind, life, r, homing?, stun, color } */
+  function addProjectile(m, pr) {
+    m.projs.push(Object.assign({ t: 0, r: 12, dead: false }, pr));
+  }
+
+  function updateProjectiles(m, dt, playing) {
+    for (const pr of m.projs) {
+      pr.t += dt;
+      if (pr.homing) {
+        let target = null, bd = Infinity;
+        for (const q of m.players) {
+          if (q.team === pr.team || q.stun > 0 || untouchable(q)) continue;
+          const d = U.dist(pr.x, pr.y, q.x, q.y);
+          if (d < bd) { bd = d; target = q; }
+        }
+        if (target) {
+          const a = Math.atan2(pr.vy, pr.vx), want = Math.atan2(target.y - 12 - pr.y, target.x - pr.x);
+          const na = a + U.clamp(U.angDiff(a, want), -5 * dt, 5 * dt);
+          const s = Math.hypot(pr.vx, pr.vy);
+          pr.vx = Math.cos(na) * s; pr.vy = Math.sin(na) * s;
+        }
+      }
+      pr.x += pr.vx * dt;
+      pr.y += pr.vy * dt;
+      if (Math.random() < 0.8) PF.FX.particle(m.fx, pr.x, pr.y, U.rand(-30, 30), U.rand(-30, 30), pr.color, 0.25, 3);
+      if (pr.x < F.x0 || pr.x > F.x1 || pr.y < F.y0 || pr.y > F.y1 || pr.t > pr.life) { pr.dead = true; continue; }
+      if (!playing) continue;
+      for (const q of m.players) {
+        if (q.team === pr.team || q.stun > 0 || untouchable(q)) continue;
+        if (U.dist(pr.x, pr.y, q.x, q.y - 10) > radius(q) + pr.r) continue;
+        const s = Math.hypot(pr.vx, pr.vy) || 1;
+        if (knock(m, q, pr.vx / s, pr.vy / s, 220, pr.stun)) {
+          PF.FX.burst(m.fx, q.x, q.y - 14, 14, pr.color, 220);
+          PF.FX.text(m.fx, q.x, q.y - 50, pr.hitText || '¡PAM!', pr.color, 0.9);
+          PF.Audio.sfx.tackle();
+        }
+        pr.dead = true;
+        break;
+      }
+    }
+    m.projs = m.projs.filter((pr) => !pr.dead);
+  }
+
+  // ---------------------------------------------------------------- zonas
+  /** h: { kind: fire|lava|puddle|ice|sleep, x, y, r, life, team (-1 = afecta a todos) } */
   function addHazard(m, h) {
     h.t = 0;
     h.hit = new Set();
@@ -541,14 +771,18 @@ PF.Match = (() => {
     if (!playing) return;
     for (const h of m.hazards) {
       for (const p of m.players) {
-        if (p.team === h.team || p.slam || p.phase > 0) continue;
+        if (p.team === h.team || untouchable(p)) continue;
         if (U.dist(p.x, p.y, h.x, h.y) > h.r + radius(p) * 0.5) continue;
         if (h.kind === 'puddle') {
           p.slip = 0.3;
-        } else if (h.kind === 'fire' && p.burnCd <= 0 && p.stun <= 0) {
+        } else if (h.kind === 'ice') {
+          p.slip = 0.3;
+          p.slow = Math.max(p.slow, 0.3);
+        } else if ((h.kind === 'fire' || h.kind === 'lava') && p.burnCd <= 0 && p.stun <= 0) {
           p.burnCd = 1;
-          const a = U.rand(0, Math.PI * 2);
-          if (knock(m, p, Math.cos(a), Math.sin(a), 240, 0.7)) {
+          let a = U.rand(0, Math.PI * 2);
+          if (h.kind === 'lava') a = Math.atan2(p.y - h.y, p.x - h.x);   // la lava escupe hacia fuera
+          if (knock(m, p, Math.cos(a), Math.sin(a), h.kind === 'lava' ? 420 : 240, 0.7)) {
             PF.FX.text(m.fx, p.x, p.y - 50, '¡QUEMA!', '#ff8a3d', 0.9);
             PF.FX.burst(m.fx, p.x, p.y - 10, 12, '#ff9a3d', 180);
             PF.Audio.sfx.tackle();
@@ -568,6 +802,9 @@ PF.Match = (() => {
   function updateBall(m, dt, playing) {
     const b = m.ball;
     b.fire = Math.max(0, b.fire - dt);
+    b.big = Math.max(0, b.big - dt);
+    b.crazy = Math.max(0, b.crazy - dt);
+    b.r = b.big > 0 ? 20 : BALL_R;
     if (b.passTo) { b.passT -= dt; if (b.passT <= 0) b.passTo = null; }
 
     if (b.holder) {
@@ -581,10 +818,10 @@ PF.Match = (() => {
       b.spin += (Math.hypot(p.vx, p.vy) * dt) / b.r;
       PF.Field.collide(b, b.r, 0, true);
       // robo: un rival que aguanta en contacto con la pelota se la queda
-      if (playing && p.phase <= 0) {
+      if (playing && p.phase <= 0 && p.dig <= 0) {
         for (const q of m.players) {
           if (q.team === p.team) continue;
-          const touching = q.stun <= 0 && !q.slam && q.pickupCd <= 0 &&
+          const touching = q.stun <= 0 && !untouchable(q) && q.pickupCd <= 0 &&
             U.dist(q.x, q.y, b.x, b.y) < radius(q) + b.r + 2;
           if (!touching) { q.stealT = 0; continue; }
           q.stealT += dt;
@@ -611,6 +848,21 @@ PF.Match = (() => {
       }
     }
 
+    // imán: la pelota suelta va hacia quien lo tiene
+    if (playing && !b.vine) {
+      for (const p of m.players) {
+        if (p.magnet <= 0 || p.stun > 0) continue;
+        const dx = p.x - b.x, dy = p.y - b.y, d = Math.hypot(dx, dy);
+        if (d < 180 && d > 1) { b.vx += (dx / d) * 1100 * dt; b.vy += (dy / d) * 1100 * dt; }
+      }
+    }
+    // pelota loca: curva hacia un lado que cambia sola
+    if (b.crazy > 0) {
+      if (Math.random() < dt * 1.5) b.curve = -b.curve;
+      const s = Math.hypot(b.vx, b.vy);
+      if (s > 60) { b.vx += (-b.vy / s) * b.curve * 700 * dt; b.vy += (b.vx / s) * b.curve * 700 * dt; }
+    }
+
     const sp = Math.hypot(b.vx, b.vy);
     const steps = Math.max(1, Math.ceil((sp * dt) / (b.r * 0.7)));
     const h = dt / steps;
@@ -619,6 +871,7 @@ PF.Match = (() => {
       b.y += b.vy * h;
       const imp = PF.Field.collide(b, b.r, 0.78, true);
       if (imp > 120) PF.Audio.sfx.bounce(imp);
+      if (imp > 350 && playing) nearMiss(m, b);
       if (ballVsPlayers(m, b, playing)) return;
     }
     if (b.fire > 0 && Math.random() < 0.9) {
@@ -626,11 +879,12 @@ PF.Match = (() => {
     }
 
     if (!b.vine) {
-      const k = Math.exp(-0.95 * dt);
+      const fr = m.stadium.friction;
+      const k = Math.exp(-0.95 * fr * dt);
       b.vx *= k; b.vy *= k;
       const s2 = Math.hypot(b.vx, b.vy);
       if (s2 > 0) {
-        const ns = Math.max(0, s2 - 45 * dt);
+        const ns = Math.max(0, s2 - 45 * fr * dt);
         b.vx *= ns / s2; b.vy *= ns / s2;
       }
     }
@@ -639,10 +893,26 @@ PF.Match = (() => {
     if (PF.Field.outside(b.x, b.y)) Object.assign(b, { x: F.cx, y: F.cy, vx: 0, vy: 0, fire: 0, vine: null });
   }
 
+  /** Un tiro fuerte que pega en el fondo cerca del arco: ¡palo! o ¡uuuh! */
+  function nearMiss(m, b) {
+    if (m.nearT > 0) return;
+    const atEnd = b.x < F.x0 + b.r + 3 || b.x > F.x1 - b.r - 3;
+    if (!atEnd) return;
+    const dy = Math.abs(b.y - F.cy);
+    let txt = null;
+    if (dy > F.goalHalf - 6 && dy < F.goalHalf + 14) txt = '¡PALO!';
+    else if (dy < F.goalHalf + 110) txt = '¡UUUH!';
+    if (!txt) return;
+    m.nearT = 1.2;
+    PF.FX.text(m.fx, b.x + (b.x < F.cx ? 60 : -60), b.y - 40, txt, '#fff', 1.2);
+    PF.Audio.crowd('ooh', 1);
+    if (txt === '¡PALO!') { PF.Audio.sfx.post(); m.shake = Math.max(m.shake, 6); }
+  }
+
   /** Choques de la pelota suelta con los Pokémon. true si alguien la controló. */
   function ballVsPlayers(m, b, playing) {
     for (const p of m.players) {
-      if (p.slam) continue;
+      if (p.slam || p.dig > 0) continue;
       if (p === b.last && p.pickupCd > 0) continue;
       const pr = radius(p);
       const dx = b.x - p.x, dy = b.y - p.y, d = Math.hypot(dx, dy);
@@ -661,14 +931,14 @@ PF.Match = (() => {
           }
         }
         if (p.wall <= 0) continue;
-        b.fire = 0;   // el Bloqueo de Snorlax apaga el fuego
+        b.fire = 0;   // el Bloqueo apaga el fuego
       }
 
       if (b.vine === p && playing) { take(m, p); return true; }
 
       const rvx = b.vx - p.vx, rvy = b.vy - p.vy, rel = Math.hypot(rvx, rvy);
       const canTake = playing && p.stun <= 0 && p.pickupCd <= 0;
-      const control = CONTROL_SPEED * (p.giant > 0 ? 1.5 : 1) * (b.passTo === p ? 1.3 : 1);
+      const control = CONTROL_SPEED * (p.giant > 0 ? 1.5 : 1) * (b.passTo === p ? 1.3 : 1) * (p.magnet > 0 ? 1.4 : 1);
       if (canTake && rel < control) { take(m, p); return true; }
 
       // rebote contra el cuerpo
@@ -702,15 +972,17 @@ PF.Match = (() => {
     b.vine = null; b.passTo = null;
     m.score[team]++;
     m.state = 'goal';
-    m.stateT = 2.8;
+    m.stateT = 1.8;
     m.goalTeam = team;
     m.kickoffTeam = 1 - team;
     m.ownGoal = !!(b.last && b.last.team !== team);
+    m.scorer = b.last;
     const color = PF.TEAM_COLORS[team];
-    PF.FX.text(m.fx, F.cx, F.cy - 30, m.ownGoal ? '¡AUTOGOL!' : '¡GOOOOL!', color, 3, 2.6);
-    PF.FX.confetti(m.fx, [color, '#fff', '#ffd23f']);
+    PF.FX.text(m.fx, m.cam.x + PF.W / 2, m.cam.y + PF.H / 2 - 30, m.ownGoal ? '¡AUTOGOL!' : '¡GOOOOL!', color, 3, 2.2);
+    PF.FX.confetti(m.fx, [color, '#fff', '#ffd23f'], m.cam);
     PF.FX.ring(m.fx, b.x, b.y, 140, '#fff', 0.6, 12);
     PF.Audio.sfx.goal();
+    PF.Audio.crowd('cheer', 1);
     m.shake = 16;
     m.freeze = 0.12;
   }
@@ -721,14 +993,14 @@ PF.Match = (() => {
       m.itemT -= dt;
       if (m.itemT <= 0) {
         m.items.push({ x: U.rand(F.x0 + 180, F.x1 - 180), y: U.rand(F.y0 + 90, F.y1 - 90), kind: U.pick(ITEMS), t: 0 });
-        m.itemT = U.rand(9, 14);
+        m.itemT = U.rand(9, 14) * (4 / (2 + teamOf(m, 0).length));
       }
     }
     for (let i = m.items.length - 1; i >= 0; i--) {
       const it = m.items[i];
       it.t += dt;
       for (const p of m.players) {
-        if (p.slam || p.stun > 0) continue;
+        if (untouchable(p) || p.stun > 0) continue;
         if (U.dist(p.x, p.y, it.x, it.y) < radius(p) + 16) {
           applyItem(m, p, it.kind);
           m.items.splice(i, 1);
@@ -739,10 +1011,14 @@ PF.Match = (() => {
   }
 
   function applyItem(m, p, kind) {
+    const b = m.ball;
     if (kind.id === 'recarga') p.cd = 0;
     else if (kind.id === 'turbo') p.turbo = 6;
     else if (kind.id === 'gigante') p.giant = 7;
     else if (kind.id === 'lento') for (const q of m.players) if (q.team !== p.team) q.slow = 4;
+    else if (kind.id === 'gigaball') b.big = 8;
+    else if (kind.id === 'loca') b.crazy = 6;
+    else if (kind.id === 'iman') p.magnet = 6;
     PF.FX.text(m.fx, p.x, p.y - 60, kind.label, kind.color, 1);
     PF.FX.burst(m.fx, p.x, p.y - 20, 16, kind.color, 220);
     PF.Audio.sfx.pickup();
@@ -754,7 +1030,7 @@ PF.Match = (() => {
   return {
     create, step, CHARGE_MAX, ORDERS, orderOf,
     // usados por abilities.js, ai.js y render.js
-    radius, mass, mateOf, setAnim, knock, stunInPlace, loseBall, shoot, addHazard,
-    shotAim, passGoesToMate,
+    radius, mass, untouchable, mateOf, matesOf, teamOf, setAnim, knock, stunInPlace, loseBall, shoot,
+    addHazard, addProjectile, jump, nearestFoeDist, homeSpot, shotAim, passTarget,
   };
 })();

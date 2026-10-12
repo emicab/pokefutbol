@@ -5,8 +5,29 @@
 PF.Abilities = (() => {
   const U = PF.U, F = PF.FIELD;
   const foes = (m, p) => m.players.filter((q) => q.team !== p.team);
+  const near = (m, p, R) => foes(m, p).filter((q) => U.dist(p.x, p.y, q.x, q.y) < R);
 
-  return {
+  /** Abanico de agua/ola: empuja rivales y pelota dentro del cono. */
+  function cone(m, p, R, half, force, stun, ballSpeed) {
+    const M = PF.Match;
+    const inCone = (x, y) => {
+      const dx = x - p.x, dy = y - p.y, d = Math.hypot(dx, dy);
+      return d < R && d > 1 && Math.abs(U.angDiff(p.facing, Math.atan2(dy, dx))) < half;
+    };
+    for (const q of foes(m, p)) {
+      if (!inCone(q.x, q.y)) continue;
+      const d = U.dist(p.x, p.y, q.x, q.y) || 1;
+      M.knock(m, q, (q.x - p.x) / d, (q.y - p.y) / d, force, stun);
+    }
+    const b = m.ball;
+    if (ballSpeed && (!b.holder || b.holder.team !== p.team) && inCone(b.x, b.y)) {
+      if (b.holder) { b.holder.pickupCd = 0.6; b.holder = null; }
+      b.vx = Math.cos(p.facing) * ballSpeed; b.vy = Math.sin(p.facing) * ballSpeed; b.last = p; b.vine = null;
+    }
+    return inCone;
+  }
+
+  const A = {
     /** Pikachu: rayo a todos los rivales en el radio. */
     zap(m, p) {
       const M = PF.Match, R = 330;
@@ -69,7 +90,7 @@ PF.Abilities = (() => {
         return false;
       }
       if (b.holder) { b.holder.pickupCd = 0.6; b.holder.charge = -1; b.holder = null; }
-      b.vine = p; b.vineT = 1.2; b.fire = 0; b.last = p;
+      b.vine = p; b.vineT = 1.2; b.vineColor = '#7dff9e'; b.fire = 0; b.last = p;
       PF.FX.text(m.fx, p.x, p.y - 60, '¡ZIP!', '#7dff9e', 1.1);
       PF.Audio.sfx.vine();
     },
@@ -148,12 +169,201 @@ PF.Abilities = (() => {
 
     /** Snorlax: salto hacia delante y aterrizaje que tumba a todos. */
     slam(m, p) {
-      const d = 190;
-      const x1 = U.clamp(p.x + Math.cos(p.facing) * d, F.x0 + 40, F.x1 - 40);
-      const y1 = U.clamp(p.y + Math.sin(p.facing) * d, F.y0 + 40, F.y1 - 40);
-      p.slam = { t: 0, dur: 0.5, x0: p.x, y0: p.y, x1, y1 };
-      p.vx = 0; p.vy = 0;
+      PF.Match.jump(m, p, 190, false);
       PF.Audio.sfx.jump();
     },
+
+    // ------------------------------------------------ Pokémon desbloqueables
+
+    /** Eevee: una habilidad al azar de otro Pokémon. */
+    adapt(m, p) {
+      const pool = Object.keys(A).filter((k) => k !== 'adapt' && k !== 'splash');
+      const id = U.pick(pool);
+      const r = PF.ROSTER.find((x) => x.abilities.some((a) => a.id === id));
+      const name = r ? r.abilities.find((a) => a.id === id).name : id;
+      PF.FX.text(m.fx, p.x, p.y - 90, name + '!', '#ffe0b0', 0.8, 1.1);
+      return A[id](m, p);
+    },
+
+    /** Psyduck: los rivales cercanos dan vueltas mareados. */
+    confusion(m, p) {
+      const M = PF.Match;
+      PF.FX.ring(m.fx, p.x, p.y, 260, '#ffd84a', 0.4, 6);
+      for (const q of near(m, p, 260)) {
+        if (M.stunInPlace(m, q, 1.0)) {
+          q.spinT = 1.0;
+          PF.FX.text(m.fx, q.x, q.y - 50, '¿¡?!', '#ffd84a', 0.8, 0.8);
+        }
+      }
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡CONFUSIÓN!', '#ffd84a', 1);
+      PF.Audio.sfx.phase();
+    },
+
+    /** Jigglypuff: duerme a todos los rivales cercanos. */
+    sing(m, p) {
+      const M = PF.Match, R = 230;
+      PF.FX.ring(m.fx, p.x, p.y, R, '#ff9ccf', 0.6, 5);
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        PF.FX.particle(m.fx, p.x, p.y - 30, Math.cos(a) * 220, Math.sin(a) * 140, '#ffd1ea', 0.8, 5);
+      }
+      for (const q of near(m, p, R)) {
+        if (M.stunInPlace(m, q, 1.6)) { q.asleep = true; PF.FX.text(m.fx, q.x, q.y - 50, 'Zzz...', '#ffd1ea', 0.9); }
+      }
+      PF.FX.text(m.fx, p.x, p.y - 64, '♪ ¡Jiggly~! ♪', '#ff9ccf', 1);
+      PF.Audio.sfx.sing();
+    },
+
+    /** Jigglypuff: rueda arrollando a todos (no se detiene al chocar). */
+    roll(m, p) {
+      p.dash = 0.6; p.ram = 0.6; p.dashSpeed = 720;
+      p.dashDx = Math.cos(p.facing); p.dashDy = Math.sin(p.facing);
+      PF.FX.text(m.fx, p.x, p.y - 60, '¡RODAR!', '#ff9ccf', 1);
+      PF.Audio.sfx.swoosh();
+    },
+
+    /** Machamp: agarra al rival más cercano y lo lanza. */
+    throw(m, p) {
+      const M = PF.Match;
+      let best = null, bd = 110;
+      for (const q of foes(m, p)) {
+        const d = U.dist(p.x, p.y, q.x, q.y);
+        if (d < bd && !M.untouchable(q)) { bd = d; best = q; }
+      }
+      if (!best) {
+        PF.FX.text(m.fx, p.x, p.y - 56, 'no hay nadie...', '#cfcfcf', 0.6, 0.7);
+        PF.Audio.sfx.fail();
+        return false;
+      }
+      M.knock(m, best, Math.cos(p.facing), Math.sin(p.facing), 820, 1.4);
+      best.z = 0;
+      PF.FX.text(m.fx, best.x, best.y - 60, '¡SÍSMICO!', '#ffd23f', 1.2);
+      PF.FX.burst(m.fx, best.x, best.y - 10, 16, '#fff', 260);
+      PF.Audio.sfx.slam();
+      m.shake = Math.max(m.shake, 8);
+      m.freeze = 0.08;
+    },
+
+    /** Machamp: puñetazo en cono corto que tumba y despeja la pelota. */
+    punch(m, p) {
+      cone(m, p, 140, 0.75, 680, 1.4, 900);
+      const fx = Math.cos(p.facing), fy = Math.sin(p.facing);
+      PF.FX.burst(m.fx, p.x + fx * 60, p.y + fy * 60 - 14, 18, '#ffd23f', 260);
+      PF.FX.text(m.fx, p.x + fx * 70, p.y + fy * 70 - 50, '¡PUÑO!', '#ffd23f', 1.2);
+      PF.Audio.sfx.tackle();
+      m.shake = Math.max(m.shake, 6);
+    },
+
+    /** Lapras: suelo congelado delante. */
+    ice(m, p) {
+      const x = U.clamp(p.x + Math.cos(p.facing) * 150, F.x0 + 40, F.x1 - 40);
+      const y = U.clamp(p.y + Math.sin(p.facing) * 150, F.y0 + 40, F.y1 - 40);
+      PF.Match.addHazard(m, { kind: 'ice', x, y, r: 95, life: 6, team: p.team });
+      PF.FX.burst(m.fx, x, y, 30, '#dff6ff', 260, 0.5, 4);
+      PF.FX.text(m.fx, x, y - 40, '¡CRIIC!', '#bfeeff', 1.1);
+      PF.Audio.sfx.zap();
+    },
+
+    /** Lapras: ola larga que arrastra todo hacia delante. */
+    surf(m, p) {
+      const HALF = 0.42;
+      cone(m, p, 440, HALF, 650, 0.7, 860);
+      const fx = Math.cos(p.facing), fy = Math.sin(p.facing);
+      for (let i = 0; i < 70; i++) {
+        const a = p.facing + U.rand(-HALF, HALF), s = U.rand(400, 860);
+        PF.FX.particle(m.fx, p.x + fx * 20, p.y + fy * 20 - 10, Math.cos(a) * s, Math.sin(a) * s,
+          U.pick(['#6cc6ff', '#b8e6ff', '#3b9cff', '#ffffff']), U.rand(0.35, 0.6), U.rand(4, 7));
+      }
+      PF.FX.text(m.fx, p.x + fx * 120, p.y + fy * 120 - 50, '¡SURF!', '#8fd8ff', 1.3);
+      PF.Audio.sfx.water();
+      m.shake = Math.max(m.shake, 5);
+    },
+
+    /** Onix: bajo tierra 1,2 s (intocable); al salir tumba a los de alrededor (match.js). */
+    dig(m, p) {
+      p.dig = 1.2;
+      PF.FX.burst(m.fx, p.x, p.y, 20, '#8a6a4a', 220, 0.4, 5, 400);
+      PF.FX.text(m.fx, p.x, p.y - 60, '¡EXCAVAR!', '#e8d2b0', 1);
+      PF.Audio.sfx.slam();
+    },
+
+    /** Lucario: esfera que persigue al rival más cercano. */
+    aura(m, p) {
+      PF.Match.addProjectile(m, {
+        x: p.x + Math.cos(p.facing) * 24, y: p.y - 18 + Math.sin(p.facing) * 24,
+        vx: Math.cos(p.facing) * 560, vy: Math.sin(p.facing) * 560,
+        team: p.team, kind: 'aura', life: 2.6, r: 14, homing: true, stun: 1.2,
+        color: '#7fb8ff', hitText: '¡AURA!',
+      });
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡ESFERA AURAL!', '#7fb8ff', 0.9);
+      PF.Audio.sfx.zap();
+    },
+
+    /** Greninja: tres estrellas de agua en abanico. */
+    shuriken(m, p) {
+      for (const off of [-0.22, 0, 0.22]) {
+        const a = p.facing + off;
+        PF.Match.addProjectile(m, {
+          x: p.x + Math.cos(a) * 22, y: p.y - 16 + Math.sin(a) * 22,
+          vx: Math.cos(a) * 820, vy: Math.sin(a) * 820,
+          team: p.team, kind: 'shuriken', life: 0.9, r: 11, stun: 0.75,
+          color: '#9fdcff', hitText: '¡ZING!',
+        });
+      }
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡SHURIKEN!', '#9fdcff', 0.9);
+      PF.Audio.sfx.swoosh();
+    },
+
+    /** Magikarp: ...no pasa nada. Casi nunca. */
+    splash(m, p) {
+      const M = PF.Match;
+      PF.FX.burst(m.fx, p.x, p.y - 10, 20, '#8fd8ff', 160, 0.5, 4, 300);
+      PF.Audio.sfx.water();
+      if (Math.random() < 0.1) {
+        for (const q of near(m, p, 280)) {
+          const d = U.dist(p.x, p.y, q.x, q.y) || 1;
+          M.knock(m, q, (q.x - p.x) / d, (q.y - p.y) / d, 600, 1.6);
+        }
+        PF.FX.ring(m.fx, p.x, p.y, 280, '#8fd8ff', 0.5, 10);
+        PF.FX.text(m.fx, p.x, p.y - 70, '¡¿¡QUÉ!?!', '#ffd23f', 1.6);
+        PF.Audio.crowd('cheer', 0.8);
+        m.shake = Math.max(m.shake, 12);
+      } else {
+        PF.FX.text(m.fx, p.x, p.y - 64, '¡Pero no pasa nada!', '#cfe8ff', 0.8, 1.1);
+      }
+    },
+
+    /** Magikarp: salto enorme, sin onda expansiva. */
+    jump(m, p) {
+      PF.Match.jump(m, p, 260, true);
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡BOING!', '#ffd23f', 1);
+      PF.Audio.sfx.jump();
+    },
+
+    /** Mewtwo: trae la pelota con la mente, desde donde sea. */
+    psychic(m, p) {
+      const b = m.ball;
+      if (b.holder === p || (b.holder && b.holder.phase > 0)) return false;
+      if (b.holder) { b.holder.pickupCd = 0.6; b.holder.charge = -1; b.holder = null; }
+      b.vine = p; b.vineT = 2.2; b.vineColor = '#d6a6ff'; b.fire = 0; b.last = p;
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡PSÍQUICO!', '#d6a6ff', 1.1);
+      PF.Audio.sfx.phase();
+    },
+
+    /** Mewtwo: onda que aparta y aturde a los rivales alrededor. */
+    psywave(m, p) {
+      const M = PF.Match, R = 300;
+      for (const q of near(m, p, R)) {
+        const d = U.dist(p.x, p.y, q.x, q.y) || 1;
+        M.knock(m, q, (q.x - p.x) / d, (q.y - p.y) / d, 620 - d, 0.7);
+      }
+      PF.FX.ring(m.fx, p.x, p.y, R * 1.3, '#d6a6ff', 0.5, 10);
+      PF.FX.ring(m.fx, p.x, p.y, R * 0.8, '#ffffff', 0.35, 5);
+      PF.FX.text(m.fx, p.x, p.y - 70, '¡ONDA MENTAL!', '#d6a6ff', 1.1);
+      PF.Audio.sfx.zap();
+      m.shake = Math.max(m.shake, 8);
+    },
   };
+
+  return A;
 })();

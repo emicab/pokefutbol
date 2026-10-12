@@ -1,13 +1,14 @@
 /* ============ field.js — paredes de la cancha y choques contra ellas ============
  * La cancha es un polígono cerrado (con los bolsillos de los arcos) hecho de
  * segmentos. Las bocas de los arcos son segmentos sólo para jugadores: la
- * pelota entra, los Pokémon no.
+ * pelota entra, los Pokémon no. Se reconstruye al cambiar de formato.
  */
 PF.Field = (() => {
   const F = PF.FIELD;
   const segs = [];
 
-  (function build() {
+  function rebuild() {
+    segs.length = 0;
     const { x0, x1, y0, y1, cx, cy, goalHalf: g, goalDepth: d, chamfer: c } = F;
     const pts = [
       [x0 + c, y0], [x1 - c, y0], [x1, y0 + c], [x1, cy - g],
@@ -22,7 +23,8 @@ PF.Field = (() => {
     segs.push({ ax: x1, ay: cy - g, bx: x1, by: cy + g, playersOnly: true });
     segs.push({ ax: x0, ay: cy - g, bx: x0, by: cy + g, playersOnly: true });
     F.outline = pts;
-  })();
+  }
+  rebuild();
 
   /**
    * Saca un círculo de las paredes y hace rebotar su velocidad.
@@ -58,5 +60,5 @@ PF.Field = (() => {
     return x < F.x0 - F.goalDepth - 20 || x > F.x1 + F.goalDepth + 20 || y < F.y0 - 20 || y > F.y1 + 20;
   }
 
-  return { collide, outside };
+  return { rebuild, collide, outside };
 })();

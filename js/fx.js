@@ -40,9 +40,10 @@ PF.FX = (() => {
     fx.bolts.push({ pts, color, life, max: life });
   }
 
-  function confetti(fx, colors, n = 140) {
+  /** Lluvia de papelitos sobre lo que ve la cámara. */
+  function confetti(fx, colors, cam = { x: 0, y: 0 }, n = 140) {
     for (let i = 0; i < n; i++) {
-      particle(fx, U.rand(0, PF.W), U.rand(-60, 0), U.rand(-60, 60), U.rand(60, 260),
+      particle(fx, cam.x + U.rand(0, PF.W), cam.y + U.rand(-60, 0), U.rand(-60, 60), U.rand(60, 260),
         U.pick(colors), U.rand(1.6, 2.6), U.rand(3, 6), 120);
     }
   }

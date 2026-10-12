@@ -3,8 +3,12 @@
  * power      multiplica la fuerza del tiro
  * mass       empuja y aguanta los choques (Snorlax no se mueve)
  * radius     tamaño del cuerpo en la cancha
+ * scale      tamaño del dibujo (sprites muy grandes, como Onix, se achican)
  * abilities  dos opciones; en la selección se elige cuál llevar.
  *            Cada `id` es una función de abilities.js.
+ * unlock     sin él: disponible desde el principio.
+ *            { coins }: se compra en la selección.
+ *            { challenge, label }: se gana cumpliendo un reto (ver PF.CHALLENGES).
  */
 PF.ROSTER = [
   {
@@ -67,9 +71,122 @@ PF.ROSTER = [
         desc: '3,5 s hecho una muralla: inamovible, rebota tiros y rivales. Portero ideal.' },
     ],
   },
+
+  // ------------------------------------------------ desbloqueables
+  {
+    id: 'eevee', dex: 133, name: 'Eevee', type: 'Normal', color: '#d9a066',
+    speed: 325, power: 1.02, mass: 1.0, radius: 18, unlock: { coins: 200 },
+    abilities: [
+      { id: 'adapt', name: 'Adaptabilidad', cd: 8,
+        desc: 'Cada vez usa una habilidad al azar de otro Pokémon. ¡Sorpresa!' },
+      { id: 'quick', name: 'Ataque Rápido', cd: 5,
+        desc: 'Embestida veloz sin soltar la pelota: arrolla a quien se cruce.' },
+    ],
+  },
+  {
+    id: 'psyduck', dex: 54, name: 'Psyduck', type: 'Agua', color: '#ffd84a',
+    speed: 290, power: 0.95, mass: 1.05, radius: 18, unlock: { coins: 200 },
+    abilities: [
+      { id: 'confusion', name: 'Confusión', cd: 9,
+        desc: 'Los rivales cercanos dan vueltas mareados y sueltan la pelota.' },
+      { id: 'hydro', name: 'Hidrobomba', cd: 9,
+        desc: 'Chorro en abanico que barre a los rivales y se lleva la pelota.' },
+    ],
+  },
+  {
+    id: 'jigglypuff', dex: 39, name: 'Jigglypuff', type: 'Hada', color: '#ff9ccf',
+    speed: 285, power: 0.9, mass: 0.85, radius: 17, unlock: { coins: 250 },
+    abilities: [
+      { id: 'sing', name: 'Canto', cd: 12,
+        desc: 'Todos los rivales cerca de ti se duermen escuchándote.' },
+      { id: 'roll', name: 'Rodar', cd: 8,
+        desc: 'Rueda a toda velocidad arrollando a todos los que se crucen.' },
+    ],
+  },
+  {
+    id: 'machamp', dex: 68, name: 'Machamp', type: 'Lucha', color: '#9fb6d6',
+    speed: 285, power: 1.22, mass: 1.8, radius: 23, unlock: { coins: 350 },
+    abilities: [
+      { id: 'throw', name: 'Sísmico', cd: 9,
+        desc: 'Agarra al rival más cercano y lo lanza lejos.' },
+      { id: 'punch', name: 'Puño Dinámico', cd: 8,
+        desc: 'Puñetazo enorme hacia delante: tumba y despeja la pelota.' },
+    ],
+  },
+  {
+    id: 'lapras', dex: 131, name: 'Lapras', type: 'Hielo', color: '#7fd4f0',
+    speed: 262, power: 1.15, mass: 2.0, radius: 25, scale: 0.85, unlock: { coins: 400 },
+    abilities: [
+      { id: 'ice', name: 'Rayo Hielo', cd: 9,
+        desc: 'Congela el suelo delante: los rivales patinan y van lentos 6 s.' },
+      { id: 'surf', name: 'Surf', cd: 10,
+        desc: 'Ola larga que arrastra rivales y pelota hacia delante.' },
+    ],
+  },
+  {
+    id: 'onix', dex: 95, name: 'Onix', type: 'Roca', color: '#a9a39a',
+    speed: 252, power: 1.1, mass: 2.8, radius: 29, scale: 0.6, unlock: { coins: 400 },
+    abilities: [
+      { id: 'wall', name: 'Bloqueo', cd: 10,
+        desc: '3,5 s hecho una muralla: inamovible, rebota tiros y rivales.' },
+      { id: 'dig', name: 'Excavar', cd: 9,
+        desc: 'Se mete bajo tierra y sale de golpe, tumbando a los de alrededor.' },
+    ],
+  },
+  {
+    id: 'lucario', dex: 448, name: 'Lucario', type: 'Lucha', color: '#5b8fd9',
+    speed: 330, power: 1.12, mass: 1.15, radius: 19, unlock: { coins: 500 },
+    abilities: [
+      { id: 'aura', name: 'Esfera Aural', cd: 8,
+        desc: 'Bola de energía que persigue al rival más cercano y lo aturde.' },
+      { id: 'quick', name: 'Velocidad Extrema', cd: 6,
+        desc: 'Embestida veloz sin soltar la pelota: arrolla a quien se cruce.' },
+    ],
+  },
+  {
+    id: 'greninja', dex: 658, name: 'Greninja', type: 'Agua', color: '#3e6fb5',
+    speed: 345, power: 1.08, mass: 1.0, radius: 19, unlock: { coins: 600 },
+    abilities: [
+      { id: 'shuriken', name: 'Shuriken de Agua', cd: 9,
+        desc: 'Tres estrellas de agua en abanico que aturden al que tocan.' },
+      { id: 'teleport', name: 'Doble Equipo', cd: 6,
+        desc: 'Desapareces y reapareces más adelante, con la pelota incluida.' },
+    ],
+  },
+  {
+    id: 'magikarp', dex: 129, name: 'Magikarp', type: 'Agua', color: '#ff7a4a',
+    speed: 235, power: 0.75, mass: 0.8, radius: 17,
+    unlock: { challenge: 'played5', label: 'Juega 5 partidos' },
+    abilities: [
+      { id: 'splash', name: 'Salpicadura', cd: 3,
+        desc: '¡Pero no pasa nada! ...casi nunca.' },
+      { id: 'jump', name: 'Salto', cd: 5,
+        desc: 'Un salto enorme por encima de todos. No hace daño, pero qué salto.' },
+    ],
+  },
+  {
+    id: 'mewtwo', dex: 150, name: 'Mewtwo', type: 'Psíquico', color: '#c58ae0',
+    speed: 340, power: 1.3, mass: 1.3, radius: 21,
+    unlock: { challenge: 'hardWin', label: 'Gana un partido en Difícil' },
+    abilities: [
+      { id: 'psychic', name: 'Psíquico', cd: 14,
+        desc: 'Trae la pelota con la mente desde cualquier lugar de la cancha.' },
+      { id: 'psywave', name: 'Onda Mental', cd: 10,
+        desc: 'Una onda que aparta y aturde a todos los rivales a tu alrededor.' },
+    ],
+  },
 ];
 
+/** Retos que desbloquean Pokémon. Reciben las estadísticas guardadas. */
+PF.CHALLENGES = {
+  played5: (st) => st.played >= 5,
+  hardWin: (st) => st.hardWins >= 1,
+};
+
 PF.rosterById = (id) => PF.ROSTER.find((r) => r.id === id);
+
+/** ¿Se puede elegir ya este Pokémon? */
+PF.isUnlocked = (r) => !r.unlock || PF.Save.data.unlocked.includes(r.id);
 
 /** Copia del Pokémon con la habilidad elegida en `def.ability`. */
 PF.withAbility = (r, i) => Object.assign({}, r, { ability: r.abilities[i] || r.abilities[0] });
