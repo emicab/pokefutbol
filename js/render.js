@@ -329,6 +329,13 @@ PF.Render = (() => {
       ctx.beginPath(); ctx.moveTo(p.x - 10, y - 12); ctx.lineTo(p.x + 10, y - 12); ctx.lineTo(p.x, y + 2); ctx.closePath(); ctx.fill();
       ctx.fillStyle = color;
       ctx.beginPath(); ctx.moveTo(p.x - 7, y - 10); ctx.lineTo(p.x + 7, y - 10); ctx.lineTo(p.x, y - 1); ctx.closePath(); ctx.fill();
+      // con varios humanos: quién es quién (el tuyo, en amarillo)
+      if (m.humans.length > 1 && p.ctrl) {
+        ctx.font = '13px Pixelify, monospace'; ctx.textAlign = 'center';
+        const lbl = 'J' + (p.ctrl.idx + 1);
+        ctx.fillStyle = '#141018'; ctx.fillText(lbl, p.x + 1, y - 15);
+        ctx.fillStyle = p.ctrl.idx === m.view ? '#ffd23f' : '#fff'; ctx.fillText(lbl, p.x, y - 16);
+      }
     }
     if (p.charge >= 0 && p.team === m.humanTeam) drawPowerBar(ctx, p, head);
     if (p.passCharge > PF.Match.PASS_HOLD_MIN && p.team === m.humanTeam) drawPassBar(ctx, p, head);

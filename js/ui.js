@@ -33,7 +33,7 @@ PF.UI = (() => {
   }
 
   // ---------------------------------------------------------------- título
-  function title(onPlay, onCareer, onOptions) {
+  function title(onPlay, onCareer, onOptions, onOnline) {
     clear();
     const s = el(`
       <div class="screen title">
@@ -43,6 +43,7 @@ PF.UI = (() => {
         <div class="row">
           <button class="btn big" data-act="play">Partido rápido</button>
           <button class="btn big story" data-act="career">Modo Historia</button>
+          <button class="btn big online" data-act="online">Online</button>
           <button class="btn" data-act="opts">Opciones</button>
         </div>
         <div class="box controls">
@@ -62,6 +63,7 @@ PF.UI = (() => {
     s.querySelector('[data-act=play]').onclick = onPlay;
     s.querySelector('[data-act=career]').onclick = onCareer;
     s.querySelector('[data-act=opts]').onclick = onOptions;
+    s.querySelector('[data-act=online]').onclick = onOnline;
     root().appendChild(s);
     s.querySelector('button').focus();
   }
@@ -141,7 +143,7 @@ PF.UI = (() => {
   }
 
   /** onGo() cuando el equipo está completo; la elección queda en PF.Save.data.setup. */
-  function select(onGo, onBack) {
+  function select(onGo, onBack, goLabel = '¡A la cancha!') {
     clear();
     const save = PF.Save.data, setup = save.setup;
     let focus = setup.picks[0] || PF.ROSTER[0].id;
@@ -171,7 +173,7 @@ PF.UI = (() => {
         <div class="row foot-row">
           <div class="team"></div>
           <button class="btn" data-act="back">Volver</button>
-          <button class="btn big" data-act="go">¡A la cancha!</button>
+          <button class="btn big" data-act="go">${goLabel}</button>
         </div>
       </div>`);
 
@@ -469,9 +471,14 @@ PF.UI = (() => {
   }
 
   /** reward: { coins, lines: [[texto, monedas]], unlocked: [nombres] } */
-  function result(m, reward, onRematch, onTeam, onMenu) {
+  /**
+   * Botones con callback null no se muestran. extra: { rematch, team, menu } (textos), note.
+   * Ganar o perder se cuenta desde el equipo de quien mira (m.humanTeam).
+   */
+  function result(m, reward, onRematch, onTeam, onMenu, extra = {}) {
     clear();
-    const won = m.winner === 0, lost = m.winner === 1;
+    const mine = Math.max(0, m.humanTeam);
+    const won = m.winner === mine, lost = m.winner === 1 - mine;
     const s = el(`
       <div class="screen">
         <div class="box menu result">
@@ -482,13 +489,14 @@ PF.UI = (() => {
             <div class="total"><span>Total</span>${coinHTML('+' + reward.coins)}</div>
           </div>
           ${reward.unlocked.map((n) => `<div class="new">¡Nuevo Pokémon desbloqueado: <b>${n}</b>!</div>`).join('')}
-          <button class="btn big" data-act="rematch">Revancha</button>
-          <button class="btn" data-act="team">Cambiar equipo</button>
-          <button class="btn" data-act="menu">Menú</button>
+          ${extra.note ? `<div class="hint">${extra.note}</div>` : ''}
+          ${onRematch ? `<button class="btn big" data-act="rematch">${extra.rematch || 'Revancha'}</button>` : ''}
+          ${onTeam ? `<button class="btn" data-act="team">${extra.team || 'Cambiar equipo'}</button>` : ''}
+          <button class="btn" data-act="menu">${extra.menu || 'Menú'}</button>
         </div>
       </div>`);
-    s.querySelector('[data-act=rematch]').onclick = onRematch;
-    s.querySelector('[data-act=team]').onclick = onTeam;
+    if (onRematch) s.querySelector('[data-act=rematch]').onclick = onRematch;
+    if (onTeam) s.querySelector('[data-act=team]').onclick = onTeam;
     s.querySelector('[data-act=menu]').onclick = onMenu;
     root().appendChild(s);
     s.querySelector('button').focus();

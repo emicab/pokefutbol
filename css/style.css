@@ -263,6 +263,36 @@ kbd {
 
 .btn.story { background: linear-gradient(#2f8f5a, #1d6a3f); }
 .btn.story:hover, .btn.story:focus-visible { background: linear-gradient(#3fb070, #25804c); color: #fff; }
+.btn.online { background: linear-gradient(#7a4fc9, #55339a); }
+.btn.online:hover, .btn.online:focus-visible { background: linear-gradient(#9466e6, #6a42bb); color: #fff; }
+
+/* ---- online ---- */
+.online { gap: 18px; }
+.netcols { display: flex; gap: 24px; }
+.netcard { width: 420px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.netcard.wide { width: 760px; }
+.netcard h3 { margin: 0; font-size: 26px; font-weight: normal; color: var(--yellow); text-shadow: 2px 2px 0 var(--ink); }
+.netcard p { margin: 0; font-size: 19px; color: var(--muted); }
+.netcard .wait { color: var(--text); animation: blink 1.2s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0.45; } }
+.netcard .status { font-size: 20px; color: var(--muted); }
+.netcard .status.ok { color: #9cff6b; }
+.netcard .setupline { color: var(--text); }
+.codebig {
+  font-size: 72px; letter-spacing: 14px; color: var(--yellow); padding: 4px 20px 4px 34px;
+  background: var(--ink); border: 3px solid var(--yellow); border-radius: 8px; user-select: all;
+}
+.codebig.small { font-size: 40px; letter-spacing: 8px; }
+input.code {
+  font: inherit; font-size: 40px; width: 230px; text-align: center; letter-spacing: 10px; text-transform: uppercase;
+  background: var(--ink); color: var(--yellow); border: 3px solid var(--edge); border-radius: 6px; padding: 4px 8px;
+}
+.netteam { display: flex; align-items: center; gap: 14px; font-size: 19px; padding: 12px 20px; max-width: 900px; }
+.netteam b { color: var(--yellow); font-weight: normal; }
+.netteam small { color: var(--muted); }
+.netteam em { color: #ff8a3d; font-style: normal; }
+.netteam .btn { min-width: 0; margin-left: auto; }
+.netmenu .box { display: flex; flex-direction: column; gap: 12px; align-items: center; max-width: 520px; text-align: center; }
 .btn.small { font-size: 16px; min-width: 0; padding: 4px 12px; }
 .btn.small.big { font-size: 18px; }
 

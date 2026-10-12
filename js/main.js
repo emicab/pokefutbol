@@ -224,6 +224,171 @@
       'No, gracias');
   }
 
+  // ---------------------------------------------------------------- online
+  // El anfitrión corre el partido; el invitado manda sus teclas y dibuja lo
+  // que le llega (ver net.js). Jugador 1 = anfitrión, jugador 2 = invitado.
+  const N = PF.Net;
+  let online = null;   // { phase, mode, code, connected, info, guestPicks, view, inbuf, pack }
+
+  const myPicks = () => PF.Save.data.setup.picks.map((id) => ({ id, a: PF.Save.data.setup.abil[id] || 0 }));
+  const infoMsg = () => Object.assign({ mode: online.mode }, PF.Save.data.setup);
+
+  function toOnline() {
+    toMenu();
+    if (!online) online = { phase: 'idle', mode: 'pvp' };
+    drawLobby();
+  }
+  function drawLobby() {
+    screen = 'menu';
+    online.view = 'lobby';
+    PF.OnlineUI.lobby(online, {
+      onHost: hostRoom, onJoin: joinRoom, onStart: startOnlineHost, onTeam: onlineTeam, onBack: leaveOnline,
+      onMode: (mode) => { online.mode = mode; N.send({ t: 'info', setup: infoMsg() }); PF.Audio.sfx.click(); drawLobby(); },
+    });
+  }
+  const redrawLobby = () => { if (online && online.view === 'lobby') drawLobby(); };
+
+  function hostRoom() {
+    online.phase = 'creating';
+    drawLobby();
+    N.host(
+      (code) => { online.phase = 'hosting'; online.code = code; redrawLobby(); },
+      () => { online.connected = true; N.send({ t: 'info', setup: infoMsg() }); PF.Audio.sfx.coin(); redrawLobby(); },
+      (err) => { PF.UI.toast(err); N.close(); online = { phase: 'idle', mode: online.mode }; redrawLobby(); },
+    );
+  }
+  function joinRoom(code) {
+    online.phase = 'joining';
+    online.code = code;
+    drawLobby();
+    N.join(code,
+      () => { online.phase = 'joined'; online.connected = true; N.send({ t: 'hello', v: N.VERSION, picks: myPicks() }); redrawLobby(); },
+      (err) => { PF.UI.toast(err); N.close(); online = { phase: 'idle', mode: 'pvp' }; redrawLobby(); });
+  }
+  /** Armar el equipo con la pantalla del partido rápido y volver a la sala. */
+  function onlineTeam() {
+    online.view = 'team';
+    const back = () => {
+      if (N.role === 'host') N.send({ t: 'info', setup: infoMsg() });
+      if (N.role === 'guest') N.send({ t: 'hello', v: N.VERSION, picks: myPicks() });
+      drawLobby();
+    };
+    PF.UI.select(back, back, 'Listo');
+  }
+  function leaveOnline() {
+    N.close();
+    online = null;
+    toTitle();
+  }
+
+  N.on('hello', (msg) => {
+    if (msg.v !== N.VERSION) { PF.UI.toast('Tu amigo tiene otra versión del juego.'); return; }
+    online.guestPicks = msg.picks;
+    redrawLobby();
+  });
+  N.on('info', (msg) => { if (online) { online.info = msg.setup; online.mode = msg.setup.mode; redrawLobby(); } });
+  N.on('start', (msg) => startOnline(msg.cfg, 1));
+  N.on('in', (msg) => { if (online && online.inbuf) online.inbuf.push(msg.i); });
+  N.on('s', (msg) => { if (match && match.online === 'guest') N.applySync(match, msg); });
+  N.on('lobby', () => { if (online) toOnline(); });
+  N.on('full', () => { PF.UI.toast('Esa sala ya está completa.'); N.close(); online = { phase: 'idle', mode: 'pvp' }; redrawLobby(); });
+  N.on('close', () => {
+    PF.UI.toast('Se cortó la conexión con tu amigo.');
+    online = null;
+    if (match && match.online) { match = null; toTitle(); } else toTitle();
+  });
+
+  /** El anfitrión arma el partido con los dos equipos y se lo manda al invitado. */
+  function startOnlineHost() {
+    if (!N.connected()) return;
+    const s = PF.Save.data.setup, size = s.size, pvp = online.mode === 'pvp';
+    const key = (x) => x.id + ':' + x.a;
+    const fill = (picks, n) => {
+      const out = picks.filter((x) => PF.rosterById(x.id));
+      while (out.length < n) out.push({ id: PF.U.pick(PF.ROSTER).id, a: Math.random() < 0.5 ? 0 : 1 });
+      return out;
+    };
+    const nHost = pvp ? size : Math.ceil(size / 2), nGuest = size - (pvp ? 0 : nHost);
+    const host = fill(myPicks(), nHost), guest = fill(online.guestPicks || [], pvp ? size : nGuest);
+    const hostDefs = host.slice(0, nHost).map((x) => N.defOf(key(x)));
+    let cfg;
+    if (pvp) {
+      cfg = {
+        teams: [host.slice(0, size).map(key), guest.slice(0, size).map(key)],
+        bench: [host.slice(size, size + 2).map(key), guest.slice(size, size + 2).map(key)],
+        humans: [{ team: 0 }, { team: 1 }], skills: ['mate', 'mate'],
+        formations: [PF.Board.spotsFor(s.spots[size + '-' + s.keeper] || {}, hostDefs, s.keeper), null],
+      };
+    } else {
+      const ids = host.concat(guest).map((x) => x.id);
+      const rival = pickRival(ids, size + 2).map((r) => r.id + ':' + (Math.random() < 0.5 ? 0 : 1));
+      cfg = {
+        teams: [host.slice(0, nHost).concat(guest.slice(0, nGuest)).map(key), rival.slice(0, size)],
+        bench: [[], rival.slice(size)],
+        humans: [{ team: 0 }, { team: 0 }], skills: ['mate', s.diff],
+        formations: [null, null],
+      };
+    }
+    Object.assign(cfg, {
+      mode: online.mode, size, time: s.time, stadium: s.stadium, keeperMode: s.keeper,
+      flip: Math.random() < 0.5, replays: PF.Save.data.settings.replays,
+    });
+    N.send({ t: 'start', cfg });
+    startOnline(cfg, 0);
+  }
+
+  /** Arranca el partido online (view 0 = anfitrión, 1 = invitado). */
+  function startOnline(cfg, view) {
+    const defs = (arr) => arr.map(N.defOf);
+    PF.configureField(cfg.size);
+    match = PF.Match.create({
+      teams: cfg.teams.map(defs), bench: cfg.bench.map(defs), formations: cfg.formations,
+      keeperMode: cfg.keeperMode, humans: cfg.humans, view, autoSubs: true,
+      time: cfg.time, stadium: cfg.stadium, replays: cfg.replays, flip: cfg.flip,
+      skills: cfg.skills.map((k) => PF.AI.SKILLS[k]),
+    });
+    match.online = view === 0 ? 'host' : 'guest';
+    match.netCfg = cfg;
+    online.view = 'match';
+    online.menu = false;
+    if (view === 0) { online.inbuf = N.makeInputBuffer(); online.pack = N.makeSync(); }
+    current = { cfg, onEnd: onlineResult, quit: { label: 'Abandonar', fn: leaveOnline } };
+    screen = 'match';
+    PF.UI.clear();
+    PF.Audio.music('match');
+    PF.Audio.setAmbience(1);
+  }
+
+  function onlineReward(m) {
+    const team = m.humanTeam, save = PF.Save.data;
+    const lines = [['Partido online', 30]];
+    if (m.winner === team) lines.push(['Victoria', 70]);
+    else if (m.winner === -1) lines.push(['Empate', 30]);
+    if (m.score[team]) lines.push([`Goles (${m.score[team]})`, 10 * m.score[team]]);
+    const coins = lines.reduce((s, l) => s + l[1], 0);
+    save.coins += coins;
+    PF.Save.save();
+    PF.Audio.sfx.coin();
+    return { coins, lines, unlocked: [] };
+  }
+
+  function onlineResult(m) {
+    screen = 'result';
+    online.view = 'result';
+    const host = m.online === 'host';
+    PF.UI.result(m, onlineReward(m),
+      host ? startOnlineHost : null,
+      host ? () => { N.send({ t: 'lobby' }); toOnline(); } : null,
+      leaveOnline,
+      { team: 'Volver a la sala', menu: 'Salir', note: host ? '' : 'Esperando a que el anfitrión elija revancha o volver a la sala…' });
+  }
+
+  function toggleNetMenu() {
+    online.menu = !online.menu;
+    if (online.menu) PF.OnlineUI.menu(toggleNetMenu, leaveOnline);
+    else PF.UI.clear();
+  }
+
   // ---------------------------------------------------------------- pantallas
   function menuMusic() {
     PF.Audio.music('menu');
@@ -240,7 +405,7 @@
   function toTitle() {
     toMenu();
     screen = 'title';
-    PF.UI.title(toSelect, toCareer, toOptions);
+    PF.UI.title(toSelect, toCareer, toOptions, toOnline);
   }
 
   function toOptions() {
@@ -293,14 +458,45 @@
     clock += dt;
     PF.Input.pollPad();
 
-    if (PF.Input.was('pause') && (screen === 'match' || screen === 'pause')) togglePause();
-    // R: cambios directos (pausa el partido y abre la pantalla; al cerrarla se sigue jugando)
-    if (PF.Input.was('subs') && screen === 'match' && match.state !== 'end') openSubs();
-    else if (PF.Input.was('subs') && screen === 'pause' && document.querySelector('.subs')) resume();
+    const net = match && match.online;   // 'host' | 'guest' | undefined
+    if (net) {
+      // online no hay pausa: Esc abre un menú y el partido sigue
+      if (PF.Input.was('pause') && screen === 'match') toggleNetMenu();
+      if (PF.Input.was('subs') && screen === 'match') PF.UI.toast('Online los cambios son automáticos.');
+    } else {
+      if (PF.Input.was('pause') && (screen === 'match' || screen === 'pause')) togglePause();
+      // R: cambios directos (pausa el partido y abre la pantalla; al cerrarla se sigue jugando)
+      if (PF.Input.was('subs') && screen === 'match' && match.state !== 'end') openSubs();
+      else if (PF.Input.was('subs') && screen === 'pause' && document.querySelector('.subs')) resume();
+    }
     if (PF.Input.was('mute')) PF.Audio.toggleMute();
 
     let steps = 0;
-    if (screen !== 'pause') {
+    if (net === 'guest') {
+      // invitado: manda sus teclas una vez por frame y sólo anima efectos y cámara
+      if (screen === 'match') N.send({ t: 'in', i: humanIntent() });
+      PF.Input.endStep();
+      acc += dt;
+      while (acc >= STEP && steps < 5) {
+        PF.FX.update(match.fx, STEP);
+        PF.Match.updateCamera(match, STEP);
+        acc -= STEP;
+        steps++;
+      }
+      if (steps === 5) acc = 0;
+    } else if (net === 'host') {
+      // anfitrión: corre el partido con las teclas de los dos y manda lo que cambió
+      acc += dt;
+      while (acc >= STEP && steps < 5) {
+        const ins = [screen === 'match' ? humanIntent() : null, online.inbuf.take()];
+        const events = N.capture(match, () => PF.Match.step(match, STEP, ins));
+        N.send(online.pack(match, events));
+        acc -= STEP;
+        steps++;
+        PF.Input.endStep();
+      }
+      if (steps === 5) acc = 0;
+    } else if (screen !== 'pause') {
       acc += dt;
       while (acc >= STEP && steps < 5) {
         PF.Match.step(match, STEP, screen === 'match' ? humanIntent() : null);
@@ -331,7 +527,7 @@
   }
 
   // ---------------------------------------------------------------- arranque
-  PF.debug = { get match() { return match; }, get screen() { return screen; } };   // para la consola
+  PF.debug = { get match() { return match; }, get screen() { return screen; }, get online() { return online; } };   // para la consola
   PF.Sprites.preloadAll();
   applySettings();
   const fontReady = document.fonts ? document.fonts.load('20px Pixelify') : Promise.resolve();

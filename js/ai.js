@@ -255,7 +255,7 @@ PF.AI = (() => {
     for (const q of mates) {
       if (PF.Match.keeperOf(m, q.team) === q && !q.human) continue;   // el arquero no sale a perseguir
       const d = U.dist(q.x, q.y, b.x, b.y);
-      if (q.human) dHuman = d;
+      if (q.human) dHuman = Math.min(dHuman, d);
       else { dOtherAI = Math.min(dOtherAI, d); if (q.ai.chasing && d < dMe * 1.25) otherChasing = true; }
     }
     let chase;

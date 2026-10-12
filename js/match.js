@@ -197,7 +197,7 @@ PF.Match = (() => {
       stats: { goals: 0, assists: 0, tackles: 0, saves: 0 },
       stamina: PF.staminaMax(def), maxStamina: PF.staminaMax(def), agility: PF.agility(def),
       types: PF.typesOf(def), tiredWarned: false,
-      gkHold: false, gkT: 0, assistFrom: null, assistT: 0,
+      gkHold: false, gkT: 0, assistFrom: null, assistT: 0, ctrl: null,
       x: 0, y: 0, z: 0, vx: 0, vy: 0, facing: 0, r: def.radius,
       stun: 0, asleep: false, cd: def.ability.cd * 0.75, tackleCd: 0, dash: 0, dashDx: 0, dashDy: 0, dashSpeed: DASH_SPEED,
       pickupCd: 0, holdT: 0, stealT: 0, charge: -1, passCharge: -1, aimMy: 0,
@@ -304,8 +304,13 @@ PF.Match = (() => {
       fx: PF.FX.create(), shake: 0, freeze: 0, cam: { x: 0, y: 0 },
       rec: [], replay: null, replays: opts.replays !== false, nearT: 0,
       stadium: PF.stadiumById(opts.stadium),
-      humanTeam: opts.humanTeam, controlled: null, demo: !!opts.demo,
-      order: 0,   // índice en ORDERS
+      // humanos: cada uno maneja un Pokémon de su equipo (dos en el mismo = cooperativo).
+      // humanTeam = el equipo de quien mira esta pantalla (HUD, colores, cambios).
+      humans: (opts.humans || (opts.humanTeam >= 0 ? [{ team: opts.humanTeam }] : [])).map((h, idx) => ({ idx, team: h.team, controlled: null })),
+      view: opts.view || 0,
+      humanTeam: opts.humanTeam ?? (opts.humans && opts.humans.length ? opts.humans[opts.view || 0].team : -1),
+      demo: !!opts.demo, autoSubs: !!opts.autoSubs,
+      orders: [0, 0],   // orden (índice en ORDERS) de cada equipo con humanos
       tactic: ['neutral', 'neutral'], coachT: 4, rotateT: 2,   // táctica de los equipos de la CPU
       keeperMode, keeper: [null, null],
       sides: opts.flip ? [1, 0] : [0, 1],   // lado de cada equipo
@@ -315,6 +320,12 @@ PF.Match = (() => {
       hit: null,
       mods: [Object.assign({}, neutral, opts.mods && opts.mods[0]), Object.assign({}, neutral, opts.mods && opts.mods[1])],
     };
+    // el Pokémon que maneja quien mira esta pantalla, y la orden de su equipo
+    Object.defineProperty(m, 'controlled', { get() { const h = this.humans[this.view]; return h ? h.controlled : null; } });
+    Object.defineProperty(m, 'order', {
+      get() { return this.humanTeam >= 0 ? this.orders[this.humanTeam] : 0; },
+      set(v) { if (this.humanTeam >= 0) this.orders[this.humanTeam] = v; },
+    });
     opts.teams.forEach((defs, team) => {
       const given = opts.formations && opts.formations[team];
       const spots = given && given.length === defs.length ? given : autoFormation(defs, keeperMode);
@@ -332,10 +343,19 @@ PF.Match = (() => {
     return m;
   }
 
-  function setControl(m, p) {
-    if (m.controlled) m.controlled.human = false;
-    m.controlled = p;
+  const hasHuman = (m, team) => m.humans.some((h) => h.team === team);
+
+  /** El humano `h` (por defecto, el de esta pantalla) pasa a manejar a `p`, si no lo maneja otro. */
+  function setControl(m, p, h = m.humans[m.view] || m.humans[0]) {
+    if (!h || (p.human && p.ctrl !== h)) return;
+    if (h.controlled) { h.controlled.human = false; h.controlled.ctrl = null; }
+    h.controlled = p;
     p.human = true;
+    p.ctrl = h;
+  }
+  function releaseControl(h) {
+    if (h.controlled) { h.controlled.human = false; h.controlled.ctrl = null; }
+    h.controlled = null;
   }
 
   function kickoff(m) {
@@ -365,7 +385,13 @@ PF.Match = (() => {
     kicker.y = F.cy;
     b.holder = kicker; b.last = kicker;
     m.kicker = kicker;
-    if (m.humanTeam >= 0) setControl(m, upfront(m.humanTeam));
+    // cada humano toma al más adelantado que quede libre (el primero, el que saca)
+    for (const h of m.humans) releaseControl(h);
+    for (const h of m.humans) {
+      const free = teamOf(m, h.team).filter((p) => !p.human && (!p.fixedKeeper || teamOf(m, h.team).length <= 2));
+      const pick = free.find((p) => p === kicker) || free.reduce((a, q) => (!a || q.spot[0] > a.spot[0] ? q : a), null);
+      if (pick) setControl(m, pick, h);
+    }
     updateKeepers(m, true);
     m.items = [];
     m.projs = [];
@@ -374,7 +400,7 @@ PF.Match = (() => {
     for (const [fx, fy] of st.hazards) {
       addHazard(m, { kind: 'lava', x: F.cx + fx * (F.x1 - F.x0) / 2, y: F.cy + fy * H, r: 46 + H * 0.06, life: Infinity, team: -1 });
     }
-    for (const team of [0, 1]) if (team !== m.humanTeam) aiSubs(m, team, 40);
+    for (const team of [0, 1]) if (!hasHuman(m, team) || m.autoSubs) aiSubs(m, team, 40);
     m.rec = [];
     m.replay = null;
     m.state = 'kickoff';
@@ -472,7 +498,7 @@ PF.Match = (() => {
     m.coachT = U.rand(5, 9);
     const left = m.golden ? 0 : m.time / m.totalTime;   // 1 al empezar, 0 al final
     for (const team of [0, 1]) {
-      if (team === m.humanTeam) continue;
+      if (hasHuman(m, team)) continue;
       const diff = m.score[team] - m.score[1 - team];
       let t;
       if (m.golden) t = 'atk';
@@ -548,7 +574,7 @@ PF.Match = (() => {
     if (m.ball.holder === out) { m.ball.holder = np; np.gkHold = out.gkHold; }
     if (m.ball.passTo === out) m.ball.passTo = np;
     if (m.kicker === out) m.kicker = np;
-    if (m.controlled === out) setControl(m, np);
+    if (out.human) { const h = out.ctrl; releaseControl(h); setControl(m, np, h); }
     m.bench[team][benchIdx] = { def: out.def, stamina: out.stamina, maxStamina: out.maxStamina, cd: out.cd };
     m.retired.push(out);
     m.players[m.players.indexOf(out)] = np;
@@ -603,14 +629,19 @@ PF.Match = (() => {
   }
 
   // ---------------------------------------------------------------- bucle
+  /**
+   * hi: la intención del humano, o una lista con la de cada uno (m.humans[i]).
+   */
   function step(m, dt, hi) {
+    const ins = Array.isArray(hi) ? hi : hi ? [hi] : [];
     PF.FX.update(m.fx, dt);
     if (m.shake > 0) m.shake = Math.max(0, m.shake - dt * 40);
     if (m.freeze > 0) { m.freeze -= dt; return; }
     m.clock += dt;
     m.nearT = Math.max(0, m.nearT - dt);
 
-    if (m.state === 'replay') { stepReplay(m, dt, hi); return; }
+    // la repetición la salta cualquiera de los jugadores
+    if (m.state === 'replay') { stepReplay(m, dt, ins.find((x) => x && (x.skip || x.pass)) || null); return; }
 
     if (m.state === 'kickoff') {
       m.stateT += dt;
@@ -644,48 +675,53 @@ PF.Match = (() => {
     if (playing && (m.subT -= dt) <= 0) {
       m.subT = 4;
       for (const team of [0, 1]) {
-        if (team === m.humanTeam) continue;
+        if (hasHuman(m, team) && !m.autoSubs) continue;
         const far = teamOf(m, team).filter((p) => energyPct(p) < 15 && U.dist(p.x, p.y, m.ball.x, m.ball.y) > 450);
         if (far.length) aiSubs(m, team, 15);
       }
     }
-    if (playing && hi && hi.swap) {
-      // al compañero más cerca de la pelota (el arquero fijo no entra en la rotación)
-      let best = null, bd = Infinity;
-      for (const q of matesOf(m, m.controlled)) {
-        if (q.fixedKeeper) continue;
-        const d = U.dist(q.x, q.y, m.ball.x, m.ball.y);
-        if (d < bd) { bd = d; best = q; }
+    m.humans.forEach((h, i) => {
+      const hin = ins[i], c = h.controlled;
+      if (!hin || !c) return;
+      if (playing && hin.swap) {
+        // al compañero más cerca de la pelota (el arquero fijo no entra en la
+        // rotación, ni el que maneja otro jugador)
+        let best = null, bd = Infinity;
+        for (const q of matesOf(m, c)) {
+          if (q.fixedKeeper || q.human) continue;
+          const d = U.dist(q.x, q.y, m.ball.x, m.ball.y);
+          if (d < bd) { bd = d; best = q; }
+        }
+        if (best) setControl(m, best, h);
       }
-      if (best) setControl(m, best);
-    }
-    if (hi && hi.order && m.state !== 'end' && m.humanTeam >= 0) {
-      m.order = (m.order + 1) % ORDERS.length;
-      const o = ORDERS[m.order];
-      for (const q of matesOf(m, m.controlled)) PF.FX.text(m.fx, q.x, q.y - 70, '¡' + o.label + '!', o.color, 0.8, 0.9);
-      PF.Audio.sfx.touch();
-    }
+      if (hin.order && m.state !== 'end') {
+        m.orders[h.team] = (m.orders[h.team] + 1) % ORDERS.length;
+        const o = ORDERS[m.orders[h.team]];
+        for (const q of matesOf(m, c)) if (!q.human) PF.FX.text(m.fx, q.x, q.y - 70, '¡' + o.label + '!', o.color, 0.8, 0.9);
+        PF.Audio.sfx.touch();
+      }
+    });
 
     // Las pulsaciones (pase, habilidad) se gastan en un solo Pokémon por paso:
     // si un pase cambia el control al compañero, éste no recibe el mismo "pase".
-    let input = hi;
+    const input = ins.slice();
     for (const p of m.players) {
       let it = NO_INTENT, active = playing;
-      const wasHuman = p.human;
+      const wasHuman = p.human, hi2 = p.human && p.ctrl ? p.ctrl.idx : -1;
       if (kicking) {
         active = p === m.kicker && m.stateT > KICKOFF_WAIT;
         if (active) {
-          it = p.human ? input || NO_INTENT : PF.AI.kickoff(p, m);
+          it = p.human ? input[hi2] || NO_INTENT : PF.AI.kickoff(p, m);
           if (m.stateT > KICKOFF_MAX) it = Object.assign({}, NO_INTENT, { pass: true });
           // en el saque sólo se puede pasar: nada de tiros ni habilidades
           it = Object.assign({}, it, { ability: false, press: false, shootHold: false });
         }
       } else if (playing && p.stun <= 0 && !p.slam) {
-        it = p.human ? input || NO_INTENT : PF.AI.think(p, m, dt);
+        it = p.human ? input[hi2] || NO_INTENT : PF.AI.think(p, m, dt);
       }
       applyIntent(m, p, it, dt, active);
       if (kicking) { p.vx = 0; p.vy = 0; }
-      if (wasHuman && input) input = Object.assign({}, input, { pass: false, passHold: false, ability: false });
+      if (wasHuman && input[hi2]) input[hi2] = Object.assign({}, input[hi2], { pass: false, passHold: false, ability: false });
     }
     movePlayers(m, dt);
     collidePlayers(m);
@@ -722,7 +758,7 @@ PF.Match = (() => {
       const frac = Math.hypot(p.vx, p.vy) / p.def.speed;
       if (frac > 0.55 && p.stun <= 0) spend(p, STAMINA.run * frac * dt * (m.keeper[p.team] === p ? 0.5 : 1));
       else spend(p, -STAMINA.regen * dt * (p.maxStamina / 100));
-      if (p.stamina <= 0 && p.team === m.humanTeam && !p.tiredWarned) {
+      if (p.stamina <= 0 && hasHuman(m, p.team) && !p.tiredWarned) {
         p.tiredWarned = true;
         PF.FX.text(m.fx, p.x, p.y - 70, '¡AGOTADO!', '#ff8a8a', 0.9, 1.4);
       }
@@ -949,7 +985,8 @@ PF.Match = (() => {
       release(m, p, (dx / d) * sp, (dy / d) * sp);
       // el control pasa al que recibe, que va solo a buscarla
       b.passTo = mate; b.passT = 2; b.passFrom = p;
-      if (p.human) setControl(m, mate);
+      // (si el que recibe es el compañero humano, cada uno sigue con el suyo)
+      if (p.human) setControl(m, mate, p.ctrl);
     } else {
       // pase al hueco: hacia donde miras; sigues controlando al mismo.
       // En el saque sale más flojo, para que no llegue al arco rival.
@@ -1086,7 +1123,17 @@ PF.Match = (() => {
     p.gkHold = isActiveKeeper(m, p) && m.state === 'play';
     p.gkT = 0;
     PF.Audio.sfx.touch();
-    if (m.humanTeam === p.team && m.controlled !== p && m.state === 'play') setControl(m, p);
+    // la agarra un compañero de la IA: pasa a manejarlo el humano de ese equipo
+    // (en cooperativo, el que estaba más cerca)
+    if (!p.human && m.state === 'play') {
+      let h = null, hd = Infinity;
+      for (const x of m.humans) {
+        if (x.team !== p.team) continue;
+        const d = x.controlled ? U.dist(x.controlled.x, x.controlled.y, p.x, p.y) : 0;
+        if (d < hd) { hd = d; h = x; }
+      }
+      if (h) setControl(m, p, h);
+    }
   }
 
   function useAbility(m, p) {
@@ -1501,7 +1548,7 @@ PF.Match = (() => {
   }
 
   /** Orden vigente para el Pokémon p: la tecla T en tu equipo, la táctica del entrenador en la CPU. */
-  const orderOf = (m, p) => (p.team === m.humanTeam ? (p.human ? 'neutral' : ORDERS[m.order].id) : m.tactic[p.team]);
+  const orderOf = (m, p) => (hasHuman(m, p.team) ? (p.human ? 'neutral' : ORDERS[m.orders[p.team]].id) : m.tactic[p.team]);
 
   return {
     create, step, CHARGE_MAX, PASS_HOLD_MIN, PASS_HOLD_MAX, ORDERS, orderOf, PRESETS, KEEPER_DEPTH, autoFormation,
@@ -1510,5 +1557,6 @@ PF.Match = (() => {
     // usados por abilities.js, ai.js y render.js
     radius, mass, untouchable, mateOf, matesOf, teamOf, setAnim, knock, stunInPlace, loseBall, shoot,
     addHazard, addProjectile, jump, nearestFoeDist, homeSpot, shotAim, passTarget, laneClear, bestShot,
+    updateCamera, hasHuman, makePlayer,
   };
 })();
