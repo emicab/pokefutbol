@@ -200,7 +200,8 @@ PF.Match = (() => {
    * pase al hueco). IA: al más libre y adelantado.
    */
   function passTarget(m, p) {
-    const mates = matesOf(m, p).filter((q) => !q.slam && q.dig <= 0);
+    // la IA no le pasa a un compañero aturdido (el humano apunta a quien quiera)
+    const mates = matesOf(m, p).filter((q) => !q.slam && q.dig <= 0 && (p.human || q.stun <= 0));
     if (!mates.length) return null;
     let best = null, bestScore = p.human ? Infinity : -Infinity;
     for (const q of mates) {
@@ -212,7 +213,7 @@ PF.Match = (() => {
       } else {
         const free = Math.min(250, nearestFoeDist(m, q, q.x, q.y));
         const ahead = (q.x - p.x) * dirOf(p.side);
-        const score = free + ahead * 0.4 - Math.max(0, d - 450) * 0.6 - (q.stun > 0 ? 999 : 0);
+        const score = free + ahead * 0.4 - Math.max(0, d - 450) * 0.6;
         if (score > bestScore) { best = q; bestScore = score; }
       }
     }
@@ -775,7 +776,8 @@ PF.Match = (() => {
       } else useAbility(m, p);
     }
     if (b.holder === p) {
-      if (it.pass) pass(m, p);
+      if (it.clear !== undefined) clearance(m, p, it.clear);
+      else if (it.pass) pass(m, p);
       else if (it.shootHold) p.charge = Math.min(CHARGE_MAX, Math.max(0, p.charge) + dt);
       else if (p.charge >= 0) shoot(m, p, p.charge / CHARGE_MAX);
     } else {
@@ -867,13 +869,26 @@ PF.Match = (() => {
     p.gkHold = false;
   }
 
+  /**
+   * Velocidad de salida para que la pelota recorra `d` y llegue con `arrive`
+   * px/s, según cómo frena la cancha: el frenado exponencial resta k·d a la
+   * velocidad y el de rodadura c·d/v (v ≈ velocidad media).
+   */
+  const PASS_ARRIVE = 360;
+  function passSpeed(m, d, arrive = PASS_ARRIVE, max = 1900) {
+    const fr = m.stadium.friction;
+    const k = 0.95 * fr, c = 45 * fr;
+    const v0 = arrive + k * d;
+    return U.clamp(v0 + (c * d) / ((v0 + arrive) / 2), 300, max);
+  }
+
   function pass(m, p) {
     const b = m.ball;
     const mate = passTarget(m, p);
     if (mate) {
       const tx = mate.x + mate.vx * 0.35, ty = mate.y + mate.vy * 0.35;
       const dx = tx - b.x, dy = ty - b.y, d = Math.hypot(dx, dy) || 1;
-      const sp = U.clamp(d * 1.5 + 260, 380, 900);
+      const sp = passSpeed(m, d);
       p.facing = Math.atan2(dy, dx);
       release(m, p, (dx / d) * sp, (dy / d) * sp);
       // el control pasa al que recibe, que va solo a buscarla
@@ -882,12 +897,23 @@ PF.Match = (() => {
     } else {
       // pase al hueco: hacia donde miras; sigues controlando al mismo.
       // En el saque sale más flojo, para que no llegue al arco rival.
-      const sp = m.state === 'kickoff' ? 380 : 560;
+      const sp = m.state === 'kickoff' ? passSpeed(m, 220, 120) : passSpeed(m, 320, 260);
       release(m, p, Math.cos(p.facing) * sp, Math.sin(p.facing) * sp);
     }
     setAnim(p, 'Shoot', true);
     spend(p, STAMINA.pass);
     PF.Audio.sfx.pass();
+  }
+
+  /** Despeje largo (arquero): hacia `angle`, hasta campo rival, según cómo frena la pelota. */
+  function clearance(m, p, angle) {
+    const sp = passSpeed(m, (F.x1 - F.x0) * 0.45, 150);
+    p.facing = angle;
+    release(m, p, Math.cos(angle) * sp, Math.sin(angle) * sp);
+    spend(p, STAMINA.shot + STAMINA.shotCharge);
+    setAnim(p, 'Attack', true);
+    PF.Audio.sfx.kick(1);
+    PF.FX.burst(m.fx, m.ball.x, m.ball.y, 10, '#fff', 220, 0.3, 3);
   }
 
   function shoot(m, p, k) {

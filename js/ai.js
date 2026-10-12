@@ -148,11 +148,9 @@ PF.AI = (() => {
     if (p.gkT < 0.7 + (p.slot % 3) * 0.15) return it;
     const mate = M.passTarget(m, p);
     if (mate && M.nearestFoeDist(m, mate, mate.x, mate.y) > 120) { it.pass = true; return it; }
-    // despeje: hacia la banda contraria a donde está el rival más cercano
-    ai.aim = Math.atan2((p.y < F.cy ? 1 : -1) * 0.5, dirX);
-    ai.shotT = 0.45;
-    it.shootHold = true;
-    it.aim = ai.aim;
+    // despeje largo hacia una banda, lejos del arco
+    it.clear = Math.atan2((p.y < F.cy ? 1 : -1) * 0.3, dirX);
+    it.aim = it.clear;
     return it;
   }
 
