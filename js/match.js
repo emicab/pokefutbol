@@ -888,11 +888,12 @@ PF.Match = (() => {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       PF.Field.collide(p, radius(p), 0.2, false);
-      if (p.gkHold) {
-        // con la pelota en las manos no sale del área
-        const x0 = p.side === 0 ? F.x0 : F.x1 - F.boxW, x1 = p.side === 0 ? F.x0 + F.boxW : F.x1;
-        p.x = U.clamp(p.x, x0, x1);
-        p.y = U.clamp(p.y, F.cy - F.boxH, F.cy + F.boxH);
+      if (p.gkHold && !inBox(p.side, p.x, p.y)) {
+        // puede salir del área con la pelota, pero ya sin las manos: la lleva
+        // en los pies y desde ahí se la pueden disputar como a cualquiera
+        p.gkHold = false;
+        p.gkT = 0;
+        PF.FX.text(m.fx, p.x, p.y - 64, '¡SIN MANOS!', '#9cff6b', 0.8, 0.9);
       }
     }
   }

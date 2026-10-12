@@ -80,7 +80,9 @@ que no sean demasiado fuertes para sus reflejos (los demás los desvía), se
 estira hacia donde va la pelota y, con ella en las manos, nadie se la puede
 quitar (ni con placajes ni con habilidades) y nunca puede meterse un autogol:
 saca con un pase o un despeje. Mientras la tiene, los rivales vuelven a su
-puesto y le dejan espacio. `Q` nunca te pasa al arquero fijo.
+puesto y le dejan espacio. Puede salir caminando del área con la pelota, pero
+al cruzar la línea la suelta de las manos («¡SIN MANOS!»): sigue llevándola
+en los pies y ya lo pueden marcar y quitársela como a cualquiera. `Q` nunca te pasa al arquero fijo.
 
 ### La CPU
 
