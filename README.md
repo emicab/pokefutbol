@@ -53,8 +53,15 @@ LT orden al equipo · Select cambios · Start pausa.
   brilla cuando está lista. Sólo recarga con la pelota en juego.
 - **Órdenes al equipo** (panel de abajo y etiqueta sobre cada uno):
   - *Neutro*: va a por la pelota el que esté más cerca; el resto cubre.
-  - *Ataque*: el equipo se adelanta y sólo presiona si la tiene muy cerca.
+  - *Ataque*: con la pelota el equipo sube mucho; al perderla baja igual
+    (un poco menos) y presiona arriba.
   - *Defensa*: el equipo se queda atrás y sólo sale a presionar en tu tercio.
+
+  En todas las órdenes el equipo sube cuando tiene la pelota y baja cuando la
+  pierde; la orden cambia cuánto. Sin la pelota, si nadie quedó cerca del arco,
+  el compañero más cercano baja a cubrirlo, y los delanteros se quedan de
+  salida para el contragolpe (salvo en *Defensa*). Los compañeros se separan
+  si quedan pegados.
 - **Repetición:** cada gol se repite en cámara lenta (se salta con J, K o
   Espacio; se puede quitar en Opciones).
 
@@ -280,7 +287,7 @@ Dieciséis tienen stats y habilidades hechas a mano:
 | Alakazam | **Psicorrayo**: esfera que persigue al rival y lo aturde | **Teletransporte** |
 | Jolteon | **Pin Misil**: cinco agujas en abanico | **Ataque Rápido** |
 | Magikarp | **Salpicadura**: no pasa nada… casi nunca | **Salto**: enorme e inútil |
-| Mewtwo | **Psíquico**: trae la pelota desde donde sea | **Onda Mental**: aparta a todos |
+| Mewtwo | **Psíquico**: trae la pelota desde lejos | **Onda Mental**: aparta a todos |
 
 El resto saca los stats de la Pokédex (velocidad, tiro, peso y tamaño) y las
 habilidades de su línea evolutiva (Charizard juega como Charmander) o de su

@@ -33,21 +33,21 @@ PF.AI = (() => {
    * true, un ángulo (usarla mirando hacia ahí) o nada.
    */
   const WANTS = {
-    zap: (c) => (c.mine ? c.pressure < 200 : c.foeHolder && c.dHolder < 300),
+    zap: (c) => (c.mine ? c.pressure < 180 : c.foeHolder && c.dHolder < 220),
     quick: (c) => (c.mine ? (c.pressure < 120 || c.dGoal < 650) && c.aimGoal : !c.b.holder && c.dMe > 220 && c.chasing && c.aimBall),
     roll: (c) => (c.mine ? c.pressure < 140 && c.aimGoal : c.foeHolder && c.dHolder < 300 && c.aimHolder),
     fireshot: (c) => c.mine && c.dGoal < 700 && c.aimGoal,
     embers: (c) => (c.mine ? c.pressure < 150 : c.foeHolder && c.dHolder < 180),
-    hydro: (c) => c.foeHolder && c.dHolder < 250 && c.aimHolder,
-    surf: (c) => (c.mine ? c.dGoal < 520 && c.aimGoal : c.foeHolder && c.dHolder < 380 && c.aimHolder),
+    hydro: (c) => c.foeHolder && c.dHolder < 210 && c.aimHolder,
+    surf: (c) => (c.mine ? c.dGoal < 360 && c.aimGoal : c.foeHolder && c.dHolder < 270 && c.aimHolder),
     puddle: (c) => c.foeHolder && c.dHolder < 230 && c.aimHolder,
     ice: (c) => c.foeHolder && c.dHolder < 230 && c.aimHolder,
     vine: (c) => !c.mine && c.dMe < 250 && (c.foeHolder || c.dMe > 140),
-    psychic: (c) => !c.mine && (c.foeHolder || c.dMe > 320),
+    psychic: (c) => !c.mine && c.dMe < 540 && (c.foeHolder || c.dMe > 280),
     sleep: (c) => c.foeHolder && c.dHolder < 170 && c.aimHolder,
-    sing: (c) => c.foesNear > 0 && (c.mine ? c.pressure < 160 : c.foeHolder && c.dHolder < 210),
-    confusion: (c) => c.foesNear > 0 && (c.mine ? c.pressure < 150 : c.foeHolder && c.dHolder < 240),
-    psywave: (c) => (c.mine ? c.pressure < 150 : c.foeHolder && c.dHolder < 260),
+    sing: (c) => c.foesNear > 0 && (c.mine ? c.pressure < 160 : c.foeHolder && c.dHolder < 180),
+    confusion: (c) => c.foesNear > 0 && (c.mine ? c.pressure < 150 : c.foeHolder && c.dHolder < 190),
+    psywave: (c) => (c.mine ? c.pressure < 150 : c.foeHolder && c.dHolder < 210),
     phase: (c) => (c.mine ? c.pressure < 130 : !c.b.holder && c.dMe > 250 && c.chasing),
     teleport: (c) => (c.mine ? c.pressure < 110 && c.aimGoal : !c.b.holder && c.dMe > 260 && c.chasing && c.aimBall),
     dig: (c) => (c.mine ? c.pressure < 120 && c.aimGoal : !c.b.holder && c.dMe > 260 && c.chasing && c.aimBall),
@@ -56,10 +56,10 @@ PF.AI = (() => {
     wall: (c) => !c.mine && Math.abs(c.b.x - c.ownX) < 330 && c.dMe < 260,
     throw: (c) => c.foeHolder && c.dHolder < 100,
     punch: (c) => c.foeHolder && c.dHolder < 130 && c.aimHolder,
-    aura: (c) => c.foeHolder && c.dHolder < 650,
-    psybeam: (c) => c.foeHolder && c.dHolder < 650,
-    pinmissile: (c) => c.foeHolder && c.dHolder < 420 && c.aimHolder,
-    shuriken: (c) => c.foeHolder && c.dHolder < 480 && c.aimHolder,
+    aura: (c) => c.foeHolder && c.dHolder < 480,
+    psybeam: (c) => c.foeHolder && c.dHolder < 480,
+    pinmissile: (c) => c.foeHolder && c.dHolder < 270 && c.aimHolder,
+    shuriken: (c) => c.foeHolder && c.dHolder < 280 && c.aimHolder,
     adapt: (c) => (c.mine ? c.pressure < 150 : c.foeHolder && c.dHolder < 220),
     splash: (c) => c.pressure < 220,
   };
@@ -286,12 +286,40 @@ PF.AI = (() => {
 
     const ownX = p.side === 0 ? F.x0 : F.x1;
     const ownThird = Math.abs(b.x - ownX) < (F.x1 - F.x0) / 3;
+    // defensa: sólo sale a la pelota en nuestro tercio; ataque: presiona arriba como siempre
     if (order === 'def') chase = (chase && ownThird) || dMe < 110;
-    else if (order === 'atk') chase = chase && dMe < 220 && dMe < dHuman * 0.5;
     return chase;
   }
 
-  function think(p, m, dt) {
+  /**
+   * ¿Me toca cubrir el arco? Sí si nadie del equipo (ni el arquero, ni un
+   * humano) está cerca de nuestro arco y yo soy la IA de campo más cercana a
+   * él (sin contar al que va a la pelota).
+   */
+  function lastMan(p, m, ownX, dirX) {
+    const M = PF.Match, len = F.x1 - F.x0;
+    const team = M.teamOf(m, p.team);
+    const near = (q) => (q.x - ownX) * dirX < len * 0.24 && Math.abs(q.y - F.cy) < F.goalHalf + 220;
+    if (team.some((q) => q !== p && q.stun <= 0 && near(q))) return false;
+    const free = team.filter((q) => !q.human && !q.ai.chasing && q.stun <= 0 && !q.slam);
+    const closest = free.reduce((a, q) => (!a || Math.abs(q.x - ownX) < Math.abs(a.x - ownX) ? q : a), null);
+    return closest === p;
+  }
+
+  /** Separarse de compañeros pegados (si no, se quedaban dos en el mismo lugar chocando). */
+  function spread(it, p, m) {
+    let ax = 0, ay = 0;
+    for (const q of PF.Match.matesOf(m, p)) {
+      const dx = p.x - q.x, dy = p.y - q.y, d = Math.hypot(dx, dy);
+      if (d > 0.5 && d < 90) { const w = ((90 - d) / 90) * 1.2; ax += (dx / d) * w; ay += (dy / d) * w; }
+    }
+    if (!ax && !ay) return;
+    it.mx += ax; it.my += ay;
+    const l = Math.hypot(it.mx, it.my);
+    if (l > 1) { it.mx /= l; it.my /= l; }
+  }
+
+  function thinkInner(p, m, dt) {
     const s = p.skill, ai = p.ai, b = m.ball, M = PF.Match;
     const it = { mx: 0, my: 0, pass: false, shootHold: false, ability: false };
     const dirX = p.side === 0 ? 1 : -1;
@@ -415,8 +443,10 @@ PF.AI = (() => {
       const ownHalf = (b.x - ownX) * dirX < (F.x1 - F.x0) * 0.5;
       if (p.fixedKeeper || ownHalf) { ai.pushUp = false; return keeperThink(p, m, it, c); }
       // dinámico con la pelota en campo rival: a veces se suma al ataque (y
-      // otro pasa a ser el arquero por estar más cerca del arco); si no, líbero
-      if (decide && holder && holder.team === p.team) ai.pushUp = Math.random() < (order === 'atk' ? 0.5 : order === 'def' ? 0.05 : 0.2);
+      // otro pasa a ser el arquero por estar más cerca del arco); si no, líbero.
+      // Apenas se pierde la pelota, vuelve.
+      if (!(holder && holder.team === p.team)) ai.pushUp = false;
+      else if (decide) ai.pushUp = Math.random() < (order === 'atk' ? 0.3 : order === 'def' ? 0.03 : 0.12);
       if (!ai.pushUp) {
         ai.chasing = false;
         const [tx, ty] = M.homeSpot(m, p, -0.25);
@@ -437,7 +467,26 @@ PF.AI = (() => {
     }
 
 
-    const shift = order === 'atk' ? 0.2 : order === 'def' ? -0.2 : 0;
+    // fases: con la pelota el bloque sube (más con la orden de ataque); sin
+    // ella (la tiene el rival o está suelta en nuestra mitad) baja, y con
+    // ataque sólo un poco menos. Así la orden cambia cuánto, no si se baja.
+    const poss = !!(holder && holder.team === p.team);
+    const ballDepth = ((b.x - ownX) * dirX) / (F.x1 - F.x0);
+    const defending = !poss && ((holder && holder.team !== p.team) || ballDepth < 0.5);
+    const SHIFT = poss ? { atk: 0.22, neutral: 0.08, def: -0.05 }
+      : defending ? { atk: -0.06, neutral: -0.15, def: -0.26 } : { atk: 0.1, neutral: 0, def: -0.15 };
+    let shift = SHIFT[order] ?? 0;
+    // los delanteros (salvo con la orden de defensa) bajan poco: quedan de salida para el contragolpe
+    if (defending && order !== 'def' && p.spot[0] >= 0.55) shift = Math.max(shift, order === 'atk' ? 0.06 : -0.02);
+
+    // último hombre: sin la pelota, si nadie del equipo está cerca de nuestro
+    // arco, el compañero de la IA más cercano a él (que no vaya a la pelota) baja a cubrirlo
+    if (!poss && !ai.chasing && lastMan(p, m, ownX, dirX)) {
+      const len = F.x1 - F.x0;
+      const k = U.clamp(ballDepth * 0.35, 0.08, 0.2);
+      moveTo(it, p, ownX + dirX * len * k, F.cy + (b.y - F.cy) * 0.35);
+      return it;
+    }
 
     // ---------------------------------------------- la tiene un compañero
     if (holder && holder.team === p.team) {
@@ -472,8 +521,9 @@ PF.AI = (() => {
 
     // relevo: si el arquero salió de su área, el compañero libre más cercano al arco lo cubre
     if (!ai.chasing && coverGoal(p, m, it)) return it;
-    // marca: defendiendo en mi mitad, me pego a un rival (entre él y el arco)
-    if (!ai.chasing && order !== 'atk') {
+    // marca: defendiendo en mi mitad, me pego a un rival (entre él y el arco).
+    // También con la orden de ataque: atacar no es dejar solos a los rivales
+    if (!ai.chasing) {
       const mark = markOf(p, m);
       if (mark) {
         const [gx2, gy2] = [ownX, F.cy];
@@ -499,18 +549,27 @@ PF.AI = (() => {
     } else if (teamSize > 2) {
       const [tx, ty] = M.homeSpot(m, p, shift);
       moveTo(it, p, tx, ty);
-    } else if (order === 'atk') {
-      // esperar arriba, del lado contrario a la pelota, listo para el contragolpe
+    } else if (order === 'atk' && !defending) {
+      // pelota suelta en campo rival: esperar arriba, del lado contrario, listo para el contragolpe
       const tx = F.cx + dirX * 200;
       const ty = b.y < F.cy ? F.cy + 130 : F.cy - 130;
       moveTo(it, p, tx, ty);
     } else {
-      // cubrir: entre la pelota y el arco propio (más pegado al arco si defiende)
-      const k = order === 'def' ? 0.22 : 0.35;
+      // cubrir: entre la pelota y el arco propio (más pegado al arco si defiende;
+      // con ataque, un poco más adelante, pero cubriendo igual)
+      const k = order === 'def' ? 0.22 : order === 'atk' ? 0.45 : 0.35;
       const tx = ownX + (b.x - ownX) * k;
       const ty = F.cy + (b.y - F.cy) * 0.55;
       moveTo(it, p, dirX > 0 ? Math.max(tx, F.x0 + 70) : Math.min(tx, F.x1 - 70), ty);
     }
+    return it;
+  }
+
+  /** Decisión de la IA, más separarse de los compañeros (salvo el que va a la pelota o ataja). */
+  function think(p, m, dt) {
+    const it = thinkInner(p, m, dt);
+    const b = m.ball;
+    if (b.holder !== p && b.passTo !== p && !p.ai.chasing && !it.dive && PF.Match.keeperOf(m, p.team) !== p) spread(it, p, m);
     return it;
   }
 

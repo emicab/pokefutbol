@@ -10,6 +10,8 @@ PF.Abilities = (() => {
   const safe = (b) => !!(b.holder && b.holder.gkHold);
   /** Alcance del Látigo Cepa (antes 440: robaba casi desde la otra punta). */
   const VINE_RANGE = 260;
+  /** Alcance de Psíquico (Mewtwo): largo, pero ya no desde cualquier punta. */
+  const PSYCHIC_RANGE = 560;
 
   /** Abanico de agua/ola: empuja rivales y pelota dentro del cono. */
   function cone(m, p, R, half, force, stun, ballSpeed) {
@@ -34,7 +36,7 @@ PF.Abilities = (() => {
   const A = {
     /** Pikachu: rayo a todos los rivales en el radio. */
     zap(m, p) {
-      const M = PF.Match, R = 330;
+      const M = PF.Match, R = 240;
       PF.FX.ring(m.fx, p.x, p.y, R, '#ffe066', 0.35, 5);
       for (const q of foes(m, p)) {
         if (q.slam || U.dist(p.x, p.y, q.x, q.y) > R) continue;
@@ -59,7 +61,7 @@ PF.Abilities = (() => {
 
     /** Squirtle: abanico de agua que barre rivales y pelota. */
     hydro(m, p) {
-      const M = PF.Match, R = 300, HALF = 0.62;
+      const M = PF.Match, R = 240, HALF = 0.62;
       const fx = Math.cos(p.facing), fy = Math.sin(p.facing);
       const inCone = (x, y) => {
         const dx = x - p.x, dy = y - p.y, d = Math.hypot(dx, dy);
@@ -193,8 +195,8 @@ PF.Abilities = (() => {
     /** Psyduck: los rivales cercanos dan vueltas mareados. */
     confusion(m, p) {
       const M = PF.Match;
-      PF.FX.ring(m.fx, p.x, p.y, 260, '#ffd84a', 0.4, 6);
-      for (const q of near(m, p, 260)) {
+      PF.FX.ring(m.fx, p.x, p.y, 200, '#ffd84a', 0.4, 6);
+      for (const q of near(m, p, 200)) {
         if (M.stunInPlace(m, q, 1.0)) {
           q.spinT = 1.0;
           PF.FX.text(m.fx, q.x, q.y - 50, '¿¡?!', '#ffd84a', 0.8, 0.8);
@@ -206,7 +208,7 @@ PF.Abilities = (() => {
 
     /** Jigglypuff: duerme a todos los rivales cercanos. */
     sing(m, p) {
-      const M = PF.Match, R = 230;
+      const M = PF.Match, R = 190;
       PF.FX.ring(m.fx, p.x, p.y, R, '#ff9ccf', 0.6, 5);
       for (let i = 0; i < 12; i++) {
         const a = (i / 12) * Math.PI * 2;
@@ -221,7 +223,7 @@ PF.Abilities = (() => {
 
     /** Jigglypuff: rueda arrollando a todos (no se detiene al chocar). */
     roll(m, p) {
-      p.dash = 0.6; p.ram = 0.6; p.dashSpeed = 720;
+      p.dash = 0.5; p.ram = 0.5; p.dashSpeed = 720;
       p.dashDx = Math.cos(p.facing); p.dashDy = Math.sin(p.facing);
       PF.FX.text(m.fx, p.x, p.y - 60, '¡RODAR!', '#ff9ccf', 1);
       PF.Audio.sfx.swoosh();
@@ -272,7 +274,7 @@ PF.Abilities = (() => {
     /** Lapras: ola larga que arrastra todo hacia delante. */
     surf(m, p) {
       const HALF = 0.42;
-      cone(m, p, 440, HALF, 650, 0.7, 860);
+      cone(m, p, 300, HALF, 650, 0.7, 760);
       const fx = Math.cos(p.facing), fy = Math.sin(p.facing);
       for (let i = 0; i < 70; i++) {
         const a = p.facing + U.rand(-HALF, HALF), s = U.rand(400, 860);
@@ -297,7 +299,7 @@ PF.Abilities = (() => {
       PF.Match.addProjectile(m, {
         x: p.x + Math.cos(p.facing) * 24, y: p.y - 18 + Math.sin(p.facing) * 24,
         vx: Math.cos(p.facing) * 560, vy: Math.sin(p.facing) * 560,
-        team: p.team, kind: 'aura', life: 2.6, r: 14, homing: true, stun: 1.2,
+        team: p.team, kind: 'aura', life: 1.0, r: 14, homing: true, stun: 1.2,
         color: '#7fb8ff', hitText: '¡AURA!',
       });
       PF.FX.text(m.fx, p.x, p.y - 64, '¡ESFERA AURAL!', '#7fb8ff', 0.9);
@@ -309,7 +311,7 @@ PF.Abilities = (() => {
       PF.Match.addProjectile(m, {
         x: p.x + Math.cos(p.facing) * 24, y: p.y - 18 + Math.sin(p.facing) * 24,
         vx: Math.cos(p.facing) * 560, vy: Math.sin(p.facing) * 560,
-        team: p.team, kind: 'aura', life: 2.6, r: 14, homing: true, stun: 1.2,
+        team: p.team, kind: 'aura', life: 1.0, r: 14, homing: true, stun: 1.2,
         color: '#e6a8ff', hitText: '¡PSICO!',
       });
       PF.FX.text(m.fx, p.x, p.y - 64, '¡PSICORRAYO!', '#e6a8ff', 0.9);
@@ -323,7 +325,7 @@ PF.Abilities = (() => {
         PF.Match.addProjectile(m, {
           x: p.x + Math.cos(a) * 22, y: p.y - 16 + Math.sin(a) * 22,
           vx: Math.cos(a) * 860, vy: Math.sin(a) * 860,
-          team: p.team, kind: 'shuriken', life: 0.75, r: 9, stun: 0.6,
+          team: p.team, kind: 'shuriken', life: 0.35, r: 9, stun: 0.6,
           color: '#ffe066', hitText: '¡PIN!',
         });
       }
@@ -338,7 +340,7 @@ PF.Abilities = (() => {
         PF.Match.addProjectile(m, {
           x: p.x + Math.cos(a) * 22, y: p.y - 16 + Math.sin(a) * 22,
           vx: Math.cos(a) * 820, vy: Math.sin(a) * 820,
-          team: p.team, kind: 'shuriken', life: 0.9, r: 11, stun: 0.75,
+          team: p.team, kind: 'shuriken', life: 0.38, r: 11, stun: 0.75,
           color: '#9fdcff', hitText: '¡ZING!',
         });
       }
@@ -352,11 +354,11 @@ PF.Abilities = (() => {
       PF.FX.burst(m.fx, p.x, p.y - 10, 20, '#8fd8ff', 160, 0.5, 4, 300);
       PF.Audio.sfx.water();
       if (Math.random() < 0.1) {
-        for (const q of near(m, p, 280)) {
+        for (const q of near(m, p, 220)) {
           const d = U.dist(p.x, p.y, q.x, q.y) || 1;
           M.knock(m, q, (q.x - p.x) / d, (q.y - p.y) / d, 600, 1.6);
         }
-        PF.FX.ring(m.fx, p.x, p.y, 280, '#8fd8ff', 0.5, 10);
+        PF.FX.ring(m.fx, p.x, p.y, 220, '#8fd8ff', 0.5, 10);
         PF.FX.text(m.fx, p.x, p.y - 70, '¡¿¡QUÉ!?!', '#ffd23f', 1.6);
         PF.Audio.crowd('cheer', 0.8);
         m.shake = Math.max(m.shake, 12);
@@ -372,10 +374,15 @@ PF.Abilities = (() => {
       PF.Audio.sfx.jump();
     },
 
-    /** Mewtwo: trae la pelota con la mente, desde donde sea. */
+    /** Mewtwo: trae la pelota con la mente, desde lejos (PSYCHIC_RANGE). */
     psychic(m, p) {
       const b = m.ball;
       if (b.holder === p || (b.holder && b.holder.phase > 0) || safe(b)) return false;
+      if (U.dist(p.x, p.y, b.x, b.y) > PSYCHIC_RANGE) {
+        PF.FX.text(m.fx, p.x, p.y - 56, 'no llega...', '#cfcfcf', 0.6, 0.7);
+        PF.Audio.sfx.fail();
+        return false;
+      }
       if (b.holder) { b.holder.pickupCd = 0.6; b.holder.charge = -1; b.holder = null; }
       b.vine = p; b.vineT = 2.2; b.vineColor = '#d6a6ff'; b.fire = 0; b.last = p;
       PF.FX.text(m.fx, p.x, p.y - 64, '¡PSÍQUICO!', '#d6a6ff', 1.1);
@@ -384,7 +391,7 @@ PF.Abilities = (() => {
 
     /** Mewtwo: onda que aparta y aturde a los rivales alrededor. */
     psywave(m, p) {
-      const M = PF.Match, R = 300;
+      const M = PF.Match, R = 230;
       for (const q of near(m, p, R)) {
         const d = U.dist(p.x, p.y, q.x, q.y) || 1;
         M.knock(m, q, (q.x - p.x) / d, (q.y - p.y) / d, 620 - d, 0.7);

@@ -167,7 +167,7 @@ PF.ROSTER = [
     speed: 340, power: 1.3, mass: 1.3, radius: 21,
     abilities: [
       { id: 'psychic', name: 'Psíquico', cd: 14,
-        desc: 'Trae la pelota con la mente desde cualquier lugar de la cancha.' },
+        desc: 'Trae la pelota con la mente desde lejos (pero no desde cualquier punta).' },
       { id: 'psywave', name: 'Onda Mental', cd: 10,
         desc: 'Una onda que aparta y aturde a todos los rivales a tu alrededor.' },
     ],
