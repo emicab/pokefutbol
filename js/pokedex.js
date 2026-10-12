@@ -58,11 +58,4 @@ PF.POKEDEX = {
   136: {"dex": 136, "name": "Flareon", "types": ["fire"], "hp": 99, "spd": 105, "atk": 1.42, "bst": 525},
   143: {"dex": 143, "name": "Snorlax", "types": ["normal"], "hp": 142, "spd": 91, "atk": 1.31, "bst": 540},
   150: {"dex": 150, "name": "Mewtwo", "types": ["psychic"], "hp": 118, "spd": 133, "atk": 1.55, "bst": 680},
-  208: {"dex": 208, "name": "Steelix", "types": ["steel", "ground"], "hp": 104, "spd": 91, "atk": 1.17, "bst": 510},
-  446: {"dex": 446, "name": "Munchlax", "types": ["normal"], "hp": 131, "spd": 80, "atk": 1.17, "bst": 390},
-  447: {"dex": 447, "name": "Riolu", "types": ["fighting"], "hp": 88, "spd": 103, "atk": 1.08, "bst": 285},
-  448: {"dex": 448, "name": "Lucario", "types": ["fighting", "steel"], "hp": 102, "spd": 116, "atk": 1.33, "bst": 525},
-  656: {"dex": 656, "name": "Froakie", "types": ["water"], "hp": 88, "spd": 108, "atk": 1.04, "bst": 314},
-  657: {"dex": 657, "name": "Frogadier", "types": ["water"], "hp": 94, "spd": 119, "atk": 1.16, "bst": 405},
-  658: {"dex": 658, "name": "Greninja", "types": ["water", "dark"], "hp": 102, "spd": 129, "atk": 1.27, "bst": 530},
 };

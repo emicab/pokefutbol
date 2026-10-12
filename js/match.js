@@ -256,7 +256,7 @@ PF.Match = (() => {
         x: F.cx, y: F.cy, vx: 0, vy: 0, r: BALL_R, holder: null, last: null, fire: 0,
         vine: null, vineT: 0, vineColor: '#7dff9e', passTo: null, passT: 0, passFrom: null, spin: 0, big: 0, crazy: 0, curve: 1,
       },
-      score: [0, 0], time: opts.time ?? PF.MATCH_TIME, golden: false,
+      score: [0, 0], time: opts.time ?? PF.MATCH_TIME, totalTime: opts.time ?? PF.MATCH_TIME, golden: false,
       state: 'kickoff', stateT: 0, clock: 0, kickoffTeam: Math.random() < 0.5 ? 0 : 1, kicker: null,
       goalTeam: -1, ownGoal: false, winner: -1, scorer: null,
       items: [], itemT: 7, hazards: [], projs: [],
@@ -265,6 +265,7 @@ PF.Match = (() => {
       stadium: PF.stadiumById(opts.stadium),
       humanTeam: opts.humanTeam, controlled: null, demo: !!opts.demo,
       order: 0,   // índice en ORDERS
+      tactic: ['neutral', 'neutral'], coachT: 4, rotateT: 2,   // táctica de los equipos de la CPU
       keeperMode, keeper: [null, null],
       sides: opts.flip ? [1, 0] : [0, 1],   // lado de cada equipo
       bench: [0, 1].map((t) => ((opts.bench && opts.bench[t]) || []).map((def) => ({ def, stamina: PF.staminaMax(def), maxStamina: PF.staminaMax(def) }))),
@@ -417,6 +418,80 @@ PF.Match = (() => {
     setAnim(p, 'Attack', true);
   }
 
+  // ---------------------------------------------------------------- entrenador de la CPU
+  const TACTIC_TEXT = { atk: '¡AL ATAQUE!', def: '¡A DEFENDER!', neutral: '¡EQUILIBRIO!' };
+
+  /**
+   * Cada pocos segundos, los equipos de la CPU revisan su táctica: si van
+   * perdiendo se van al ataque (más cuanto menos tiempo queda), si ganan
+   * sobre el final se cierran atrás, y si no, varían para no ser previsibles.
+   */
+  function coach(m, dt) {
+    if ((m.coachT -= dt) > 0) return;
+    m.coachT = U.rand(5, 9);
+    const left = m.golden ? 0 : m.time / m.totalTime;   // 1 al empezar, 0 al final
+    for (const team of [0, 1]) {
+      if (team === m.humanTeam) continue;
+      const diff = m.score[team] - m.score[1 - team];
+      let t;
+      if (m.golden) t = 'atk';
+      else if (diff < 0) t = left < 0.6 || Math.random() < 0.5 ? 'atk' : 'neutral';
+      else if (diff > 0 && left < 0.35) t = 'def';
+      else if (diff >= 2) t = Math.random() < 0.5 ? 'def' : 'neutral';
+      else { const r = Math.random(); t = r < 0.55 ? 'neutral' : r < 0.8 ? 'atk' : 'def'; }
+      if (t !== m.tactic[team]) {
+        m.tactic[team] = t;
+        if (!m.demo) {
+          const mates = teamOf(m, team);
+          const cx = mates.reduce((s, q) => s + q.x, 0) / mates.length, cy = mates.reduce((s, q) => s + q.y, 0) / mates.length;
+          PF.FX.text(m.fx, cx, cy - 80, TACTIC_TEXT[t], PF.TEAM_COLORS[team], 0.8, 1.2);
+        }
+      }
+    }
+  }
+
+  /**
+   * Rotación: si dos compañeros (de la IA) estarían más cerca de sus puestos
+   * intercambiándolos, se los cambian. Así, si un defensa sube con la pelota,
+   * el delantero que quedó atrás pasa a cubrir. El arquero fijo no rota.
+   */
+  function rotate(m, dt) {
+    if ((m.rotateT -= dt) > 0) return;
+    m.rotateT = 1;
+    const swapSpots = (a, c) => {
+      [a.spot, c.spot] = [c.spot, a.spot];
+      for (const p of [a, c]) { p.pos = PF.zoneRole(p.spot[0]); p.bonus = roleBonus(p.natural, p.pos); }
+    };
+    // uno sube, otro baja: si el que lleva la pelota pasa por delante de un
+    // compañero de puesto más adelantado, se cambian el puesto
+    const h = m.ball.holder;
+    if (h && !h.fixedKeeper && m.keeper[h.team] !== h) {
+      const dir = dirOf(h.side);
+      const behind = teamOf(m, h.team).filter((q) => q !== h && !q.fixedKeeper && m.keeper[h.team] !== q && !q.human &&
+        q.spot[0] > h.spot[0] + 0.05 && (h.x - q.x) * dir > 120);
+      if (behind.length) {
+        const q = behind.reduce((a, c) => ((c.x - a.x) * dir < 0 ? c : a));   // el que quedó más atrás
+        swapSpots(h, q);
+        return;
+      }
+    }
+    for (const team of [0, 1]) {
+      // el que lleva la pelota también entra: si un defensa sube con ella, otro baja a cubrir su puesto
+      const ps = teamOf(m, team).filter((p) => !p.fixedKeeper && (!p.human || m.ball.holder === p) && m.keeper[team] !== p);
+      for (let i = 0; i < ps.length; i++) {
+        for (let j = i + 1; j < ps.length; j++) {
+          const a = ps[i], c = ps[j];
+          const [ax, ay] = homeSpot(m, a), [cx, cy] = homeSpot(m, c);
+          const now = U.dist(a.x, a.y, ax, ay) + U.dist(c.x, c.y, cx, cy);
+          const swapped = U.dist(a.x, a.y, cx, cy) + U.dist(c.x, c.y, ax, ay);
+          if (now > 120 && swapped < now * 0.85) {
+            swapSpots(a, c);
+          }
+        }
+      }
+    }
+  }
+
   // ---------------------------------------------------------------- cambios
   /**
    * Cambia al jugador `out` (de m.players) por el suplente `benchIdx`. El que
@@ -524,6 +599,7 @@ PF.Match = (() => {
     const playing = m.state === 'play';
     const kicking = m.state === 'kickoff';
     for (const bench of m.bench) for (const s of bench) s.stamina = Math.min(s.maxStamina, s.stamina + STAMINA.bench * dt * (s.maxStamina / 100));
+    if (playing) { coach(m, dt); rotate(m, dt); }
     if (playing && (m.subT -= dt) <= 0) {
       m.subT = 4;
       for (const team of [0, 1]) {
@@ -964,7 +1040,7 @@ PF.Match = (() => {
       const dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy);
       if (d < R + radius(q)) knock(m, q, d > 1 ? dx / d : 1, d > 1 ? dy / d : 0, 560 - d, 1.1);
     }
-    if (b.holder !== p) {
+    if (b.holder !== p && !(b.holder && b.holder.gkHold)) {
       const dx = b.x - p.x, dy = b.y - p.y, d = Math.hypot(dx, dy);
       if (d < R) {
         if (b.holder) b.holder.pickupCd = 0.6;
@@ -1109,6 +1185,8 @@ PF.Match = (() => {
       b.x = nx; b.y = ny;
       b.spin += (Math.hypot(p.vx, p.vy) * dt) / b.r;
       PF.Field.collide(b, b.r, 0, true);
+      // en las manos del arquero la pelota no puede cruzar la línea (nada de autogol)
+      if (p.gkHold) b.x = U.clamp(b.x, F.x0 + b.r + 2, F.x1 - b.r - 2);
       // robo: un rival que aguanta en contacto con la pelota se la queda
       if (playing && p.phase <= 0 && p.dig <= 0 && !p.gkHold) {
         for (const q of m.players) {
@@ -1271,6 +1349,7 @@ PF.Match = (() => {
 
   function checkGoal(m) {
     const b = m.ball;
+    if (b.holder && b.holder.gkHold) return;
     let team = -1;
     if (Math.abs(b.y - F.cy) < F.goalHalf + b.r) {
       if (b.x < F.x0 - b.r) team = m.sides.indexOf(1);        // entró en el arco izquierdo: marca el de la derecha
@@ -1339,8 +1418,8 @@ PF.Match = (() => {
     PF.Audio.sfx.pickup();
   }
 
-  /** Orden vigente para el Pokémon p (sólo afecta a la IA del equipo humano). */
-  const orderOf = (m, p) => (p.team === m.humanTeam && !p.human ? ORDERS[m.order].id : 'neutral');
+  /** Orden vigente para el Pokémon p: la tecla T en tu equipo, la táctica del entrenador en la CPU. */
+  const orderOf = (m, p) => (p.team === m.humanTeam ? (p.human ? 'neutral' : ORDERS[m.order].id) : m.tactic[p.team]);
 
   return {
     create, step, CHARGE_MAX, ORDERS, orderOf, PRESETS, KEEPER_DEPTH, autoFormation,

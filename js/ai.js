@@ -57,6 +57,8 @@ PF.AI = (() => {
     throw: (c) => c.foeHolder && c.dHolder < 100,
     punch: (c) => c.foeHolder && c.dHolder < 130 && c.aimHolder,
     aura: (c) => c.foeHolder && c.dHolder < 650,
+    psybeam: (c) => c.foeHolder && c.dHolder < 650,
+    pinmissile: (c) => c.foeHolder && c.dHolder < 420 && c.aimHolder,
     shuriken: (c) => c.foeHolder && c.dHolder < 480 && c.aimHolder,
     adapt: (c) => (c.mine ? c.pressure < 150 : c.foeHolder && c.dHolder < 220),
     splash: (c) => c.pressure < 220,
@@ -257,14 +259,19 @@ PF.AI = (() => {
     ai.shotT = 0;
 
     // ---------------------------------------------- arquero
-    if (M.keeperOf(m, p.team) === p) {
+    const isKeeper = M.keeperOf(m, p.team) === p;
+    if (isKeeper) {
       const ownHalf = (b.x - ownX) * dirX < (F.x1 - F.x0) * 0.5;
-      if (p.fixedKeeper || ownHalf) return keeperThink(p, m, it, c);
-      // dinámico con la pelota lejos: líbero, atrás y sin salir a perseguir
-      ai.chasing = false;
-      const [tx, ty] = M.homeSpot(m, p, -0.25);
-      moveTo(it, p, tx, ty);
-      return it;
+      if (p.fixedKeeper || ownHalf) { ai.pushUp = false; return keeperThink(p, m, it, c); }
+      // dinámico con la pelota en campo rival: a veces se suma al ataque (y
+      // otro pasa a ser el arquero por estar más cerca del arco); si no, líbero
+      if (decide && holder && holder.team === p.team) ai.pushUp = Math.random() < (order === 'atk' ? 0.5 : order === 'def' ? 0.05 : 0.2);
+      if (!ai.pushUp) {
+        ai.chasing = false;
+        const [tx, ty] = M.homeSpot(m, p, -0.25);
+        moveTo(it, p, tx, ty);
+        return it;
+      }
     }
 
     // ---------------------------------------------- me la pasan: ir a buscarla

@@ -25,11 +25,12 @@ y abre <http://localhost:8123>.
 | `Espacio` / `I` | Presionar: correr solo hacia la pelota |
 | `Q` / `Shift` | Cambiar al compañero más cerca de la pelota |
 | `T` | Orden al equipo: Neutro → Ataque → Defensa |
+| `R` | Cambios (suplentes) |
 | `Esc` / `P` | Pausa |
 | `M` | Silenciar |
 
 Con mando: A pase/placaje · B tiro · Y o RB habilidad · X presionar · LB cambiar ·
-LT orden al equipo · Start pausa.
+LT orden al equipo · Select cambios · Start pausa.
 
 - **Saque:** el que saca empieza con la pelota y nadie se mueve hasta que la
   juega. Sólo se puede pasar.
@@ -64,11 +65,20 @@ Cada partido sortea de qué lado juega tu equipo.
   que entran al área. Nunca sale del área.
 - **Dinámico** (por defecto en 2 y 3 por equipo): ataja el que esté más
   cerca de su arco en cada momento; cuando sale, lo reemplaza el siguiente.
+  A veces se suma al ataque y otro queda en el arco.
 
 El arquero lleva guantes verdes. En su área llega más lejos, atrapa los tiros
 que no sean demasiado fuertes para sus reflejos (los demás los desvía), se
 estira hacia donde va la pelota y, con ella en las manos, nadie se la puede
-quitar: saca con un pase o un despeje. `Q` nunca te pasa al arquero fijo.
+quitar (ni con placajes ni con habilidades) y nunca puede meterse un autogol:
+saca con un pase o un despeje. `Q` nunca te pasa al arquero fijo.
+
+### La CPU
+
+El entrenador rival cambia de táctica según el partido (se ve en el
+marcador): si va perdiendo se va al ataque, si gana sobre el final se cierra
+atrás, y si no, varía para no ser previsible. Sus jugadores rotan de puesto:
+si un defensa sube con la pelota, el compañero que quedó atrás baja a cubrir.
 
 ### Puestos y pizarra
 
@@ -119,7 +129,7 @@ flojo y recarga la habilidad más despacio; agotado (0) no puede usarla.
 
 En el partido rápido se pueden elegir hasta 2 suplentes; en el modo historia,
 todo el club que no es titular está en el banco. Hay 3 cambios por partido,
-desde la pausa (**Cambios**). La CPU también cambia a sus cansados.
+con `R` (o desde la pausa). La CPU también cambia a sus cansados.
 
 ## Modo historia
 
@@ -150,7 +160,8 @@ cualquier Pokémon importado se puede usar.
 
 ## Plantel
 
-Cada Pokémon tiene dos habilidades; se elige cuál llevar en la selección.
+Por ahora todos los Pokémon son de la **primera generación**. Cada uno tiene
+dos habilidades; se elige cuál llevar en la selección.
 
 | Pokémon | Habilidad 1 | Habilidad 2 | Se consigue |
 |---|---|---|---|
@@ -166,8 +177,8 @@ Cada Pokémon tiene dos habilidades; se elige cuál llevar en la selección.
 | Machamp | **Sísmico**: agarra y lanza al rival | **Puño Dinámico**: tumba y despeja | 350 |
 | Lapras | **Rayo Hielo**: suelo congelado | **Surf**: ola que arrastra todo | 400 |
 | Onix | **Bloqueo** | **Excavar**: bajo tierra y sale tumbando | 400 |
-| Lucario | **Esfera Aural**: persigue al rival y lo aturde | **Velocidad Extrema** | 500 |
-| Greninja | **Shuriken de Agua**: tres estrellas en abanico | **Doble Equipo**: reaparece más adelante | 600 |
+| Alakazam | **Psicorrayo**: esfera que persigue al rival y lo aturde | **Teletransporte** | 500 |
+| Jolteon | **Pin Misil**: cinco agujas en abanico | **Ataque Rápido** | 600 |
 | Magikarp | **Salpicadura**: no pasa nada… casi nunca | **Salto**: enorme e inútil | reto: juega 5 partidos |
 | Mewtwo | **Psíquico**: trae la pelota desde donde sea | **Onda Mental**: aparta a todos | reto: gana en Difícil |
 

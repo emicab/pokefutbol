@@ -263,6 +263,12 @@
   }
   function resume() { screen = 'match'; PF.UI.clear(); last = performance.now(); }
 
+  function openSubs() {
+    if (!match.bench[0].length) { PF.UI.toast('No tienes suplentes en este partido.'); return; }
+    screen = 'pause';
+    PF.UI.subs(match, resume);
+  }
+
   // ---------------------------------------------------------------- bucle
   function humanIntent() {
     const I = PF.Input;
@@ -286,6 +292,9 @@
     PF.Input.pollPad();
 
     if (PF.Input.was('pause') && (screen === 'match' || screen === 'pause')) togglePause();
+    // R: cambios directos (pausa el partido y abre la pantalla; al cerrarla se sigue jugando)
+    if (PF.Input.was('subs') && screen === 'match' && match.state !== 'end') openSubs();
+    else if (PF.Input.was('subs') && screen === 'pause' && document.querySelector('.subs')) resume();
     if (PF.Input.was('mute')) PF.Audio.toggleMute();
 
     let steps = 0;

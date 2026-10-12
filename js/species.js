@@ -39,10 +39,6 @@
     39: { to: 40, level: 30 },
     66: { to: 67, level: 28 }, 67: { to: 68, level: 40 },
     92: { to: 93, level: 25 }, 93: { to: 94, level: 38 },
-    95: { to: 208, level: 35 },
-    447: { to: 448, level: 30 },
-    656: { to: 657, level: 16 }, 657: { to: 658, level: 36 },
-    446: { to: 143, level: 25 },
     16: { to: 17, level: 18 }, 17: { to: 18, level: 36 },
     19: { to: 20, level: 20 },
     74: { to: 75, level: 25 }, 75: { to: 76, level: 40 },
@@ -167,7 +163,7 @@
     vine: 'grass', sleep: 'grass', phase: 'ghost', teleport: 'ghost', slam: 'normal', wall: 'rock',
     confusion: 'psychic', sing: 'fairy', roll: 'fairy', throw: 'fighting', punch: 'fighting', ice: 'ice',
     surf: 'water', dig: 'ground', aura: 'fighting', shuriken: 'water', splash: 'water', jump: 'normal',
-    psychic: 'psychic', psywave: 'psychic', adapt: null,
+    psychic: 'psychic', psywave: 'psychic', adapt: null, psybeam: 'psychic', pinmissile: 'bug',
   };
 
   /**
@@ -219,7 +215,7 @@
   // ------------------------------------------------------------------ modo historia
   PF.CAREER_STARTERS = [4, 7, 1, 25];
   /** Pokémon que pueden aparecer en el club al empezar o unirse tras un partido. */
-  PF.CAREER_COMMONS = [16, 19, 74, 66, 92, 54, 39, 129, 63, 58, 447, 656, 446, 133, 100, 43, 77, 120];
+  PF.CAREER_COMMONS = [16, 19, 74, 66, 92, 54, 39, 129, 63, 58, 133, 100, 43, 77, 120, 111];
 
   /**
    * Gimnasios: cada uno es una copa de 3 partidos (2 entrenadores + líder).

@@ -15,12 +15,13 @@ PF.Input = (() => {
     swap: ['KeyQ', 'ShiftLeft', 'ShiftRight'],
     press: ['Space', 'KeyI'],
     order: ['KeyT'],
+    subs: ['KeyR'],
     pause: ['Escape', 'KeyP'],
     mute: ['KeyM'],
   };
   // Mando estándar: A pase/placaje · B tiro · Y o RB habilidad · X presionar · LB cambiar
-  //                 LT orden al compañero · Start pausa
-  const PAD = { pass: [0], shoot: [1], ability: [3, 5], press: [2], swap: [4], order: [6], pause: [9] };
+  //                 LT orden al compañero · Select cambios · Start pausa
+  const PAD = { pass: [0], shoot: [1], ability: [3, 5], press: [2], swap: [4], order: [6], subs: [8], pause: [9] };
 
   const GAME_KEYS = new Set(Object.values(MAP).flat());
   const down = new Set(), pressed = new Set();

@@ -6,6 +6,8 @@ PF.Abilities = (() => {
   const U = PF.U, F = PF.FIELD;
   const foes = (m, p) => m.players.filter((q) => q.team !== p.team);
   const near = (m, p, R) => foes(m, p).filter((q) => U.dist(p.x, p.y, q.x, q.y) < R);
+  /** Al arquero con la pelota en las manos nadie se la saca. */
+  const safe = (b) => !!(b.holder && b.holder.gkHold);
 
   /** Abanico de agua/ola: empuja rivales y pelota dentro del cono. */
   function cone(m, p, R, half, force, stun, ballSpeed) {
@@ -20,7 +22,7 @@ PF.Abilities = (() => {
       M.knock(m, q, (q.x - p.x) / d, (q.y - p.y) / d, force, stun);
     }
     const b = m.ball;
-    if (ballSpeed && (!b.holder || b.holder.team !== p.team) && inCone(b.x, b.y)) {
+    if (ballSpeed && !safe(b) && (!b.holder || b.holder.team !== p.team) && inCone(b.x, b.y)) {
       if (b.holder) { b.holder.pickupCd = 0.6; b.holder = null; }
       b.vx = Math.cos(p.facing) * ballSpeed; b.vy = Math.sin(p.facing) * ballSpeed; b.last = p; b.vine = null;
     }
@@ -67,7 +69,7 @@ PF.Abilities = (() => {
         M.knock(m, q, (q.x - p.x) / d, (q.y - p.y) / d, 600, 0.6);
       }
       const b = m.ball;
-      if ((!b.holder || b.holder.team !== p.team) && inCone(b.x, b.y)) {
+      if (!safe(b) && (!b.holder || b.holder.team !== p.team) && inCone(b.x, b.y)) {
         if (b.holder) { b.holder.pickupCd = 0.6; b.holder = null; }
         b.vx = fx * 720; b.vy = fy * 720; b.last = p; b.vine = null;
       }
@@ -84,7 +86,7 @@ PF.Abilities = (() => {
     vine(m, p) {
       const b = m.ball;
       if (b.holder === p) return false;
-      if (U.dist(p.x, p.y, b.x, b.y) > 440 || (b.holder && b.holder.phase > 0)) {
+      if (U.dist(p.x, p.y, b.x, b.y) > 440 || (b.holder && b.holder.phase > 0) || safe(b)) {
         PF.FX.text(m.fx, p.x, p.y - 56, 'no llega...', '#cfcfcf', 0.6, 0.7);
         PF.Audio.sfx.fail();
         return false;
@@ -288,7 +290,7 @@ PF.Abilities = (() => {
       PF.Audio.sfx.slam();
     },
 
-    /** Lucario: esfera que persigue al rival más cercano. */
+    /** Esfera aural que persigue al rival más cercano (por tipo: Lucha/Acero). */
     aura(m, p) {
       PF.Match.addProjectile(m, {
         x: p.x + Math.cos(p.facing) * 24, y: p.y - 18 + Math.sin(p.facing) * 24,
@@ -300,7 +302,34 @@ PF.Abilities = (() => {
       PF.Audio.sfx.zap();
     },
 
-    /** Greninja: tres estrellas de agua en abanico. */
+    /** Alakazam: esfera psíquica que persigue al rival más cercano. */
+    psybeam(m, p) {
+      PF.Match.addProjectile(m, {
+        x: p.x + Math.cos(p.facing) * 24, y: p.y - 18 + Math.sin(p.facing) * 24,
+        vx: Math.cos(p.facing) * 560, vy: Math.sin(p.facing) * 560,
+        team: p.team, kind: 'aura', life: 2.6, r: 14, homing: true, stun: 1.2,
+        color: '#e6a8ff', hitText: '¡PSICO!',
+      });
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡PSICORRAYO!', '#e6a8ff', 0.9);
+      PF.Audio.sfx.phase();
+    },
+
+    /** Jolteon: cinco agujas en abanico. */
+    pinmissile(m, p) {
+      for (const off of [-0.3, -0.15, 0, 0.15, 0.3]) {
+        const a = p.facing + off;
+        PF.Match.addProjectile(m, {
+          x: p.x + Math.cos(a) * 22, y: p.y - 16 + Math.sin(a) * 22,
+          vx: Math.cos(a) * 860, vy: Math.sin(a) * 860,
+          team: p.team, kind: 'shuriken', life: 0.75, r: 9, stun: 0.6,
+          color: '#ffe066', hitText: '¡PIN!',
+        });
+      }
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡PIN MISIL!', '#ffe066', 0.9);
+      PF.Audio.sfx.zap();
+    },
+
+    /** Tres estrellas de agua en abanico (por tipo: Agua/Siniestro/Bicho). */
     shuriken(m, p) {
       for (const off of [-0.22, 0, 0.22]) {
         const a = p.facing + off;
@@ -344,7 +373,7 @@ PF.Abilities = (() => {
     /** Mewtwo: trae la pelota con la mente, desde donde sea. */
     psychic(m, p) {
       const b = m.ball;
-      if (b.holder === p || (b.holder && b.holder.phase > 0)) return false;
+      if (b.holder === p || (b.holder && b.holder.phase > 0) || safe(b)) return false;
       if (b.holder) { b.holder.pickupCd = 0.6; b.holder.charge = -1; b.holder = null; }
       b.vine = p; b.vineT = 2.2; b.vineColor = '#d6a6ff'; b.fire = 0; b.last = p;
       PF.FX.text(m.fx, p.x, p.y - 64, '¡PSÍQUICO!', '#d6a6ff', 1.1);

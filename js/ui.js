@@ -51,6 +51,7 @@ PF.UI = (() => {
           <div><kbd>Q</kbd> cambiar de Pokémon</div>
           <div>al tirar, <kbd>↑</kbd>/<kbd>↓</kbd> eligen palo</div>
           <div><kbd>T</kbd> orden al equipo: neutro, ataque o defensa</div>
+          <div><kbd>R</kbd> cambios (suplentes)</div>
           <div><kbd>Esc</kbd> pausa · <kbd>M</kbd> silencio</div>
         </div>
         <div class="foot">Sprites de SpriteCollab (CC BY-NC 4.0) · proyecto de fans sin ánimo de lucro · ver CREDITS.md</div>
@@ -369,7 +370,7 @@ PF.UI = (() => {
           ${subs ? `<button class="btn" data-act="subs" ${subs.left > 0 && subs.bench > 0 ? '' : 'disabled'}>Cambios (${subs.left} restantes)</button>` : ''}
           <button class="btn" data-act="restart">Reiniciar partido</button>
           <button class="btn" data-act="quit">${quitLabel}</button>
-          <div class="hint">J pase/placaje · K tiro · L habilidad · Espacio presionar · Q cambiar · T orden</div>
+          <div class="hint">J pase/placaje · K tiro · L habilidad · Espacio presionar · Q cambiar · T orden · R cambios</div>
         </div>
       </div>`);
     s.querySelector('[data-act=resume]').onclick = onResume;
@@ -392,6 +393,7 @@ PF.UI = (() => {
       <div class="screen">
         <div class="box menu subs">
           <h2>Cambios <small class="left"></small></h2>
+          <div class="hint">Elige quién sale y quién entra. <kbd>R</kbd> o <kbd>Esc</kbd> para volver al partido.</div>
           <div class="subcols"><div class="field"><h3>En cancha</h3></div><div class="benchc"><h3>Banco</h3></div></div>
           <div class="row">
             <button class="btn" data-act="back">Volver</button>

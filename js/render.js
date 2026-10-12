@@ -525,6 +525,14 @@ PF.Render = (() => {
       ctx.textAlign = right ? 'right' : 'left';
       ctx.fillStyle = '#a9b6d3';
       ctx.fillText(names[team], cx + s * 172, 30);
+      // táctica del entrenador de la CPU
+      const tac = m.humanTeam >= 0 && team !== m.humanTeam && m.tactic[team];
+      if (tac && tac !== 'neutral') {
+        const o = PF.Match.ORDERS.find((x) => x.id === tac);
+        ctx.font = '12px Pixelify, monospace';
+        ctx.fillStyle = o.color;
+        ctx.fillText(o.short, cx + s * 130, 30);
+      }
       // mini retratos (si caben)
       const gap = n <= 2 ? 40 : n <= 3 ? 28 : 18;
       PF.Match.teamOf(m, team).forEach((p, i) => {

@@ -38,8 +38,19 @@ PF.Save = (() => {
     }
   }
 
-  /** Guardados viejos: el arquero "araña" pasó a llamarse "dinámico". */
+  /** Pokémon que ya no están (sólo Gen 1 por ahora) → su reemplazo. */
+  const RENAMED = { lucario: 'alakazam', greninja: 'jolteon' };
+  const DEX_GEN1 = { 446: 143, 447: 66, 448: 68, 656: 7, 657: 8, 658: 9, 208: 95 };
+
+  /** Guardados viejos: arquero "araña" → "dinámico"; Pokémon fuera de la Gen 1 → reemplazos. */
   function migrate(s) {
+    const ren = (id) => RENAMED[id] || id;
+    if (Array.isArray(s.unlocked)) s.unlocked = [...new Set(s.unlocked.map(ren))];
+    if (s.setup) {
+      if (Array.isArray(s.setup.picks)) s.setup.picks = [...new Set(s.setup.picks.map(ren))];
+      if (s.setup.abil) for (const [a, b] of Object.entries(RENAMED)) if (a in s.setup.abil) { s.setup.abil[b] = 0; delete s.setup.abil[a]; }
+    }
+    if (s.career && Array.isArray(s.career.club)) for (const mb of s.career.club) if (DEX_GEN1[mb.dex]) mb.dex = DEX_GEN1[mb.dex];
     const fix = (o) => { if (o && o.keeper === 'spider') o.keeper = 'dynamic'; };
     fix(s.setup);
     fix(s.career);
