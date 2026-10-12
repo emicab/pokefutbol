@@ -168,7 +168,7 @@ PF.Match = (() => {
       gkHold: false, gkT: 0, assistFrom: null, assistT: 0,
       x: 0, y: 0, z: 0, vx: 0, vy: 0, facing: 0, r: def.radius,
       stun: 0, asleep: false, cd: def.ability.cd * 0.75, tackleCd: 0, dash: 0, dashDx: 0, dashDy: 0, dashSpeed: DASH_SPEED,
-      pickupCd: 0, holdT: 0, stealT: 0, charge: -1, aimMy: 0,
+      pickupCd: 0, holdT: 0, stealT: 0, charge: -1, passCharge: -1, aimMy: 0,
       fireShot: 0, phase: 0, turbo: 0, giant: 0, slow: 0, wall: 0, embers: 0, emberT: 0, slip: 0, burnCd: 0,
       dig: 0, ram: 0, spinT: 0, magnet: 0, diving: 0, fixedKeeper: false,
       slam: null, anim: 'Idle', animT: 0, animLock: 0, human: false,
@@ -213,7 +213,9 @@ PF.Match = (() => {
       } else {
         const free = Math.min(250, nearestFoeDist(m, q, q.x, q.y));
         const ahead = (q.x - p.x) * dirOf(p.side);
-        const score = free + ahead * 0.4 - Math.max(0, d - 450) * 0.6;
+        // al arquero sólo si no hay otra (pase atrás de seguridad)
+        const backPass = m.keeper[q.team] === q ? 220 : 0;
+        const score = free + ahead * 0.4 - Math.max(0, d - 450) * 0.6 - backPass;
         if (score > bestScore) { best = q; bestScore = score; }
       }
     }
@@ -645,7 +647,7 @@ PF.Match = (() => {
       }
       applyIntent(m, p, it, dt, active);
       if (kicking) { p.vx = 0; p.vy = 0; }
-      if (wasHuman && input) input = Object.assign({}, input, { pass: false, ability: false });
+      if (wasHuman && input) input = Object.assign({}, input, { pass: false, passHold: false, ability: false });
     }
     movePlayers(m, dt);
     collidePlayers(m);
@@ -776,12 +778,22 @@ PF.Match = (() => {
       } else useAbility(m, p);
     }
     if (b.holder === p) {
-      if (it.clear !== undefined) clearance(m, p, it.clear);
-      else if (it.pass) pass(m, p);
-      else if (it.shootHold) p.charge = Math.min(CHARGE_MAX, Math.max(0, p.charge) + dt);
+      if (it.clear !== undefined) { clearance(m, p, it.clear); return; }
+      // pase: el humano lo carga manteniendo la tecla (toque = pase justo; más = más fuerte)
+      if (p.human && it.passHold !== undefined) {
+        if (it.passHold) { p.passCharge = Math.min(PASS_HOLD_MAX, Math.max(0, p.passCharge) + dt); p.charge = -1; return; }
+        if (p.passCharge >= 0) {
+          const k = U.clamp((p.passCharge - PASS_HOLD_MIN) / (PASS_HOLD_MAX - PASS_HOLD_MIN), 0, 1);
+          p.passCharge = -1;
+          pass(m, p, k);
+          return;
+        }
+      } else if (it.pass) { pass(m, p, 0); return; }
+      if (it.shootHold) p.charge = Math.min(CHARGE_MAX, Math.max(0, p.charge) + dt);
       else if (p.charge >= 0) shoot(m, p, p.charge / CHARGE_MAX);
     } else {
       p.charge = -1;
+      p.passCharge = -1;
       // si me están pasando la pelota, J no es placaje
       if (it.pass && p.tackleCd <= 0 && p.dash <= 0 && b.passTo !== p) tackle(m, p);
     }
@@ -875,6 +887,7 @@ PF.Match = (() => {
    * velocidad y el de rodadura c·d/v (v ≈ velocidad media).
    */
   const PASS_ARRIVE = 360;
+  const PASS_HOLD_MIN = 0.12, PASS_HOLD_MAX = 0.6;   // segundos de tecla: toque … pase a máxima fuerza
   function passSpeed(m, d, arrive = PASS_ARRIVE, max = 1900) {
     const fr = m.stadium.friction;
     const k = 0.95 * fr, c = 45 * fr;
@@ -882,13 +895,18 @@ PF.Match = (() => {
     return U.clamp(v0 + (c * d) / ((v0 + arrive) / 2), 300, max);
   }
 
-  function pass(m, p) {
+  /**
+   * Pase. k (0..1) = cuánto se cargó: 0 es el pase justo (llega al compañero
+   * a velocidad cómoda); 1 sale 1,6 veces más fuerte (tenso, para pasar entre
+   * rivales) y, al hueco, llega mucho más lejos.
+   */
+  function pass(m, p, k = 0) {
     const b = m.ball;
     const mate = passTarget(m, p);
     if (mate) {
       const tx = mate.x + mate.vx * 0.35, ty = mate.y + mate.vy * 0.35;
       const dx = tx - b.x, dy = ty - b.y, d = Math.hypot(dx, dy) || 1;
-      const sp = passSpeed(m, d);
+      const sp = Math.min(2200, passSpeed(m, d) * (1 + 0.6 * k));
       p.facing = Math.atan2(dy, dx);
       release(m, p, (dx / d) * sp, (dy / d) * sp);
       // el control pasa al que recibe, que va solo a buscarla
@@ -897,7 +915,7 @@ PF.Match = (() => {
     } else {
       // pase al hueco: hacia donde miras; sigues controlando al mismo.
       // En el saque sale más flojo, para que no llegue al arco rival.
-      const sp = m.state === 'kickoff' ? passSpeed(m, 220, 120) : passSpeed(m, 320, 260);
+      const sp = m.state === 'kickoff' ? passSpeed(m, 220, 120) : passSpeed(m, 320 + 420 * k, 260);
       release(m, p, Math.cos(p.facing) * sp, Math.sin(p.facing) * sp);
     }
     setAnim(p, 'Shoot', true);
@@ -1448,7 +1466,7 @@ PF.Match = (() => {
   const orderOf = (m, p) => (p.team === m.humanTeam ? (p.human ? 'neutral' : ORDERS[m.order].id) : m.tactic[p.team]);
 
   return {
-    create, step, CHARGE_MAX, ORDERS, orderOf, PRESETS, KEEPER_DEPTH, autoFormation,
+    create, step, CHARGE_MAX, PASS_HOLD_MIN, PASS_HOLD_MAX, ORDERS, orderOf, PRESETS, KEEPER_DEPTH, autoFormation,
     substitute, fatigue, energyPct, TIRED, SUBS_PER_MATCH,
     inBox, isActiveKeeper, keeperOf, ownGoalX, dirOf,
     // usados por abilities.js, ai.js y render.js

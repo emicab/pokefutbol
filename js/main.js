@@ -27,6 +27,7 @@
   function applySettings() {
     const st = PF.Save.data.settings;
     PF.Audio.setVolumes(st.music, st.sfx);
+    PF.Input.reload();   // por si se borró el progreso (vuelven las teclas de fábrica)
   }
 
   // ---------------------------------------------------------------- partidos
@@ -276,6 +277,7 @@
     return {
       mx, my,
       pass: I.was('pass'),
+      passHold: I.is('pass') || I.was('pass'),
       shootHold: I.is('shoot') || I.was('shoot'),
       ability: I.was('ability'),
       press: I.is('press'),

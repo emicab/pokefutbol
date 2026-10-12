@@ -169,7 +169,12 @@ PF.AI = (() => {
       m.markT[team] = m.clock;
       const own = M.ownGoalX(p.side), dir = M.dirOf(p.side);
       // con el arquero rival sacando de las manos no se marca: se vuelve a la formación
-      const defending = (b.holder && b.holder.team !== team && !b.holder.gkHold) || (!b.holder && (b.x - own) * dir < (F.x1 - F.x0) * 0.55);
+      // en 5 vs 5 la marca es más floja: sólo en el último tercio, y con dos marcadores como mucho
+      const big = M.teamOf(m, team).length >= 5;
+      const zone = (big ? 0.36 : 0.55) * (F.x1 - F.x0);
+      const ballDepth = (b.x - own) * dir;
+      const foeHas = b.holder && b.holder.team !== team && !b.holder.gkHold;
+      const defending = big ? (foeHas || !b.holder) && ballDepth < zone : foeHas || (!b.holder && ballDepth < zone);
       const map = new Map();
       if (defending) {
         const keeper = M.keeperOf(m, team);
@@ -177,9 +182,11 @@ PF.AI = (() => {
         const threats = m.players.filter((q) => q.team !== team && q !== b.holder && !M.isActiveKeeper(m, q))
           .sort((a, c) => U.dist(a.x, a.y, own, F.cy) - U.dist(c.x, c.y, own, F.cy));
         const free = markers.slice();
+        let assigned = 0;
         for (const t of threats) {
-          if (!free.length) break;
-          if ((t.x - own) * dir > (F.x1 - F.x0) * 0.6) continue;   // muy arriba: no hace falta
+          if (!free.length || (big && assigned >= 2)) break;
+          if ((t.x - own) * dir > (F.x1 - F.x0) * (big ? 0.42 : 0.6)) continue;   // muy arriba: no hace falta
+          assigned++;
           free.sort((a, c) => U.dist(a.x, a.y, t.x, t.y) - U.dist(c.x, c.y, t.x, t.y));
           map.set(free.shift(), t);
         }
@@ -316,6 +323,15 @@ PF.AI = (() => {
     ai.shotT = 0;
 
     // ---------------------------------------------- arquero
+    // me la pasan: ir a buscarla (antes que nada; también el arquero, que si no
+    // se iba a su línea y dejaba la pelota suelta)
+    if (b.passTo === p && !holder) {
+      ai.chasing = true;
+      const t = Math.min(0.6, c.dMe / p.def.speed);
+      moveTo(it, p, b.x + b.vx * t * 0.7, b.y + b.vy * t * 0.7);
+      return it;
+    }
+
     const isKeeper = M.keeperOf(m, p.team) === p;
     if (isKeeper) {
       const ownHalf = (b.x - ownX) * dirX < (F.x1 - F.x0) * 0.5;
@@ -342,13 +358,6 @@ PF.AI = (() => {
       return it;
     }
 
-    // ---------------------------------------------- me la pasan: ir a buscarla
-    if (b.passTo === p && !holder) {
-      ai.chasing = true;
-      const t = Math.min(0.6, c.dMe / p.def.speed);
-      moveTo(it, p, b.x + b.vx * t * 0.7, b.y + b.vy * t * 0.7);
-      return it;
-    }
 
     const shift = order === 'atk' ? 0.2 : order === 'def' ? -0.2 : 0;
 
@@ -383,7 +392,8 @@ PF.AI = (() => {
       if (mark) {
         const [gx2, gy2] = [ownX, F.cy];
         const dx = gx2 - mark.x, dy = gy2 - mark.y, d = Math.hypot(dx, dy) || 1;
-        const tx = mark.x + (dx / d) * 45, ty = mark.y + (dy / d) * 45;
+        const gap = M.teamOf(m, p.team).length >= 5 ? 75 : 45;   // en 5 vs 5, marca más separada
+        const tx = mark.x + (dx / d) * gap, ty = mark.y + (dy / d) * gap;
         moveTo(it, p, U.lerp(tx, b.x, 0.2), U.lerp(ty, b.y, 0.2));   // un poco hacia la pelota: cortar el pase
         return it;
       }

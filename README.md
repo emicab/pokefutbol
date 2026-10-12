@@ -19,7 +19,7 @@ y abre <http://localhost:8123>.
 | Tecla | Acción |
 |---|---|
 | `WASD` / flechas | Moverse (en el saque: apuntar) |
-| `J` / `Z` | Pase · sin pelota: placaje |
+| `J` / `Z` | Pase (toque = pase justo; mantén = más fuerte) · sin pelota: placaje |
 | `K` / `X` | Tiro: mantén para cargar, suelta para patear |
 | `L` / `C` | Habilidad del Pokémon |
 | `Espacio` / `I` | Presionar: correr solo hacia la pelota |
@@ -29,6 +29,9 @@ y abre <http://localhost:8123>.
 | `Esc` / `P` | Pausa |
 | `M` | Silenciar |
 
+Las teclas se pueden cambiar en **Opciones → Controles** (clic en la acción y
+pulsar la tecla nueva; "Restaurar teclas" vuelve a las de fábrica).
+
 Con mando: A pase/placaje · B tiro · Y o RB habilidad · X presionar · LB cambiar ·
 LT orden al equipo · Select cambios · Start pausa.
 
@@ -36,7 +39,10 @@ LT orden al equipo · Select cambios · Start pausa.
   juega. Sólo se puede pasar.
 - **Pases:** si miras más o menos hacia un compañero, la línea punteada indica
   a quién va; el control pasa al que recibe y corre solo a buscarla. Si miras
-  a otro lado, es un pase al hueco.
+  a otro lado, es un pase al hueco. Un toque da el pase justo (la fuerza se
+  calcula para que llegue según la distancia y la cancha); manteniendo la
+  tecla aparece una barra azul y el pase sale más fuerte (hasta ×1,6), o más
+  largo si es al hueco.
 - **Tiro:** al cargar aparece la barra de potencia y, si apuntas al arco, una
   mira en la boca. `↑`/`↓` al soltar eligen palo.
 - **Habilidad:** el anillo de tus Pokémon se va llenando mientras recarga y
@@ -83,7 +89,9 @@ marcador): si va perdiendo se va al ataque, si gana sobre el final se cierra
 atrás, y si no, varía para no ser previsible. Sus jugadores rotan de puesto:
 si un defensa sube con la pelota, el compañero que quedó atrás baja a cubrir.
 Cuando defienden en su mitad, los que no van a la pelota marcan a un rival
-cada uno (al más peligroso primero), parados entre él y el arco.
+cada uno (al más peligroso primero), parados entre él y el arco. En 5 vs 5 la
+marca es más floja: sólo en el último tercio, dos marcadores como mucho y más
+separados.
 
 ### Puestos y pizarra
 

@@ -15,6 +15,9 @@ PF.UI = (() => {
     return t.content.firstElementChild;
   }
 
+  const K = PF.Input;
+  /** Una línea con las teclas actuales, para ayudas. */
+  const hintLine = () => `${K.label('pass')} pase/placaje · ${K.label('shoot')} tiro · ${K.label('ability')} habilidad · ${K.label('press')} presionar · ${K.label('swap')} cambiar · ${K.label('order')} orden · ${K.label('subs')} cambios`;
   const BENCH_MAX = 2;   // suplentes en partido rápido
   const KEEPER_HELP = {
     fixed: 'Arquero fijo: uno es el arquero; sale a cerrar cuando hace falta y un compañero lo releva.',
@@ -43,16 +46,16 @@ PF.UI = (() => {
           <button class="btn" data-act="opts">Opciones</button>
         </div>
         <div class="box controls">
-          <div><kbd>WASD</kbd> mover</div>
-          <div><kbd>J</kbd> pase · sin pelota: placaje</div>
-          <div><kbd>K</kbd> tiro (mantén para cargar)</div>
-          <div><kbd>L</kbd> habilidad del Pokémon</div>
-          <div><kbd>Espacio</kbd> presionar (ir a la pelota)</div>
-          <div><kbd>Q</kbd> cambiar de Pokémon</div>
-          <div>al tirar, <kbd>↑</kbd>/<kbd>↓</kbd> eligen palo</div>
-          <div><kbd>T</kbd> orden al equipo: neutro, ataque o defensa</div>
-          <div><kbd>R</kbd> cambios (suplentes)</div>
-          <div><kbd>Esc</kbd> pausa · <kbd>M</kbd> silencio</div>
+          <div><kbd>${K.moveLabel()}</kbd> mover</div>
+          <div><kbd>${K.label('pass')}</kbd> pase (mantén: más fuerte) · sin pelota: placaje</div>
+          <div><kbd>${K.label('shoot')}</kbd> tiro (mantén para cargar)</div>
+          <div><kbd>${K.label('ability')}</kbd> habilidad del Pokémon</div>
+          <div><kbd>${K.label('press')}</kbd> presionar (ir a la pelota)</div>
+          <div><kbd>${K.label('swap')}</kbd> cambiar de Pokémon</div>
+          <div>al tirar, <kbd>${K.label('up')}</kbd>/<kbd>${K.label('down')}</kbd> eligen palo</div>
+          <div><kbd>${K.label('order')}</kbd> orden al equipo: neutro, ataque o defensa</div>
+          <div><kbd>${K.label('subs')}</kbd> cambios (suplentes)</div>
+          <div><kbd>${K.label('pause')}</kbd> pausa · <kbd>${K.label('mute')}</kbd> silencio</div>
         </div>
         <div class="foot">Sprites de SpriteCollab (CC BY-NC 4.0) · proyecto de fans sin ánimo de lucro · ver CREDITS.md</div>
       </div>`);
@@ -75,6 +78,11 @@ PF.UI = (() => {
           <label>Efectos y público <input type="range" min="0" max="1" step="0.05" data-k="sfx" value="${st.sfx}"></label>
           <label class="chk"><input type="checkbox" data-k="aids" ${st.aids ? 'checked' : ''}> Ayudas de apuntado (flecha, mira, línea de pase)</label>
           <label class="chk"><input type="checkbox" data-k="replays" ${st.replays ? 'checked' : ''}> Repetición de los goles</label>
+          <h3>Controles <small>clic en una acción y pulsa la tecla nueva</small></h3>
+          <div class="keys"></div>
+          <div class="row">
+            <button class="btn small" data-act="keysreset">Restaurar teclas</button>
+          </div>
           <div class="row">
             <button class="btn" data-act="back">Volver</button>
             <button class="btn danger" data-act="reset">Borrar progreso</button>
@@ -88,7 +96,29 @@ PF.UI = (() => {
         onChange();
       };
     });
-    s.querySelector('[data-act=back]').onclick = onBack;
+    // controles: cada acción con sus teclas; clic → la próxima tecla pasa a ser la principal
+    function drawKeys() {
+      const box = s.querySelector('.keys');
+      box.innerHTML = '';
+      for (const [action, name] of K.ACTIONS) {
+        const row = el(`<button class="keyrow"><span>${name}</span><b>${K.keys(action).map(K.keyName).join(' · ')}</b></button>`);
+        row.onclick = () => {
+          s.querySelectorAll('.keyrow').forEach((r) => r.classList.remove('wait'));
+          row.classList.add('wait');
+          row.querySelector('b').textContent = 'pulsa una tecla… (Esc cancela)';
+          K.captureNext((code) => {
+            if (code !== 'Escape' || action === 'pause') K.bind(action, code);
+            PF.Audio.sfx.click();
+            drawKeys();
+          });
+        };
+        box.appendChild(row);
+      }
+    }
+    drawKeys();
+    s.querySelector('[data-act=keysreset]').onclick = () => { K.cancelCapture(); K.reset(); drawKeys(); toast('Teclas de fábrica restauradas.'); };
+
+    s.querySelector('[data-act=back]').onclick = () => { K.cancelCapture(); onBack(); };
     const reset = s.querySelector('[data-act=reset]');
     reset.onclick = () => {
       if (reset.dataset.sure) { PF.Save.reset(); onChange(); options(onBack, onChange); toast('Progreso borrado.'); }
@@ -370,7 +400,7 @@ PF.UI = (() => {
           ${subs ? `<button class="btn" data-act="subs" ${subs.left > 0 && subs.bench > 0 ? '' : 'disabled'}>Cambios (${subs.left} restantes)</button>` : ''}
           <button class="btn" data-act="restart">Reiniciar partido</button>
           <button class="btn" data-act="quit">${quitLabel}</button>
-          <div class="hint">J pase/placaje · K tiro · L habilidad · Espacio presionar · Q cambiar · T orden · R cambios</div>
+          <div class="hint">${hintLine()}</div>
         </div>
       </div>`);
     s.querySelector('[data-act=resume]').onclick = onResume;
@@ -393,7 +423,7 @@ PF.UI = (() => {
       <div class="screen">
         <div class="box menu subs">
           <h2>Cambios <small class="left"></small></h2>
-          <div class="hint">Elige quién sale y quién entra. <kbd>R</kbd> o <kbd>Esc</kbd> para volver al partido.</div>
+          <div class="hint">Elige quién sale y quién entra. <kbd>${K.label('subs')}</kbd> o <kbd>${K.label('pause')}</kbd> para volver al partido.</div>
           <div class="subcols"><div class="field"><h3>En cancha</h3></div><div class="benchc"><h3>Banco</h3></div></div>
           <div class="row">
             <button class="btn" data-act="back">Volver</button>

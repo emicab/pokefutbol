@@ -260,6 +260,18 @@ PF.Render = (() => {
     }
   }
 
+  /** Barra azul del pase cargado (sólo aparece si se mantiene la tecla). */
+  function drawPassBar(ctx, p, head) {
+    const M = PF.Match;
+    const k = Math.min(1, (p.passCharge - M.PASS_HOLD_MIN) / (M.PASS_HOLD_MAX - M.PASS_HOLD_MIN));
+    const w = 50, h = 8, x = p.x - w / 2, y = head - 34;
+    ctx.fillStyle = '#141018'; ctx.fillRect(x - 3, y - 3, w + 6, h + 6);
+    ctx.fillStyle = '#2a3550'; ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = k > 0.95 ? '#ffffff' : '#59d0ff'; ctx.fillRect(x, y, w * k, h);
+    ctx.font = '11px Pixelify, monospace'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#9fe3ff'; ctx.fillText('pase', p.x, y - 6);
+  }
+
   function drawPlayer(ctx, m, p) {
     const sc = (p.giant > 0 ? 1.5 : 1) * (p.def.scale || 1);
     const r = PF.Match.radius(p);
@@ -319,6 +331,7 @@ PF.Render = (() => {
       ctx.beginPath(); ctx.moveTo(p.x - 7, y - 10); ctx.lineTo(p.x + 7, y - 10); ctx.lineTo(p.x, y - 1); ctx.closePath(); ctx.fill();
     }
     if (p.charge >= 0 && p.team === m.humanTeam) drawPowerBar(ctx, p, head);
+    if (p.passCharge > PF.Match.PASS_HOLD_MIN && p.team === m.humanTeam) drawPassBar(ctx, p, head);
     if (!m.demo && m.state !== 'replay') drawStamina(ctx, m, p, r);
   }
 
@@ -562,7 +575,8 @@ PF.Render = (() => {
       ctx.textAlign = 'right';
       ctx.font = '14px Pixelify, monospace';
       ctx.fillStyle = '#a9b6d3';
-      ctx.fillText('J pase/placaje · K tiro · L habilidad · Espacio presionar · Q cambiar · Esc pausa', PF.W - 18, PF.H - 25);
+      const L = PF.Input.label;
+      ctx.fillText(`${L('pass')} pase/placaje · ${L('shoot')} tiro · ${L('ability')} habilidad · ${L('press')} presionar · ${L('swap')} cambiar · ${L('subs')} cambios · ${L('pause')} pausa`, PF.W - 18, PF.H - 25);
     }
     if (PF.WORLD.w > PF.W || PF.WORLD.h > PF.H) drawRadar(ctx, m);
   }
@@ -607,7 +621,7 @@ PF.Render = (() => {
     if (m.state === 'kickoff' && !m.demo) {
       const mine = m.kicker.human;
       outlined(ctx, mine ? '¡SAQUE!' : 'SAQUE RIVAL', cx, cy - 110, 40, mine ? '#ffd23f' : '#fff');
-      if (mine) outlined(ctx, 'apunta con WASD · J pase', cx, cy - 76, 20, '#fff', 6);
+      if (mine) outlined(ctx, `apunta con ${PF.Input.moveLabel()} · ${PF.Input.label('pass')} pase`, cx, cy - 76, 20, '#fff', 6);
     }
     if (m.state === 'replay') {
       // franjas de cine y cartel

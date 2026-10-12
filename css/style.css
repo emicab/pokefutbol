@@ -381,3 +381,18 @@ kbd {
 .subrow small { color: var(--muted); font-size: 12px; }
 .ebar { height: 8px; background: #2a3550; border-radius: 2px; overflow: hidden; }
 .ebar b { display: block; height: 100%; }
+
+/* controles configurables */
+.opts h3 { margin: 6px 0 0; font-weight: normal; font-size: 20px; }
+.opts h3 small { font-size: 13px; color: var(--muted); margin-left: 6px; }
+.keys { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; }
+.keyrow {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  font: inherit; font-size: 14px; color: var(--muted); text-align: left;
+  background: var(--ink); border: 2px solid var(--line); border-radius: 4px; padding: 3px 8px; cursor: pointer;
+}
+.keyrow b { font-weight: normal; color: var(--yellow); white-space: nowrap; }
+.keyrow:hover { border-color: var(--edge); }
+.keyrow.wait { border-color: var(--yellow); }
+.keyrow.wait b { color: #fff; }
+.opts { min-width: 720px; }
