@@ -242,7 +242,7 @@ PF.Match = (() => {
       stats: { goals: 0, assists: 0, tackles: 0, saves: 0 },
       stamina: PF.staminaMax(def), maxStamina: PF.staminaMax(def), agility: PF.agility(def),
       hp: PF.hpMax(def), maxHp: PF.hpMax(def), ko: 0, fainted: false, hurtT: -9, rank: PF.powerRank(def),
-      status: null, statusT: 0, statusLvl: 0, statusFrom: null, confT: 0, confAng: 0, chan: null,
+      status: null, statusT: 0, statusLvl: 0, statusFrom: null, confT: 0, confAng: 0, chan: null, jk: 0, jkOn: false, jkHit: false,
       types: PF.typesOf(def), tiredWarned: false,
       gkHold: false, gkT: 0, assistFrom: null, assistT: 0, ctrl: null,
       pressT: 0, pressCd: 0, pressCdMax: 1, pressLock: false, diveCd: 0, down: 0,
@@ -858,8 +858,16 @@ PF.Match = (() => {
     const b = m.ball, st = m.stadium;
     const digging = p.dig > 0;
     for (const k of ['stun', 'tackleCd', 'pickupCd', 'phase', 'turbo', 'giant', 'slow', 'fireShot', 'wall', 'embers',
-      'slip', 'burnCd', 'dig', 'ram', 'spinT', 'magnet', 'diving', 'pressCd', 'diveCd', 'down', 'ko']) {
+      'slip', 'burnCd', 'dig', 'ram', 'spinT', 'magnet', 'diving', 'pressCd', 'diveCd', 'down', 'ko', 'jk']) {
       p[k] = Math.max(0, p[k] - dt);
+    }
+    // Patada Salto que no tocó a nadie: se tropieza
+    if (p.jkOn && p.jk <= 0) {
+      p.jkOn = false;
+      if (!p.jkHit) {
+        spend(p, 10); p.down = Math.max(p.down, 0.5);
+        PF.FX.text(m.fx, p.x, p.y - 70, '¡Falló!', '#ff8a8a', 0.8, 1);
+      }
     }
     if (p.fainted && p.ko <= 0) revive(m, p);
     if (p.status) statusTick(m, p, dt);
@@ -868,8 +876,7 @@ PF.Match = (() => {
       if (p.stun > 0 || p.fainted || p.slam) p.chan = null;
       else {
         p.chan.t += dt;
-        const id = p.chan.id;
-        const done = withHit(m, p, PF.ABILITY_TYPE[id], () => PF.Abilities.tick(m, p, dt));
+        const done = withHit(m, p, p.chan.type, () => PF.Abilities.tick(m, p, dt));
         if (done || (p.chan && p.chan.t >= p.chan.dur)) p.chan = null;
       }
     }
@@ -1247,7 +1254,9 @@ PF.Match = (() => {
    */
   function tackleHit(m, a, v, nx, ny) {
     if (a.ram <= 0) { a.dash = 0; a.vx *= 0.2; a.vy *= 0.2; }
-    const r = U.clamp(mass(a) / mass(v), 0.25, 3);
+    const kick = a.jk > 0;   // Patada Salto: cuenta como mucho más pesado
+    if (kick) a.jkHit = true;
+    const r = U.clamp((mass(a) * (kick ? 1.6 : 1)) / mass(v), 0.25, 3);
     const keepBall = m.ball.holder === v && Math.random() > U.clamp(0.9 * r, 0.25, 1);
     const hit = withHit(m, a, bestType(a, v),
       () => knock(m, v, nx, ny, 340 * Math.min(2.2, r) + 140, 0.9 * U.clamp(Math.pow(r, 1.3), 0.2, 1.6)), { phys: true, ratio: r, keepBall });
@@ -1288,7 +1297,7 @@ PF.Match = (() => {
       PF.FX.text(m.fx, v.x, v.y - 98, '¡Derretido!', '#ff8a3d', 0.8, 1);
     }
     const base = STAMINA.hit + stun * STAMINA.hitStun;
-    v.hp = Math.max(0, v.hp - base * eff * tier * heft * HP.dmg);
+    v.hp = Math.max(0, v.hp - base * eff * tier * heft * HP.dmg * ((h && h.mult) || 1));
     v.hurtT = m.clock;
     spend(v, base * HP.hitStamina * eff);
     if (raw >= 2) PF.FX.text(m.fx, v.x, v.y - 78, '¡Súper eficaz!', '#ffd23f', 0.7, 1);
@@ -1441,9 +1450,27 @@ PF.Match = (() => {
     return ok;
   }
 
+  /**
+   * Contraataque: si `v` está en postura y el golpe viene de un rival, se lo
+   * devuelve (×1,6 de desgaste, lo empuja y aturde) y no recibe nada.
+   */
+  function counterHit(m, v) {
+    const h = m.hit;
+    if (!v.chan || v.chan.id !== 'counter' || !h || !h.from || h.from.team === v.team || h.reflected || h.from.fainted) return false;
+    const a = h.from;
+    v.chan = null;
+    const dx = a.x - v.x, dy = a.y - v.y, d = Math.hypot(dx, dy) || 1;
+    PF.FX.text(m.fx, v.x, v.y - 90, '¡CONTRAATAQUE!', '#ffd23f', 1.1, 1.2);
+    PF.FX.ring(m.fx, v.x, v.y, 70, '#ffd23f', 0.3, 6);
+    withHit(m, v, 'fighting', () => knock(m, a, dx / d, dy / d, 560, 1.0), { mult: 1.6, reflected: true });
+    m.shake = Math.max(m.shake, 7);
+    return true;
+  }
+
   /** Empuja y aturde. Si tenía la pelota, la suelta. Devuelve false si no le afecta. */
   function knock(m, v, nx, ny, force, stun) {
     if (untouchable(v) || v.wall > 0 || v.gkHold) return false;   // al arquero con la pelota en las manos no se le toca
+    if (counterHit(m, v)) return false;
     if (resists(m, v)) return false;
     if (m.ball.holder === v && !(m.hit && m.hit.keepBall)) loseBall(m, v, nx, ny);
     v.vx = nx * force; v.vy = ny * force;
@@ -1457,6 +1484,7 @@ PF.Match = (() => {
 
   function stunInPlace(m, v, stun) {
     if (untouchable(v) || v.gkHold) return false;
+    if (counterHit(m, v)) return false;
     if (resists(m, v)) return false;
     if (m.ball.holder === v) loseBall(m, v, Math.cos(v.facing), Math.sin(v.facing));
     v.vx *= 0.15; v.vy *= 0.15;
@@ -1621,6 +1649,7 @@ PF.Match = (() => {
       }
       for (const q of m.players) {
         if (q.team === pr.team || q.stun > 0 || untouchable(q)) continue;
+        if (pr.seen && pr.seen.has(q)) continue;
         if (U.dist(pr.x, pr.y, q.x, q.y - 10) > radius(q) + pr.r) continue;
         const s = Math.hypot(pr.vx, pr.vy) || 1;
         // inPlace: no lo empuja (ondas, burbujas), sólo lo aturde y le deja el estado
@@ -1633,6 +1662,7 @@ PF.Match = (() => {
           if (pr.status) applyStatus(m, q, pr.status, pr.statusDur || 4, pr.statusChance ?? 1, pr.hit && pr.hit.from);
           if (pr.slowT) q.slow = Math.max(q.slow, pr.slowT);
         }
+        if (pr.pierce) { (pr.seen = pr.seen || new Set()).add(q); continue; }   // atraviesa (Terremoto)
         pr.dead = true;
         break;
       }

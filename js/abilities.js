@@ -393,7 +393,7 @@ PF.Abilities = (() => {
 
     /** Lanzallamas: chorro de fuego en cono corto durante 1 s (lo mueve tick). Puede quemar. */
     flamethrower(m, p) {
-      p.chan = { id: 'flame', t: 0, dur: 1, acc: 0, speed: 0.6 };
+      p.chan = { id: 'flame', type: 'fire', t: 0, dur: 1, acc: 0, speed: 0.6 };
       PF.FX.text(m.fx, p.x, p.y - 64, '¡LANZALLAMAS!', '#ff9a3d', 1);
       PF.Audio.sfx.fire();
     },
@@ -410,7 +410,7 @@ PF.Abilities = (() => {
 
     /** Llamarada: carga 0,6 s quieto y estalla alrededor (lo hace tick). */
     blaze(m, p) {
-      p.chan = { id: 'blaze', t: 0, dur: 0.6, root: true, speed: 0 };
+      p.chan = { id: 'blaze', type: 'fire', t: 0, dur: 0.6, root: true, speed: 0 };
       PF.FX.text(m.fx, p.x, p.y - 64, '¡LLAMARADA!', '#ff6b3d', 1.1);
       PF.Audio.sfx.fire();
     },
@@ -575,6 +575,81 @@ PF.Abilities = (() => {
       PF.Audio.sfx.phase();
     },
 
+    // ------------------------------------------------ con estados (Hielo, Lucha, Tierra/Roca)
+
+    /** Ventisca: cono ancho que frena a los rivales y a la pelota; a veces congela. */
+    blizzard(m, p) {
+      const M = PF.Match, R = 260, HALF = 0.5;
+      const fx = Math.cos(p.facing), fy = Math.sin(p.facing);
+      const inCone = (x, y, extra = 0) => {
+        const dx = x - p.x, dy = y - p.y, d = Math.hypot(dx, dy);
+        return d < R + extra && d > 1 && Math.abs(U.angDiff(p.facing, Math.atan2(dy, dx))) < HALF;
+      };
+      for (const q of foes(m, p)) {
+        if (!inCone(q.x, q.y, M.radius(q))) continue;
+        const d = U.dist(p.x, p.y, q.x, q.y) || 1;
+        if (M.knock(m, q, (q.x - p.x) / d, (q.y - p.y) / d, 240, 0.3)) {
+          q.slow = Math.max(q.slow, 2.5);
+          M.applyStatus(m, q, 'freeze', 1.2, 0.25);
+        }
+      }
+      const b = m.ball;
+      if (!safe(b) && (!b.holder || b.holder.team !== p.team) && inCone(b.x, b.y)) { b.vx *= 0.3; b.vy *= 0.3; }
+      for (let i = 0; i < 60; i++) {
+        const a = p.facing + U.rand(-HALF, HALF), s = U.rand(260, 700);
+        PF.FX.particle(m.fx, p.x + fx * 20, p.y + fy * 20 - 12, Math.cos(a) * s, Math.sin(a) * s,
+          U.pick(['#ffffff', '#dff6ff', '#9fe3ff']), U.rand(0.35, 0.6), U.rand(3, 6));
+      }
+      PF.FX.text(m.fx, p.x + fx * 110, p.y + fy * 110 - 50, '¡VENTISCA!', '#bfeeff', 1.2);
+      PF.Audio.sfx.zap();
+      m.shake = Math.max(m.shake, 4);
+    },
+
+    /** Patada Salto: embestida muy fuerte; si no toca a nadie, tropieza (match.js). */
+    jumpkick(m, p) {
+      p.dash = 0.35; p.dashSpeed = 720;
+      p.dashDx = Math.cos(p.facing); p.dashDy = Math.sin(p.facing);
+      p.jk = 0.4; p.jkOn = true; p.jkHit = false;
+      PF.FX.burst(m.fx, p.x, p.y - 10, 14, '#ffd23f', 220, 0.3, 4);
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡PATADA SALTO!', '#ffd23f', 1);
+      PF.Audio.sfx.swoosh();
+    },
+
+    /** Contraataque: 1 s de postura; el primer golpe de un rival se le devuelve (match.js: counterHit). */
+    counter(m, p) {
+      p.chan = { id: 'counter', type: 'fighting', t: 0, dur: 1, speed: 0.5, pulse: 0 };
+      PF.FX.ring(m.fx, p.x, p.y, 60, '#ffd23f', 0.3, 5);
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡EN GUARDIA!', '#ffd23f', 1);
+      PF.Audio.sfx.slam();
+    },
+
+    /** Terremoto: fisura que avanza y atraviesa, tumbando a los que pisan el suelo. */
+    quake(m, p) {
+      const a = p.facing;
+      PF.Match.addProjectile(m, {
+        x: p.x + Math.cos(a) * 30, y: p.y + Math.sin(a) * 30,
+        vx: Math.cos(a) * 560, vy: Math.sin(a) * 560,
+        team: p.team, kind: 'quake', life: 0.6, r: 38, stun: 0.9, force: 520, pierce: true,
+        color: '#c9a56a', hitText: '¡TEMBLOR!',
+      });
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡TERREMOTO!', '#e0c080', 1);
+      PF.Audio.sfx.slam();
+      m.shake = Math.max(m.shake, 8);
+    },
+
+    /** Lanzarrocas: roca pesada y recta que empuja fuerte y desvía la pelota. */
+    rockthrow(m, p) {
+      const a = p.facing;
+      PF.Match.addProjectile(m, {
+        x: p.x + Math.cos(a) * 26, y: p.y - 16 + Math.sin(a) * 26,
+        vx: Math.cos(a) * 600, vy: Math.sin(a) * 600,
+        team: p.team, kind: 'rock', life: 0.5, r: 20, stun: 0.9, force: 480, pushBall: true,
+        color: '#b8a26a', hitText: '¡ROCA!',
+      });
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡LANZARROCAS!', '#d8c28a', 0.9);
+      PF.Audio.sfx.slam();
+    },
+
     /** Mewtwo: onda que aparta y aturde a los rivales alrededor. */
     psywave(m, p) {
       const M = PF.Match, R = 230;
@@ -644,6 +719,12 @@ PF.Abilities = (() => {
         m.shake = Math.max(m.shake, 12);
         m.freeze = 0.06;
         return true;
+      }
+      if (c.id === 'counter') {
+        // aura dorada mientras espera el golpe
+        c.pulse -= dt;
+        if (c.pulse <= 0) { c.pulse = 0.2; PF.FX.ring(m.fx, p.x, p.y, 52, '#ffd23f', 0.2, 3); }
+        return false;
       }
       return true;
     },

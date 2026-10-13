@@ -493,6 +493,29 @@ PF.Render = (() => {
         ctx.fillStyle = pr.color;
         ctx.beginPath(); ctx.ellipse(-1, 0, pr.r * 1.2, pr.r * 0.38, 0, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
+      } else if (pr.kind === 'quake') {
+        // fisura: tierra levantada con grietas, deja polvo
+        const a = Math.atan2(pr.vy, pr.vx);
+        ctx.save();
+        ctx.translate(pr.x, pr.y + 10);
+        ctx.rotate(a);
+        ctx.fillStyle = 'rgba(120,84,48,0.7)';
+        ctx.beginPath(); ctx.ellipse(0, 0, pr.r * 1.1, pr.r * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#3a2614'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(-pr.r * 1.4, 0); ctx.lineTo(-pr.r * 0.3, -5); ctx.lineTo(pr.r * 0.4, 4); ctx.lineTo(pr.r * 1.3, -2); ctx.stroke();
+        ctx.restore();
+        PF.FX.particle(m.fx, pr.x + U.rand(-pr.r, pr.r), pr.y + U.rand(-pr.r, pr.r) * 0.6, U.rand(-40, 40), U.rand(-120, -40), U.pick(['#a98762', '#8a6a4a', '#d9b56a']), 0.4, 5);
+      } else if (pr.kind === 'rock') {
+        ctx.save();
+        ctx.translate(pr.x, pr.y);
+        ctx.rotate(m.clock * 9);
+        ctx.fillStyle = '#6d5f40';
+        ctx.beginPath();
+        for (let i = 0; i < 7; i++) { const a = (i / 7) * Math.PI * 2, rr = pr.r * (0.85 + 0.25 * ((i * 5) % 3) / 2); ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = pr.color;
+        ctx.beginPath(); ctx.arc(-pr.r * 0.2, -pr.r * 0.2, pr.r * 0.55, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
       } else if (pr.kind === 'hex') {
         const w = 0.8 + 0.2 * Math.sin(m.clock * 20);
         ctx.fillStyle = 'rgba(80,50,140,0.35)';

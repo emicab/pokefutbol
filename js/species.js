@@ -22,9 +22,9 @@
   const TYPE_ABILITIES = {
     normal: ['quick', 'slam'], fire: ['fireshot', 'embers', 'flamethrower', 'firespin', 'blaze'],
     water: ['hydro', 'puddle', 'watergun', 'bubble'], grass: ['vine', 'sleep', 'leechseed', 'razorleaf', 'stunspore'],
-    electric: ['zap', 'quick', 'thunderwave', 'bolt'], ice: ['ice', 'surf'], fighting: ['punch', 'throw'], poison: ['sludge', 'smog', 'sleep'],
-    ground: ['dig', 'wall'], flying: ['quick', 'jump'], psychic: ['confusion', 'psywave'], bug: ['pinmissile', 'quick'],
-    rock: ['wall', 'dig'], ghost: ['phase', 'teleport', 'confray', 'curse'], dragon: ['surf', 'psywave'], dark: ['teleport', 'shuriken'],
+    electric: ['zap', 'quick', 'thunderwave', 'bolt'], ice: ['ice', 'surf', 'blizzard'], fighting: ['punch', 'throw', 'jumpkick', 'counter'], poison: ['sludge', 'smog', 'sleep'],
+    ground: ['dig', 'wall', 'quake', 'rockthrow'], flying: ['quick', 'jump'], psychic: ['confusion', 'psywave'], bug: ['pinmissile', 'quick'],
+    rock: ['wall', 'dig', 'rockthrow', 'quake'], ghost: ['phase', 'teleport', 'confray', 'curse'], dragon: ['surf', 'psywave'], dark: ['teleport', 'shuriken'],
     steel: ['wall', 'aura'], fairy: ['sing', 'roll'],
   };
 
@@ -87,6 +87,11 @@
     sludge: { id: 'sludge', name: 'Bomba Lodo', cd: 8, desc: 'Bola de lodo: si toca, empuja y Envenena; donde cae deja un charco venenoso 4 s. No afecta a Veneno ni Acero.' },
     smog: { id: 'smog', name: 'Niebla Tóxica', cd: 10, desc: 'Nube grande y densa: Envenena a los rivales que se quedan dentro (cada segundo, agrava). No afecta a Veneno ni Acero.' },
     confray: { id: 'confray', name: 'Rayo Confuso', cd: 8, desc: 'Orbe lento que deja Confuso al rival: se desvía solo y sus pases salen torcidos. Inofensivo contra Normal y Psíquico.' },
+    blizzard: { id: 'blizzard', name: 'Ventisca', cd: 10, desc: 'Cono ancho de nieve: empuja poco, frena 2,5 s a los rivales y frena la pelota; 25 % de Congelar (inmóvil 1,2 s). No afecta a Hielo.' },
+    jumpkick: { id: 'jumpkick', name: 'Patada Salto', cd: 8, desc: 'Salto con patada: embestida muy fuerte (cuenta como mucho más pesado). Si no toca a nadie, te tropiezas y pierdes energía.' },
+    counter: { id: 'counter', name: 'Contraataque', cd: 9, desc: 'Postura de 1 s (te mueves lento): el primer golpe que recibes se devuelve ×1,6 y aturde a quien lo dio.' },
+    quake: { id: 'quake', name: 'Terremoto', cd: 10, desc: 'Fisura que avanza 340 px y atraviesa: tumba a todos los que pisan el suelo (no a los Voladores).' },
+    rockthrow: { id: 'rockthrow', name: 'Lanzarrocas', cd: 7, desc: 'Roca pesada y recta: empuja fuerte al rival y desvía la pelota.' },
     curse: { id: 'curse', name: 'Maldición', cd: 11, desc: 'Asusta al rival más cercano (hasta 300 px): 4 s sin poder usar su habilidad. Inofensiva contra Normal y Fantasma.' },
   });
 
@@ -209,7 +214,8 @@
     flamethrower: 'fire', firespin: 'fire', blaze: 'fire', watergun: 'water', bubble: 'water',
     thunderwave: 'electric', bolt: 'electric',
     leechseed: 'grass', razorleaf: 'grass', stunspore: 'grass', sludge: 'poison', smog: 'poison',
-    confray: 'ghost', curse: 'ghost',
+    confray: 'ghost', curse: 'ghost', blizzard: 'ice', jumpkick: 'fighting', counter: 'fighting',
+    quake: 'ground', rockthrow: 'rock',
   };
 
   /**

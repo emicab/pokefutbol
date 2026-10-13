@@ -74,6 +74,11 @@ PF.AI = (() => {
     smog: (c) => c.foeHolder && c.dHolder < 200 && c.aimHolder && !c.b.holder.status,
     confray: (c) => c.foeHolder && c.dHolder < 280 && c.aimHolder && !c.b.holder.status,
     curse: (c) => c.foeHolder && c.dHolder < 280 && c.aimHolder && !c.b.holder.status,
+    blizzard: (c) => c.foeHolder && c.dHolder < 240 && c.aimHolder,
+    jumpkick: (c) => (c.mine ? c.pressure < 110 && c.aimGoal : c.foeHolder && c.dHolder < 220 && c.aimHolder),
+    counter: (c) => c.foeHolder && c.dHolder < 120,
+    quake: (c) => (c.mine ? c.pressure < 140 && c.aimGoal : c.foeHolder && c.dHolder < 300 && c.aimHolder),
+    rockthrow: (c) => c.foeHolder && c.dHolder < 270 && c.aimHolder,
     adapt: (c) => (c.mine ? c.pressure < 150 : c.foeHolder && c.dHolder < 220),
     splash: (c) => c.pressure < 220,
   };
