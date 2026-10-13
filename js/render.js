@@ -285,6 +285,27 @@ PF.Render = (() => {
     ctx.fillStyle = '#9fe3ff'; ctx.fillText('pase', p.x, y - 6);
   }
 
+  /** Etiqueta del estado sobre la cabeza (color del estado) y un efecto en el cuerpo. */
+  function drawStatus(ctx, m, p, head, r) {
+    const S = PF.Match.STATUS[p.status];
+    if (!S) return;
+    if (p.status === 'freeze') {
+      ctx.globalAlpha = 0.45;
+      ctx.fillStyle = '#bfeeff';
+      ctx.fillRect(p.x - r, head, r * 2, p.y - head + 6);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#e8fbff'; ctx.lineWidth = 2;
+      ctx.strokeRect(p.x - r, head, r * 2, p.y - head + 6);
+    } else if (p.status === 'para') {
+      if (Math.random() < 0.25) PF.FX.bolt(m.fx, p.x + U.rand(-14, 14), head + 6, p.x + U.rand(-14, 14), p.y - 6);
+    }
+    ctx.font = '11px Pixelify, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const w = ctx.measureText(S.label).width + 8, y = head - 34;
+    ctx.fillStyle = '#141018'; ctx.fillRect(p.x - w / 2 - 1, y - 8, w + 2, 16);
+    ctx.fillStyle = S.color; ctx.fillRect(p.x - w / 2, y - 7, w, 14);
+    ctx.fillStyle = '#141018'; ctx.fillText(S.label + (p.status === 'poison' && p.statusLvl > 1 ? ' x2' : ''), p.x, y + 1);
+  }
+
   function drawPlayer(ctx, m, p) {
     const sc = (p.giant > 0 ? 1.5 : 1) * (p.def.scale || 1);
     const r = PF.Match.radius(p);
@@ -334,6 +355,7 @@ PF.Render = (() => {
       ctx.font = '14px Pixelify, monospace'; ctx.textAlign = 'center';
       ctx.fillStyle = '#c77dff'; ctx.fillText('lento', p.x, head - 4 + Math.sin(m.clock * 5) * 2);
     }
+    if (p.status && !p.fainted) drawStatus(ctx, m, p, head, r);
     const order = PF.Match.ORDERS[m.order];
     if (!m.demo && m.state !== 'replay' && p.team === m.humanTeam && !p.human && order.short) {
       ctx.font = '13px Pixelify, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -397,6 +419,18 @@ PF.Render = (() => {
         ctx.beginPath(); ctx.ellipse(h.x, h.y, h.r * f, h.r * 0.5 * f, 0, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#ffd23f';
         ctx.beginPath(); ctx.ellipse(h.x, h.y - 2, h.r * 0.5 * f, h.r * 0.25 * f, 0, 0, Math.PI * 2); ctx.fill();
+      } else if (h.kind === 'firespin') {
+        // remolino: llamas que giran alrededor
+        ctx.globalAlpha = 0.35 * fade;
+        ctx.fillStyle = '#ff6b3d';
+        ctx.beginPath(); ctx.ellipse(h.x, h.y, h.r, h.r * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 0.85 * fade;
+        for (let i = 0; i < 9; i++) {
+          const a = m.clock * 7 + (i / 9) * Math.PI * 2, k = 0.55 + 0.45 * ((i % 3) / 2);
+          const x = h.x + Math.cos(a) * h.r * k, y = h.y + Math.sin(a) * h.r * 0.55 * k;
+          ctx.fillStyle = i % 2 ? '#ffd23f' : '#ff8a3d';
+          ctx.beginPath(); ctx.ellipse(x, y - 8, 9, 15, 0, 0, Math.PI * 2); ctx.fill();
+        }
       } else if (h.kind === 'lava') {
         const f = 1 + 0.04 * Math.sin(m.clock * 3 + h.x);
         ctx.globalAlpha = fade;
@@ -437,6 +471,28 @@ PF.Render = (() => {
         }
         ctx.fillStyle = '#fff'; ctx.fillRect(-2, -2, 4, 4);
         ctx.restore();
+      } else if (pr.kind === 'bubble') {
+        const w = 1 + 0.06 * Math.sin(m.clock * 12);
+        ctx.fillStyle = 'rgba(184,230,255,0.28)';
+        ctx.beginPath(); ctx.arc(pr.x, pr.y, pr.r * w, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#e8f8ff'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(pr.x, pr.y, pr.r * w, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(pr.x - pr.r * 0.35, pr.y - pr.r * 0.35, pr.r * 0.22, 0, Math.PI * 2); ctx.fill();
+      } else if (pr.kind === 'wave') {
+        // bola eléctrica con chispas
+        ctx.fillStyle = 'rgba(255,224,102,0.3)';
+        ctx.beginPath(); ctx.arc(pr.x, pr.y, pr.r * 1.8, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#fff36b'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(pr.x, pr.y, pr.r * (0.8 + 0.2 * Math.sin(m.clock * 30)), 0, Math.PI * 2); ctx.stroke();
+        if (Math.random() < 0.5) PF.FX.bolt(m.fx, pr.x, pr.y, pr.x + U.rand(-26, 26), pr.y + U.rand(-26, 26));
+      } else if (pr.kind === 'water') {
+        ctx.fillStyle = 'rgba(108,198,255,0.35)';
+        ctx.beginPath(); ctx.arc(pr.x, pr.y, pr.r * 1.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#6cc6ff';
+        ctx.beginPath(); ctx.arc(pr.x, pr.y, pr.r, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#e8f8ff';
+        ctx.beginPath(); ctx.arc(pr.x - 3, pr.y - 3, pr.r * 0.4, 0, Math.PI * 2); ctx.fill();
       } else {
         ctx.fillStyle = 'rgba(127,184,255,0.35)';
         ctx.beginPath(); ctx.arc(pr.x, pr.y, pr.r * 1.7, 0, Math.PI * 2); ctx.fill();

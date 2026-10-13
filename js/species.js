@@ -20,8 +20,9 @@
   };
   /** Habilidades por tipo, para especies sin habilidades propias. */
   const TYPE_ABILITIES = {
-    normal: ['quick', 'slam'], fire: ['fireshot', 'embers'], water: ['hydro', 'puddle'], grass: ['vine', 'sleep'],
-    electric: ['zap', 'quick'], ice: ['ice', 'surf'], fighting: ['punch', 'throw'], poison: ['sleep', 'embers'],
+    normal: ['quick', 'slam'], fire: ['fireshot', 'embers', 'flamethrower', 'firespin', 'blaze'],
+    water: ['hydro', 'puddle', 'watergun', 'bubble'], grass: ['vine', 'sleep'],
+    electric: ['zap', 'quick', 'thunderwave', 'bolt'], ice: ['ice', 'surf'], fighting: ['punch', 'throw'], poison: ['sleep', 'embers'],
     ground: ['dig', 'wall'], flying: ['quick', 'jump'], psychic: ['confusion', 'psywave'], bug: ['pinmissile', 'quick'],
     rock: ['wall', 'dig'], ghost: ['phase', 'teleport'], dragon: ['surf', 'psywave'], dark: ['teleport', 'shuriken'],
     steel: ['wall', 'aura'], fairy: ['sing', 'roll'],
@@ -72,6 +73,14 @@
     pinmissile: { id: 'pinmissile', name: 'Pin Misil', cd: 9, desc: 'Cinco agujas en abanico que aturden al que tocan.' },
     shuriken: { id: 'shuriken', name: 'Shuriken de Agua', cd: 8, desc: 'Tres estrellas de agua en abanico que tumban al que tocan.' },
     aura: { id: 'aura', name: 'Esfera Aural', cd: 9, desc: 'Esfera que persigue al rival más cercano y lo tumba.' },
+    // ---- con estados (Quemado, Paralizado...: ver STATUS en match.js)
+    flamethrower: { id: 'flamethrower', name: 'Lanzallamas', cd: 7, desc: 'Chorro de fuego en cono corto durante 1 s: hace soltar la pelota y puede dejar Quemado (pierde vida y tira más flojo). Te mueves lento mientras lo usas.' },
+    firespin: { id: 'firespin', name: 'Giro Fuego', cd: 9, desc: 'Remolino de fuego delante que frena a los que entran, los lastima y puede quemarlos.' },
+    blaze: { id: 'blaze', name: 'Llamarada', cd: 12, desc: 'Cargas 0,6 s quieto y estalla en un radio grande: empuja y aturde, puede quemar. Gasta mucha energía.' },
+    watergun: { id: 'watergun', name: 'Pistola Agua', cd: 5, desc: 'Chorro rápido y recto: empuja al rival que toca y desvía la pelota. Apaga tu Quemadura.' },
+    bubble: { id: 'bubble', name: 'Burbuja', cd: 8, desc: 'Burbuja lenta que atrapa al primero que toca: lo frena 2,5 s. Apaga tu Quemadura.' },
+    thunderwave: { id: 'thunderwave', name: 'Onda Trueno', cd: 8, desc: 'Onda lenta que, si toca, deja Paralizado al rival (más lento y a veces se traba). Inofensiva contra Eléctricos y Tierra.' },
+    bolt: { id: 'bolt', name: 'Rayo', cd: 9, desc: 'Rayo instantáneo en línea que atraviesa a todos los rivales delante: aturde y a veces Paraliza.' },
   });
 
   /** Evoluciones que cambian tanto que no heredan (Gyarados no salpica; las Eeveelutions son de su tipo). */
@@ -86,11 +95,27 @@
       const r = PF.ROSTER.find((x) => x.dex === d);
       if (r) return r.abilities.slice(0, 2);
     }
-    // 2) por tipo: la primera de cada tipo, o las dos del único tipo
-    const t1 = TYPE_ABILITIES[types[0]] || TYPE_ABILITIES.normal;
-    const t2 = types[1] && TYPE_ABILITIES[types[1]];
-    const ids = t2 && t2[0] !== t1[0] ? [t1[0], t2[0]] : t1;
+    // 2) por tipo: la primera de cada tipo, o las dos del único tipo (cada especie
+    //    con su propio orden dentro del tipo: ver poolFor)
+    const t1 = poolFor(dex, types[0]);
+    const t2 = types[1] && TYPE_ABILITIES[types[1]] && poolFor(dex, types[1]);
+    const ids = t2 && t2[0] !== t1[0] ? [t1[0], t2[0]] : t1.slice(0, 2);
     return ids.map((id) => ABILITY_INFO[id] || ABILITY_INFO.quick);
+  }
+
+  /**
+   * Las habilidades de un tipo en el orden de esta especie: se barajan con un
+   * valor fijo sacado de su número de Pokédex, así dos Pokémon del mismo tipo
+   * no reciben siempre las mismas (y siempre las mismas cada vez que se juega).
+   */
+  function poolFor(dex, type) {
+    const base = TYPE_ABILITIES[type] || TYPE_ABILITIES.normal;
+    const h = (id) => {
+      let x = (dex * 2654435761 + id.length * 40503 + id.charCodeAt(0) * 9973 + id.charCodeAt(id.length - 1) * 131) >>> 0;
+      x ^= x >>> 15; x = Math.imul(x, 2246822519) >>> 0; x ^= x >>> 13;
+      return x;
+    };
+    return base.slice().sort((a, b) => h(a) - h(b));
   }
 
   const cache = {};
@@ -174,6 +199,8 @@
     confusion: 'psychic', sing: 'fairy', roll: 'fairy', throw: 'fighting', punch: 'fighting', ice: 'ice',
     surf: 'water', dig: 'ground', aura: 'fighting', shuriken: 'water', splash: 'water', jump: 'normal',
     psychic: 'psychic', psywave: 'psychic', adapt: null, psybeam: 'psychic', pinmissile: 'bug',
+    flamethrower: 'fire', firespin: 'fire', blaze: 'fire', watergun: 'water', bubble: 'water',
+    thunderwave: 'electric', bolt: 'electric',
   };
 
   /**
@@ -339,7 +366,7 @@
     // (Gyarados no salpica ni las Eeveelutions se adaptan: no heredan de su línea)
     const fam = NO_INHERIT.has(dex) ? [dex] : FAMILIES.find((f) => f.includes(dex)) || [dex];
     for (const d of fam) { const r = PF.ROSTER.find((x) => x.dex === d && x.handmade); if (r) r.abilities.slice(0, 2).forEach((a) => add(a.id)); }
-    for (const t of PF.POKEDEX[dex].types) (TYPE_ABILITIES[t] || []).forEach(add);
+    for (const t of PF.POKEDEX[dex].types) if (TYPE_ABILITIES[t]) poolFor(dex, t).forEach(add);
     for (const id of ['quick', 'slam', 'jump', 'psywave']) add(id);
     return out;
   }

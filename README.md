@@ -194,6 +194,31 @@ rival que cruza puede frenarlo (65 % si resiste el fuego, como los de Agua o
 Roca; 15 % si es neutro; nunca si es débil) y el arquero en su área suma 25 %.
 Si lo frenan, el fuego se apaga y la pelota pierde fuerza.
 
+**Estados.** Algunas habilidades dejan un estado secundario (uno a la vez; la
+etiqueta de color aparece sobre la cabeza). Los tipos inmunes no lo reciben:
+
+| Estado | Efecto | Dura | Inmune |
+|---|---|---|---|
+| Quemado | pierde ~1,5 % de vida por s y tira un 15 % más flojo | 4 s | Fuego |
+| Envenenado | pierde vida por s (un 2º impacto lo agrava) | 6 s | Veneno, Acero |
+| Paralizado | 65 % de la velocidad y a veces se traba un instante | 4 s | Eléctrico |
+| Congelado | inmóvil y luego lento unos segundos; un golpe de Fuego lo derrite | 1,2 s | Hielo |
+| Confuso | se desvía solo y los pases le salen torcidos | 3 s | Psíquico |
+| Asustado | no puede usar su habilidad | 3 s | Fantasma |
+
+La quemadura y el veneno no dejan K.O. (se frenan en el 10 % de vida), y las
+habilidades de Agua apagan tu propia quemadura.
+
+Movimientos con estado ya disponibles (Fuego, Agua y Eléctrico; el resto de
+los tipos, en camino): **Lanzallamas** (cono corto 1 s, hace soltar la pelota,
+puede quemar), **Giro Fuego** (remolino que frena y lastima), **Llamarada**
+(carga 0,6 s quieto y estalla; gasta mucha energía), **Pistola Agua** (chorro
+que empuja y desvía la pelota), **Burbuja** (atrapa y frena 2,5 s),
+**Onda Trueno** (paraliza; no afecta a Eléctricos ni a Tierra) y **Rayo** (línea
+instantánea que atraviesa a todos). Los Pokémon sin movimientos propios reciben
+un orden distinto dentro de su tipo, así que dos del mismo tipo ya no repiten
+siempre los mismos.
+
 En el partido rápido se pueden elegir hasta 2 suplentes; en el modo historia,
 todo el club que no es titular está en el banco. Hay 3 cambios por partido,
 con `R` (o desde la pausa) o, sin pausar, con `F`. En el banco el Pokémon

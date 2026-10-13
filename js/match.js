@@ -48,6 +48,26 @@ PF.Match = (() => {
   const hpPct = (x) => (100 * x.hp) / x.maxHp;
   /** Recuperación de energía por velocidad: los rápidos (esprínteres) se reponen antes, 0,8 … 1,3. */
   const recov = (p) => 0.8 + 0.5 * U.clamp((p.def.speed - 230) / 120, 0, 1);
+  /**
+   * Estados (uno a la vez por Pokémon; p.status / p.statusT):
+   *   burn    pierde vida cada segundo y tira un 15 % más flojo
+   *   poison  pierde vida cada segundo (un 2º impacto lo agrava)
+   *   para    65 % de la velocidad y a veces se traba un instante
+   *   freeze  inmóvil, y al terminar queda lento unos segundos
+   *   conf    se desvía solo al moverse y los pases le salen torcidos
+   *   fear    no puede usar su habilidad
+   * Los tipos inmunes no los reciben. Quemadura y veneno no lo dejan K.O.
+   * (se frenan en el 10 % de la vida).
+   */
+  const STATUS = {
+    burn: { label: 'QUEMADO', color: '#ff8a3d', immune: ['fire'] },
+    poison: { label: 'ENVENENADO', color: '#b06fd0', immune: ['poison', 'steel'] },
+    para: { label: 'PARALIZADO', color: '#f6d32d', immune: ['electric'] },
+    freeze: { label: 'CONGELADO', color: '#9fe3ff', immune: ['ice'] },
+    conf: { label: 'CONFUSO', color: '#ffd84a', immune: ['psychic'] },
+    fear: { label: 'ASUSTADO', color: '#8a7bd0', immune: ['ghost'] },
+  };
+  const DOT_FLOOR = 0.1;
   /** Energía en % del máximo (el máximo sale de los PS: PF.staminaMax). */
   const energyPct = (x) => (100 * x.stamina) / x.maxStamina;
   /** Multiplicador por cansancio: 1 descansado, 0,65 agotado. */
@@ -221,6 +241,7 @@ PF.Match = (() => {
       stats: { goals: 0, assists: 0, tackles: 0, saves: 0 },
       stamina: PF.staminaMax(def), maxStamina: PF.staminaMax(def), agility: PF.agility(def),
       hp: PF.hpMax(def), maxHp: PF.hpMax(def), ko: 0, fainted: false, hurtT: -9, rank: PF.powerRank(def),
+      status: null, statusT: 0, statusLvl: 0, confT: 0, confAng: 0, chan: null,
       types: PF.typesOf(def), tiredWarned: false,
       gkHold: false, gkT: 0, assistFrom: null, assistT: 0, ctrl: null,
       pressT: 0, pressCd: 0, pressCdMax: 1, pressLock: false, diveCd: 0, down: 0,
@@ -417,6 +438,7 @@ PF.Match = (() => {
       if (U.dist(x, y, F.cx, F.cy) < 130) x = F.cx - dir * 130;
       Object.assign(p, {
         x, y, z: 0, vx: 0, vy: 0, stun: p.fainted ? p.stun : 0, asleep: false, dash: 0, charge: -1, slam: null,
+        status: null, statusT: 0, statusLvl: 0, chan: null, slow: 0,
         pickupCd: 0, holdT: 0, stealT: 0, phase: 0, wall: 0, embers: 0, slip: 0, dig: 0, ram: 0, spinT: 0,
         gkHold: false, gkT: 0, assistFrom: null,
       });
@@ -839,6 +861,17 @@ PF.Match = (() => {
       p[k] = Math.max(0, p[k] - dt);
     }
     if (p.fainted && p.ko <= 0) revive(m, p);
+    if (p.status) statusTick(m, p, dt);
+    // habilidades que se sostienen o cargan (Lanzallamas, Llamarada): se cortan si lo aturden
+    if (p.chan) {
+      if (p.stun > 0 || p.fainted || p.slam) p.chan = null;
+      else {
+        p.chan.t += dt;
+        const id = p.chan.id;
+        const done = withHit(m, p, PF.ABILITY_TYPE[id], () => PF.Abilities.tick(m, p, dt));
+        if (done || (p.chan && p.chan.t >= p.chan.dur)) p.chan = null;
+      }
+    }
     // la habilidad sólo recarga con la pelota en juego (no en festejos ni saques)
     if (m.state === 'play') p.cd = Math.max(0, p.cd - dt * fatigue(p));
     // energía: correr gasta (más los pesados) y se recupera siempre, menos cuanto más
@@ -860,6 +893,11 @@ PF.Match = (() => {
 
     let mx = it.mx, my = it.my;
     if (p.down > 0 && p.dash <= 0) { mx = 0; my = 0; }   // en el piso tras estirarse
+    if (p.chan && p.chan.root) { mx = 0; my = 0; }       // cargando (Llamarada)
+    if (p.status === 'conf' && (mx || my)) {             // confuso: se desvía solo
+      const ca = Math.cos(p.confAng), sa = Math.sin(p.confAng);
+      [mx, my] = [mx * ca - my * sa, mx * sa + my * ca];
+    }
     if (p.human) p.aimMy = Math.abs(my) > 0.3 ? Math.sign(my) : 0;
 
     // presionar: limitado en tiempo y con enfriamiento (ver PRESS_MAX)
@@ -893,6 +931,7 @@ PF.Match = (() => {
     else if (p.dash <= 0 && !p.slam && p.stun <= 0) {
       if (it.aim !== undefined) p.facing = it.aim;
       else if (ml > 0.2) p.facing = Math.atan2(my, mx);
+      if (p.status === 'conf') p.facing += p.confAng * 0.35;   // los pases y tiros le salen torcidos
     }
 
     let sp = p.def.speed * (p.human ? 1 : p.skill.speed) * st.speed * p.bonus.speed * m.mods[p.team].speed * fatigue(p);
@@ -903,6 +942,8 @@ PF.Match = (() => {
     if (p.phase > 0) sp *= 1.2;
     if (p.dig > 0) sp *= 1.3;
     if (p.slow > 0) sp *= 0.55;
+    if (p.status === 'para') sp *= 0.65;
+    if (p.chan && p.chan.speed !== undefined) sp *= p.chan.speed;
     if (p.wall > 0) sp *= 0.3;
 
     if (p.slam) {
@@ -966,7 +1007,9 @@ PF.Match = (() => {
 
     // sin la energía que cuesta, no hay habilidad ni placaje
     if (it.ability && p.cd <= 0) {
-      if (p.stamina < abilityCost(p)) noEnergy(m, p);
+      if (p.status === 'fear') {
+        if (p.human && m.clock - (p.noEnergyT || -9) > 1) { p.noEnergyT = m.clock; PF.FX.text(m.fx, p.x, p.y - 60, '¡asustado!', STATUS.fear.color, 0.7, 0.8); PF.Audio.sfx.fail(); }
+      } else if (p.stamina < abilityCost(p)) noEnergy(m, p);
       else useAbility(m, p);
     }
     if (b.holder === p) {
@@ -995,7 +1038,7 @@ PF.Match = (() => {
   }
 
   /** Energía extra de algunas habilidades muy fuertes (además del costo por recarga). */
-  const ABILITY_EXTRA = { fireshot: 14.5 };
+  const ABILITY_EXTRA = { fireshot: 14.5, blaze: 8 };
   const abilityCost = (p) => STAMINA.ability + p.def.ability.cd * STAMINA.abilityCd + (ABILITY_EXTRA[p.def.ability.id] || 0);
   /** Aviso de "sin energía" (como mucho uno por segundo). */
   function noEnergy(m, p) {
@@ -1154,7 +1197,7 @@ PF.Match = (() => {
     spend(p, STAMINA.shot + STAMINA.shotCharge * k);
     const aim = shotAim(p);
     // un toque ya sale rápido (más que un pase); cargar le suma fuerza
-    const power = U.lerp(SHOT_TAP, SHOT_FULL, k) * p.def.power * p.bonus.power * m.mods[p.team].power * (b.big > 0 ? 0.85 : 1) * (0.75 + 0.25 * fatigue(p));
+    const power = U.lerp(SHOT_TAP, SHOT_FULL, k) * p.def.power * p.bonus.power * m.mods[p.team].power * (b.big > 0 ? 0.85 : 1) * (0.75 + 0.25 * fatigue(p)) * (p.status === 'burn' ? 0.85 : 1);
     let sp = 1180 * power;
     const fire = p.fireShot > 0;
     if (fire) sp = 1600 * p.def.power;
@@ -1238,6 +1281,11 @@ PF.Match = (() => {
     const eff = h && h.phys ? U.clamp(Math.sqrt(raw), 0.6, 1.5) : raw;
     const tier = from && from.rank ? U.clamp(1 + 0.1 * (from.rank - v.rank), 0.75, 1.3) : 1;
     const heft = h && h.ratio ? U.clamp(Math.pow(h.ratio, 0.6), 0.3, 1.8) : 1;
+    // el fuego derrite al congelado
+    if (v.status === 'freeze' && h && h.type === 'fire') {
+      v.status = null; v.statusT = 0; v.stun = 0;
+      PF.FX.text(m.fx, v.x, v.y - 98, '¡Derretido!', '#ff8a3d', 0.8, 1);
+    }
     const base = STAMINA.hit + stun * STAMINA.hitStun;
     v.hp = Math.max(0, v.hp - base * eff * tier * heft * HP.dmg);
     v.hurtT = m.clock;
@@ -1247,10 +1295,59 @@ PF.Match = (() => {
     return raw >= 2 ? 1.25 : raw < 1 ? 0.8 : 1;
   }
 
+  /**
+   * Intenta dejar `type` en `v` durante `dur` s (con probabilidad `chance`).
+   * Devuelve true si quedó. No pisa a un estado que ya tiene (salvo agravar el veneno).
+   */
+  function applyStatus(m, v, type, dur, chance = 1) {
+    const S = STATUS[type];
+    if (!S || v.fainted || untouchable(v) || v.gkHold) return false;
+    if (S.immune.some((t) => v.types.includes(t))) return false;
+    if (v.status && !(type === 'poison' && v.status === 'poison')) return false;
+    if (Math.random() >= chance) return false;
+    if (v.status === 'poison') { v.statusLvl = Math.min(2, v.statusLvl + 1); v.statusT = Math.max(v.statusT, dur); }
+    else { v.status = type; v.statusT = dur; v.statusLvl = 1; }
+    if (type === 'freeze') {
+      if (m.ball.holder === v) loseBall(m, v, Math.cos(v.facing), Math.sin(v.facing));
+      v.stun = Math.max(v.stun, dur); v.vx = 0; v.vy = 0; v.charge = -1; v.dash = 0; v.chan = null;
+    }
+    PF.FX.text(m.fx, v.x, v.y - 98, S.label + '!', S.color, 0.8, 1.2);
+    PF.FX.burst(m.fx, v.x, v.y - 20, 10, S.color, 150);
+    return true;
+  }
+
+  /** Efecto de cada estado en cada paso. */
+  function statusTick(m, p, dt) {
+    if (p.fainted) { p.status = null; return; }
+    p.statusT -= dt;
+    const s = p.status;
+    if (s === 'burn' || s === 'poison') {
+      const floor = p.maxHp * DOT_FLOOR;
+      if (m.state === 'play' && p.hp > floor) {
+        p.hp = Math.max(floor, p.hp - p.maxHp * (s === 'burn' ? 0.015 : 0.012 * p.statusLvl) * dt);
+        p.hurtT = m.clock;
+      }
+      if (Math.random() < dt * 8) PF.FX.particle(m.fx, p.x + U.rand(-10, 10), p.y - U.rand(10, 36), 0, -50, STATUS[s].color, 0.4, 3);
+    } else if (s === 'para') {
+      if (m.state === 'play' && Math.hypot(p.vx, p.vy) > 60 && Math.random() < dt * 0.9) {
+        p.down = Math.max(p.down, 0.3);   // se traba
+        PF.FX.burst(m.fx, p.x, p.y - 20, 6, '#fff36b', 140);
+      }
+    } else if (s === 'conf') {
+      p.confT -= dt;
+      if (p.confT <= 0) { p.confT = 0.4; p.confAng = U.rand(-0.9, 0.9); }
+    }
+    if (p.statusT <= 0) {
+      if (s === 'freeze') p.slow = Math.max(p.slow, 3);
+      p.status = null; p.statusLvl = 0;
+    }
+  }
+
   /** Sin vida: queda K.O. unos segundos (no se lo puede tocar) y se levanta con 1/3. */
   function faint(m, v) {
     if (v.fainted) return;
     v.fainted = true;
+    v.status = null; v.chan = null;
     v.ko = HP.koTime;
     v.stun = v.ko; v.asleep = false;
     v.vx *= 0.3; v.vy *= 0.3;
@@ -1402,6 +1499,11 @@ PF.Match = (() => {
     const fn = PF.Abilities[id];
     const ok = withHit(m, p, PF.ABILITY_TYPE[id], () => fn(m, p));
     if (ok !== false) spend(p, abilityCost(p));
+    // el agua apaga la quemadura propia
+    if (ok !== false && p.status === 'burn' && PF.ABILITY_TYPE[id] === 'water') {
+      p.status = null; p.statusT = 0;
+      PF.FX.text(m.fx, p.x, p.y - 80, '¡Refrescado!', '#8fd8ff', 0.8, 1);
+    }
     p.cd = ok === false ? 1.2 : p.def.ability.cd * p.bonus.cd * m.mods[p.team].cd;
     if (ok !== false && p.anim !== 'Attack') setAnim(p, 'Charge', true);
   }
@@ -1496,14 +1598,30 @@ PF.Match = (() => {
       if (Math.random() < 0.8) PF.FX.particle(m.fx, pr.x, pr.y, U.rand(-30, 30), U.rand(-30, 30), pr.color, 0.25, 3);
       if (pr.x < F.x0 || pr.x > F.x1 || pr.y < F.y0 || pr.y > F.y1 || pr.t > pr.life) { pr.dead = true; continue; }
       if (!playing) continue;
+      // chorro que desvía la pelota (Pistola Agua)
+      const b = m.ball;
+      if (pr.pushBall && !(b.holder && (b.holder.gkHold || b.holder.team === pr.team)) &&
+          U.dist(pr.x, pr.y, b.x, b.y) < pr.r + b.r + 6) {
+        if (b.holder) { b.holder.pickupCd = 0.6; b.holder.charge = -1; b.holder = null; }
+        const s = Math.hypot(pr.vx, pr.vy) || 1;
+        b.vx = (pr.vx / s) * 760; b.vy = (pr.vy / s) * 760; b.last = pr.hit && pr.hit.from; b.vine = null;
+        PF.FX.text(m.fx, b.x, b.y - 30, pr.hitText || '¡PAM!', pr.color, 0.8);
+        pr.dead = true;
+        continue;
+      }
       for (const q of m.players) {
         if (q.team === pr.team || q.stun > 0 || untouchable(q)) continue;
         if (U.dist(pr.x, pr.y, q.x, q.y - 10) > radius(q) + pr.r) continue;
         const s = Math.hypot(pr.vx, pr.vy) || 1;
-        if (withHit(m, pr.hit && pr.hit.from, pr.hit && pr.hit.type, () => knock(m, q, pr.vx / s, pr.vy / s, 220, pr.stun))) {
+        // inPlace: no lo empuja (ondas, burbujas), sólo lo aturde y le deja el estado
+        const hit = withHit(m, pr.hit && pr.hit.from, pr.hit && pr.hit.type,
+          () => (pr.inPlace ? stunInPlace(m, q, pr.stun) : knock(m, q, pr.vx / s, pr.vy / s, pr.force || 220, pr.stun)));
+        if (hit) {
           PF.FX.burst(m.fx, q.x, q.y - 14, 14, pr.color, 220);
           PF.FX.text(m.fx, q.x, q.y - 50, pr.hitText || '¡PAM!', pr.color, 0.9);
           PF.Audio.sfx.tackle();
+          if (pr.status) applyStatus(m, q, pr.status, pr.statusDur || 4, pr.statusChance ?? 1);
+          if (pr.slowT) q.slow = Math.max(q.slow, pr.slowT);
         }
         pr.dead = true;
         break;
@@ -1518,6 +1636,7 @@ PF.Match = (() => {
     h.ctx = m.hit || { from: null, type: h.kind === 'lava' ? 'fire' : null };
     h.t = 0;
     h.hit = new Set();
+    h.next = new Map();   // Giro Fuego: cuándo vuelve a lastimar a cada uno
     m.hazards.push(h);
   }
 
@@ -1543,6 +1662,15 @@ PF.Match = (() => {
             PF.FX.text(m.fx, p.x, p.y - 50, '¡QUEMA!', '#ff8a3d', 0.9);
             PF.FX.burst(m.fx, p.x, p.y - 10, 12, '#ff9a3d', 180);
             PF.Audio.sfx.tackle();
+          }
+        } else if (h.kind === 'firespin') {
+          p.slow = Math.max(p.slow, 0.3);
+          if (h.t >= (h.next.get(p) || 0)) {
+            h.next.set(p, h.t + 0.7);
+            if (stunInPlace(m, p, 0.2)) {
+              PF.FX.burst(m.fx, p.x, p.y - 12, 8, '#ff9a3d', 160);
+              applyStatus(m, p, 'burn', 4, 0.5);
+            }
           }
         } else if (h.kind === 'sleep' && h.t > 0.2 && !h.hit.has(p)) {
           h.hit.add(p);
@@ -1828,7 +1956,7 @@ PF.Match = (() => {
     substitute, quickSub, fatigue, energyPct, hpPct, TIRED, SUBS_PER_MATCH,
     inBox, isActiveKeeper, keeperOf, ownGoalX, dirOf,
     // usados por abilities.js, ai.js y render.js
-    radius, mass, untouchable, mateOf, matesOf, teamOf, setAnim, knock, stunInPlace, loseBall, shoot,
+    applyStatus, STATUS, radius, mass, untouchable, mateOf, matesOf, teamOf, setAnim, knock, stunInPlace, loseBall, shoot,
     addHazard, addProjectile, jump, nearestFoeDist, homeSpot, shotAim, passTarget, laneClear, bestShot,
     updateCamera, hasHuman, makePlayer, PRESS_MAX, dropHuman, abilityCost,
   };

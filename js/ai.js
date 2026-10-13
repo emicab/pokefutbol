@@ -60,6 +60,13 @@ PF.AI = (() => {
     psybeam: (c) => c.foeHolder && c.dHolder < 480,
     pinmissile: (c) => c.foeHolder && c.dHolder < 270 && c.aimHolder,
     shuriken: (c) => c.foeHolder && c.dHolder < 280 && c.aimHolder,
+    flamethrower: (c) => c.foeHolder && c.dHolder < 180 && c.aimHolder,
+    firespin: (c) => c.foeHolder && c.dHolder < 220 && c.aimHolder && !c.b.holder.status,
+    blaze: (c) => (c.mine ? c.pressure < 120 && c.foesNear > 0 : c.foeHolder && c.dHolder < 130),
+    watergun: (c) => c.foeHolder && c.dHolder < 290 && c.aimHolder,
+    bubble: (c) => c.foeHolder && c.dHolder < 240 && c.aimHolder,
+    thunderwave: (c) => c.foeHolder && c.dHolder < 290 && c.aimHolder && !c.b.holder.status,
+    bolt: (c) => c.foeHolder && c.dHolder < 320 && c.aimHolder,
     adapt: (c) => (c.mine ? c.pressure < 150 : c.foeHolder && c.dHolder < 220),
     splash: (c) => c.pressure < 220,
   };
@@ -74,7 +81,7 @@ PF.AI = (() => {
 
   /** Decide si usar la habilidad; si sí, rellena `it` y devuelve true. */
   function tryAbility(p, m, it, c) {
-    if (p.cd > 0 || Math.random() > p.skill.ability) return false;
+    if (p.cd > 0 || p.status === 'fear' || p.chan || Math.random() > p.skill.ability) return false;
     if (p.stamina < PF.Match.abilityCost(p)) return false;   // sin energía no hay habilidad
     const want = WANTS[p.def.ability.id];
     const r = want && want(c);

@@ -389,6 +389,93 @@ PF.Abilities = (() => {
       PF.Audio.sfx.phase();
     },
 
+    // ------------------------------------------------ con estados (Fuego, Agua, Eléctrico)
+
+    /** Lanzallamas: chorro de fuego en cono corto durante 1 s (lo mueve tick). Puede quemar. */
+    flamethrower(m, p) {
+      p.chan = { id: 'flame', t: 0, dur: 1, acc: 0, speed: 0.6 };
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡LANZALLAMAS!', '#ff9a3d', 1);
+      PF.Audio.sfx.fire();
+    },
+
+    /** Giro Fuego: remolino que frena y lastima a los que entran (lo mueve match.js). */
+    firespin(m, p) {
+      const x = U.clamp(p.x + Math.cos(p.facing) * 140, F.x0 + 40, F.x1 - 40);
+      const y = U.clamp(p.y + Math.sin(p.facing) * 140, F.y0 + 40, F.y1 - 40);
+      PF.Match.addHazard(m, { kind: 'firespin', x, y, r: 85, life: 2.6, team: p.team });
+      PF.FX.burst(m.fx, x, y, 24, '#ff9a3d', 240, 0.5, 4);
+      PF.FX.text(m.fx, x, y - 50, '¡GIRO FUEGO!', '#ff9a3d', 1);
+      PF.Audio.sfx.fire();
+    },
+
+    /** Llamarada: carga 0,6 s quieto y estalla alrededor (lo hace tick). */
+    blaze(m, p) {
+      p.chan = { id: 'blaze', t: 0, dur: 0.6, root: true, speed: 0 };
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡LLAMARADA!', '#ff6b3d', 1.1);
+      PF.Audio.sfx.fire();
+    },
+
+    /** Pistola Agua: chorro recto y rápido que empuja al rival y desvía la pelota. */
+    watergun(m, p) {
+      const a = p.facing;
+      PF.Match.addProjectile(m, {
+        x: p.x + Math.cos(a) * 24, y: p.y - 16 + Math.sin(a) * 24,
+        vx: Math.cos(a) * 920, vy: Math.sin(a) * 920,
+        team: p.team, kind: 'water', life: 0.34, r: 12, stun: 0.5, force: 420, pushBall: true,
+        color: '#6cc6ff', hitText: '¡PISTOLA!',
+      });
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡PISTOLA AGUA!', '#8fd8ff', 0.9);
+      PF.Audio.sfx.water();
+    },
+
+    /** Burbuja: lenta; al primero que toca lo deja atrapado y lento. */
+    bubble(m, p) {
+      const a = p.facing;
+      PF.Match.addProjectile(m, {
+        x: p.x + Math.cos(a) * 26, y: p.y - 16 + Math.sin(a) * 26,
+        vx: Math.cos(a) * 300, vy: Math.sin(a) * 300,
+        team: p.team, kind: 'bubble', life: 0.95, r: 22, stun: 0.05, inPlace: true, slowT: 2.5,
+        color: '#b8e6ff', hitText: '¡BURBUJA!',
+      });
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡BURBUJA!', '#b8e6ff', 0.9);
+      PF.Audio.sfx.water();
+    },
+
+    /** Onda Trueno: onda lenta que paraliza al que toca (no a Eléctricos ni a Tierra). */
+    thunderwave(m, p) {
+      const a = p.facing;
+      PF.Match.addProjectile(m, {
+        x: p.x + Math.cos(a) * 24, y: p.y - 16 + Math.sin(a) * 24,
+        vx: Math.cos(a) * 430, vy: Math.sin(a) * 430,
+        team: p.team, kind: 'wave', life: 0.75, r: 16, stun: 0.3, inPlace: true,
+        status: 'para', statusDur: 4, statusChance: 1,
+        color: '#ffe066', hitText: '¡ONDA TRUENO!',
+      });
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡ONDA TRUENO!', '#ffe066', 0.9);
+      PF.Audio.sfx.zap();
+    },
+
+    /** Rayo: línea instantánea que atraviesa a todos los rivales delante. */
+    bolt(m, p) {
+      const M = PF.Match, LEN = 340, W = 26;
+      const fx = Math.cos(p.facing), fy = Math.sin(p.facing);
+      const x1 = p.x + fx * LEN, y1 = p.y + fy * LEN;
+      PF.FX.bolt(m.fx, p.x + fx * 20, p.y - 22, x1, y1 - 20);
+      PF.FX.bolt(m.fx, p.x + fx * 20, p.y - 22, x1, y1 - 20);
+      for (const q of foes(m, p)) {
+        const dx = q.x - p.x, dy = q.y - p.y;
+        const along = dx * fx + dy * fy, side = Math.abs(dx * fy - dy * fx);
+        if (along < 0 || along > LEN || side > W + M.radius(q)) continue;
+        if (M.stunInPlace(m, q, 0.5)) {
+          PF.FX.burst(m.fx, q.x, q.y - 20, 10, '#fff36b', 170);
+          M.applyStatus(m, q, 'para', 4, 0.3);
+        }
+      }
+      PF.FX.text(m.fx, p.x + fx * 90, p.y + fy * 90 - 50, '¡RAYO!', '#fff36b', 1.2);
+      PF.Audio.sfx.zap();
+      m.shake = Math.max(m.shake, 5);
+    },
+
     /** Mewtwo: onda que aparta y aturde a los rivales alrededor. */
     psywave(m, p) {
       const M = PF.Match, R = 230;
@@ -403,6 +490,65 @@ PF.Abilities = (() => {
       m.shake = Math.max(m.shake, 8);
     },
   };
+
+  /**
+   * Habilidades que duran (p.chan = { id, t, dur, ... }): match.js llama a tick()
+   * cada paso mientras dure. Devuelve true cuando terminó antes de tiempo.
+   */
+  Object.defineProperty(A, 'tick', {
+    enumerable: false,
+    value(m, p, dt) {
+      const c = p.chan, M = PF.Match;
+      if (c.id === 'flame') {
+        const R = 200, HALF = 0.38, fx = Math.cos(p.facing), fy = Math.sin(p.facing);
+        for (let i = 0; i < 3; i++) {
+          const a = p.facing + U.rand(-HALF, HALF), s = U.rand(260, 560);
+          PF.FX.particle(m.fx, p.x + fx * 24, p.y + fy * 24 - 14, Math.cos(a) * s, Math.sin(a) * s,
+            U.pick(['#ffb347', '#ff6b3d', '#ffe066']), U.rand(0.25, 0.4), U.rand(4, 7));
+        }
+        c.acc += dt;
+        if (c.acc >= 0.25) {
+          c.acc -= 0.25;
+          PF.Audio.sfx.fire();
+          for (const q of foes(m, p)) {
+            const dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy);
+            if (d > R + M.radius(q) || d < 1 || Math.abs(U.angDiff(p.facing, Math.atan2(dy, dx))) > HALF + 0.15) continue;
+            if (M.stunInPlace(m, q, 0.2)) M.applyStatus(m, q, 'burn', 4, 0.25);
+          }
+        }
+        return false;
+      }
+      if (c.id === 'blaze') {
+        // anillo que se cierra mientras carga; al final, la explosión
+        const k = Math.min(1, c.t / c.dur);
+        PF.FX.ring(m.fx, p.x, p.y, 230 * (1 - k) + 40, '#ff9a3d', 0.1, 4);
+        if (c.t < c.dur) return false;
+        const R = 230;
+        for (const q of foes(m, p)) {
+          const dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy);
+          if (d > R + M.radius(q)) continue;
+          if (M.knock(m, q, d > 1 ? dx / d : 1, d > 1 ? dy / d : 0, 640 - d, 1.0)) M.applyStatus(m, q, 'burn', 4, 0.4);
+        }
+        const b = m.ball;
+        if (!safe(b) && b.holder !== p && (!b.holder || b.holder.team !== p.team)) {
+          const dx = b.x - p.x, dy = b.y - p.y, d = Math.hypot(dx, dy);
+          if (d < R) {
+            if (b.holder) { b.holder.pickupCd = 0.6; b.holder = null; }
+            b.vx = (d > 1 ? dx / d : 1) * 700; b.vy = (d > 1 ? dy / d : 0) * 700; b.last = p; b.vine = null;
+          }
+        }
+        PF.FX.ring(m.fx, p.x, p.y, R * 1.2, '#ff6b3d', 0.45, 12);
+        PF.FX.ring(m.fx, p.x, p.y, R * 0.7, '#ffe066', 0.35, 8);
+        PF.FX.burst(m.fx, p.x, p.y - 10, 40, '#ff9a3d', 420, 0.6, 6);
+        PF.FX.text(m.fx, p.x, p.y - 80, '¡BUUM!', '#ffd23f', 1.3);
+        PF.Audio.sfx.slam();
+        m.shake = Math.max(m.shake, 12);
+        m.freeze = 0.06;
+        return true;
+      }
+      return true;
+    },
+  });
 
   return A;
 })();

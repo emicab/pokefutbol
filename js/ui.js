@@ -56,7 +56,7 @@ PF.UI = (() => {
           <div><kbd>${K.label('swap')}</kbd> cambiar de Pokémon</div>
           <div>al tirar, <kbd>${K.label('up')}</kbd>/<kbd>${K.label('down')}</kbd> eligen palo</div>
           <div><kbd>${K.label('order')}</kbd> orden al equipo: neutro, ataque o defensa</div>
-          <div><kbd>${K.label('subs')}</kbd> cambios (suplentes)</div>
+          <div><kbd>${K.label('subs')}</kbd> cambios (suplentes) · <kbd>${K.label('quick')}</kbd> cambio rápido</div>
           <div><kbd>${K.label('pause')}</kbd> pausa · <kbd>${K.label('mute')}</kbd> silencio</div>
         </div>
         <div class="foot">Sprites de SpriteCollab (CC BY-NC 4.0) · proyecto de fans sin ánimo de lucro · ver CREDITS.md</div>
