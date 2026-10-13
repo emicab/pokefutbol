@@ -476,6 +476,105 @@ PF.Abilities = (() => {
       m.shake = Math.max(m.shake, 5);
     },
 
+    // ------------------------------------------------ con estados (Planta, Veneno, Fantasma)
+
+    /** Drenadoras: semilla que persigue al rival más cercano y se la lleva la vida. */
+    leechseed(m, p) {
+      const a = p.facing;
+      PF.Match.addProjectile(m, {
+        x: p.x + Math.cos(a) * 24, y: p.y - 16 + Math.sin(a) * 24,
+        vx: Math.cos(a) * 600, vy: Math.sin(a) * 600,
+        team: p.team, kind: 'seed', life: 0.45, r: 12, stun: 0.15, inPlace: true, homing: true,
+        status: 'seed', statusDur: 4, statusChance: 1,
+        color: '#7dff9e', hitText: '¡DRENADO!',
+      });
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡DRENADORAS!', '#7dff9e', 0.9);
+      PF.Audio.sfx.vine();
+    },
+
+    /** Hoja Afilada: tres hojas en abanico ancho y corto. */
+    razorleaf(m, p) {
+      for (const off of [-0.45, 0, 0.45]) {
+        const a = p.facing + off;
+        PF.Match.addProjectile(m, {
+          x: p.x + Math.cos(a) * 22, y: p.y - 16 + Math.sin(a) * 22,
+          vx: Math.cos(a) * 760, vy: Math.sin(a) * 760,
+          team: p.team, kind: 'leaf', life: 0.3, r: 13, stun: 0.7, force: 300,
+          color: '#7dff9e', hitText: '¡CORTE!',
+        });
+      }
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡HOJA AFILADA!', '#7dff9e', 0.9);
+      PF.Audio.sfx.swoosh();
+    },
+
+    /** Paralizador: nube de esporas que paraliza a quien entra. */
+    stunspore(m, p) {
+      const x = U.clamp(p.x + Math.cos(p.facing) * 100, F.x0 + 40, F.x1 - 40);
+      const y = U.clamp(p.y + Math.sin(p.facing) * 100, F.y0 + 40, F.y1 - 40);
+      PF.Match.addHazard(m, { kind: 'spore', x, y, r: 95, life: 3, team: p.team });
+      PF.FX.burst(m.fx, x, y, 22, '#f0e060', 200, 0.5, 4);
+      PF.FX.text(m.fx, x, y - 50, '¡ESPORAS!', '#e8e080', 1);
+      PF.Audio.sfx.phase();
+    },
+
+    /** Bomba Lodo: bola que envenena y deja un charco tóxico donde cae. */
+    sludge(m, p) {
+      const a = p.facing;
+      PF.Match.addProjectile(m, {
+        x: p.x + Math.cos(a) * 24, y: p.y - 16 + Math.sin(a) * 24,
+        vx: Math.cos(a) * 520, vy: Math.sin(a) * 520,
+        team: p.team, kind: 'sludge', life: 0.5, r: 16, stun: 0.5, force: 260, puddle: true,
+        status: 'poison', statusDur: 6, statusChance: 0.6,
+        color: '#b06fd0', hitText: '¡LODO!',
+      });
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡BOMBA LODO!', '#c78fe0', 0.9);
+      PF.Audio.sfx.water();
+    },
+
+    /** Niebla Tóxica: nube grande que envenena a quien se queda dentro. */
+    smog(m, p) {
+      const x = U.clamp(p.x + Math.cos(p.facing) * 90, F.x0 + 40, F.x1 - 40);
+      const y = U.clamp(p.y + Math.sin(p.facing) * 90, F.y0 + 40, F.y1 - 40);
+      PF.Match.addHazard(m, { kind: 'toxic', x, y, r: 110, life: 3, team: p.team, chance: 0.8, cloud: true });
+      PF.FX.burst(m.fx, x, y, 26, '#a060c0', 220, 0.6, 5);
+      PF.FX.text(m.fx, x, y - 54, '¡NIEBLA TÓXICA!', '#c78fe0', 1);
+      PF.Audio.sfx.phase();
+    },
+
+    /** Rayo Confuso: orbe lento que deja confuso al rival. */
+    confray(m, p) {
+      const a = p.facing;
+      PF.Match.addProjectile(m, {
+        x: p.x + Math.cos(a) * 24, y: p.y - 16 + Math.sin(a) * 24,
+        vx: Math.cos(a) * 380, vy: Math.sin(a) * 380,
+        team: p.team, kind: 'hex', life: 0.8, r: 15, stun: 0.2, inPlace: true,
+        status: 'conf', statusDur: 3, statusChance: 1,
+        color: '#a58fe8', hitText: '¿¡?!',
+      });
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡RAYO CONFUSO!', '#a58fe8', 0.9);
+      PF.Audio.sfx.phase();
+    },
+
+    /** Maldición: asusta al rival más cercano (no puede usar su habilidad 4 s). */
+    curse(m, p) {
+      const M = PF.Match, RANGE = 300;
+      let best = null, bd = RANGE;
+      for (const q of foes(m, p)) {
+        const d = U.dist(p.x, p.y, q.x, q.y);
+        if (d < bd && !M.untouchable(q)) { bd = d; best = q; }
+      }
+      if (!best) {
+        PF.FX.text(m.fx, p.x, p.y - 56, 'no hay nadie...', '#cfcfcf', 0.6, 0.7);
+        PF.Audio.sfx.fail();
+        return false;
+      }
+      PF.FX.bolt(m.fx, p.x, p.y - 22, best.x, best.y - 20);
+      if (M.stunInPlace(m, best, 0.25)) M.applyStatus(m, best, 'fear', 4, 1);
+      PF.FX.burst(m.fx, best.x, best.y - 20, 16, '#8a7bd0', 200);
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡MALDICIÓN!', '#a58fe8', 1);
+      PF.Audio.sfx.phase();
+    },
+
     /** Mewtwo: onda que aparta y aturde a los rivales alrededor. */
     psywave(m, p) {
       const M = PF.Match, R = 230;

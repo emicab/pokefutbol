@@ -66,6 +66,7 @@ PF.Match = (() => {
     freeze: { label: 'CONGELADO', color: '#9fe3ff', immune: ['ice'] },
     conf: { label: 'CONFUSO', color: '#ffd84a', immune: ['psychic'] },
     fear: { label: 'ASUSTADO', color: '#8a7bd0', immune: ['ghost'] },
+    seed: { label: 'DRENADO', color: '#7dff9e', immune: ['grass'] },   // pierde vida y se la lleva quien lo sembró
   };
   const DOT_FLOOR = 0.1;
   /** Energía en % del máximo (el máximo sale de los PS: PF.staminaMax). */
@@ -241,7 +242,7 @@ PF.Match = (() => {
       stats: { goals: 0, assists: 0, tackles: 0, saves: 0 },
       stamina: PF.staminaMax(def), maxStamina: PF.staminaMax(def), agility: PF.agility(def),
       hp: PF.hpMax(def), maxHp: PF.hpMax(def), ko: 0, fainted: false, hurtT: -9, rank: PF.powerRank(def),
-      status: null, statusT: 0, statusLvl: 0, confT: 0, confAng: 0, chan: null,
+      status: null, statusT: 0, statusLvl: 0, statusFrom: null, confT: 0, confAng: 0, chan: null,
       types: PF.typesOf(def), tiredWarned: false,
       gkHold: false, gkT: 0, assistFrom: null, assistT: 0, ctrl: null,
       pressT: 0, pressCd: 0, pressCdMax: 1, pressLock: false, diveCd: 0, down: 0,
@@ -1299,14 +1300,14 @@ PF.Match = (() => {
    * Intenta dejar `type` en `v` durante `dur` s (con probabilidad `chance`).
    * Devuelve true si quedó. No pisa a un estado que ya tiene (salvo agravar el veneno).
    */
-  function applyStatus(m, v, type, dur, chance = 1) {
+  function applyStatus(m, v, type, dur, chance = 1, from = null) {
     const S = STATUS[type];
     if (!S || v.fainted || untouchable(v) || v.gkHold) return false;
     if (S.immune.some((t) => v.types.includes(t))) return false;
     if (v.status && !(type === 'poison' && v.status === 'poison')) return false;
     if (Math.random() >= chance) return false;
     if (v.status === 'poison') { v.statusLvl = Math.min(2, v.statusLvl + 1); v.statusT = Math.max(v.statusT, dur); }
-    else { v.status = type; v.statusT = dur; v.statusLvl = 1; }
+    else { v.status = type; v.statusT = dur; v.statusLvl = 1; v.statusFrom = from; }
     if (type === 'freeze') {
       if (m.ball.holder === v) loseBall(m, v, Math.cos(v.facing), Math.sin(v.facing));
       v.stun = Math.max(v.stun, dur); v.vx = 0; v.vy = 0; v.charge = -1; v.dash = 0; v.chan = null;
@@ -1328,6 +1329,15 @@ PF.Match = (() => {
         p.hurtT = m.clock;
       }
       if (Math.random() < dt * 8) PF.FX.particle(m.fx, p.x + U.rand(-10, 10), p.y - U.rand(10, 36), 0, -50, STATUS[s].color, 0.4, 3);
+    } else if (s === 'seed') {
+      // Drenadoras: lo que pierde se lo lleva quien lo sembró (si sigue en pie)
+      const floor = p.maxHp * DOT_FLOOR, take = p.maxHp * 0.016 * dt, src = p.statusFrom;
+      if (m.state === 'play' && p.hp > floor) {
+        const lost = Math.min(take, p.hp - floor);
+        p.hp -= lost; p.hurtT = m.clock;
+        if (src && !src.fainted && src.team !== p.team) src.hp = Math.min(src.maxHp, src.hp + lost * (src.maxHp / p.maxHp));
+        if (src && Math.random() < dt * 6) PF.FX.particle(m.fx, p.x, p.y - 14, (src.x - p.x) * 1.2, (src.y - p.y) * 1.2, '#7dff9e', 0.8, 4);
+      }
     } else if (s === 'para') {
       if (m.state === 'play' && Math.hypot(p.vx, p.vy) > 60 && Math.random() < dt * 0.9) {
         p.down = Math.max(p.down, 0.3);   // se traba
@@ -1620,12 +1630,21 @@ PF.Match = (() => {
           PF.FX.burst(m.fx, q.x, q.y - 14, 14, pr.color, 220);
           PF.FX.text(m.fx, q.x, q.y - 50, pr.hitText || '¡PAM!', pr.color, 0.9);
           PF.Audio.sfx.tackle();
-          if (pr.status) applyStatus(m, q, pr.status, pr.statusDur || 4, pr.statusChance ?? 1);
+          if (pr.status) applyStatus(m, q, pr.status, pr.statusDur || 4, pr.statusChance ?? 1, pr.hit && pr.hit.from);
           if (pr.slowT) q.slow = Math.max(q.slow, pr.slowT);
         }
         pr.dead = true;
         break;
       }
+    }
+    // el lodo deja un charco venenoso donde cae (o donde pega)
+    for (const pr of m.projs) {
+      if (!pr.dead || !pr.puddle) continue;
+      const prev = m.hit;
+      m.hit = pr.hit;
+      addHazard(m, { kind: 'toxic', x: U.clamp(pr.x, F.x0 + 30, F.x1 - 30), y: U.clamp(pr.y, F.y0 + 30, F.y1 - 30), r: 70, life: 4, team: pr.team, chance: 0.5 });
+      m.hit = prev;
+      PF.FX.burst(m.fx, pr.x, pr.y, 12, '#b06fd0', 200, 0.4, 4);
     }
     m.projs = m.projs.filter((pr) => !pr.dead);
   }
@@ -1671,6 +1690,15 @@ PF.Match = (() => {
               PF.FX.burst(m.fx, p.x, p.y - 12, 8, '#ff9a3d', 160);
               applyStatus(m, p, 'burn', 4, 0.5);
             }
+          }
+        } else if (h.kind === 'spore' && h.t > 0.2 && !h.hit.has(p)) {
+          h.hit.add(p);
+          applyStatus(m, p, 'para', 4, 0.6);
+        } else if (h.kind === 'toxic') {
+          // charco o niebla: cada segundo que está dentro se envenena (o se agrava)
+          if (h.t >= (h.next.get(p) || 0.15)) {
+            h.next.set(p, h.t + 1);
+            applyStatus(m, p, 'poison', 6, h.chance ?? 0.6);
           }
         } else if (h.kind === 'sleep' && h.t > 0.2 && !h.hit.has(p)) {
           h.hit.add(p);

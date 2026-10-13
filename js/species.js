@@ -21,10 +21,10 @@
   /** Habilidades por tipo, para especies sin habilidades propias. */
   const TYPE_ABILITIES = {
     normal: ['quick', 'slam'], fire: ['fireshot', 'embers', 'flamethrower', 'firespin', 'blaze'],
-    water: ['hydro', 'puddle', 'watergun', 'bubble'], grass: ['vine', 'sleep'],
-    electric: ['zap', 'quick', 'thunderwave', 'bolt'], ice: ['ice', 'surf'], fighting: ['punch', 'throw'], poison: ['sleep', 'embers'],
+    water: ['hydro', 'puddle', 'watergun', 'bubble'], grass: ['vine', 'sleep', 'leechseed', 'razorleaf', 'stunspore'],
+    electric: ['zap', 'quick', 'thunderwave', 'bolt'], ice: ['ice', 'surf'], fighting: ['punch', 'throw'], poison: ['sludge', 'smog', 'sleep'],
     ground: ['dig', 'wall'], flying: ['quick', 'jump'], psychic: ['confusion', 'psywave'], bug: ['pinmissile', 'quick'],
-    rock: ['wall', 'dig'], ghost: ['phase', 'teleport'], dragon: ['surf', 'psywave'], dark: ['teleport', 'shuriken'],
+    rock: ['wall', 'dig'], ghost: ['phase', 'teleport', 'confray', 'curse'], dragon: ['surf', 'psywave'], dark: ['teleport', 'shuriken'],
     steel: ['wall', 'aura'], fairy: ['sing', 'roll'],
   };
 
@@ -81,6 +81,13 @@
     bubble: { id: 'bubble', name: 'Burbuja', cd: 8, desc: 'Burbuja lenta que atrapa al primero que toca: lo frena 2,5 s. Apaga tu Quemadura.' },
     thunderwave: { id: 'thunderwave', name: 'Onda Trueno', cd: 8, desc: 'Onda lenta que, si toca, deja Paralizado al rival (más lento y a veces se traba). Inofensiva contra Eléctricos y Tierra.' },
     bolt: { id: 'bolt', name: 'Rayo', cd: 9, desc: 'Rayo instantáneo en línea que atraviesa a todos los rivales delante: aturde y a veces Paraliza.' },
+    leechseed: { id: 'leechseed', name: 'Drenadoras', cd: 9, desc: 'Semilla que persigue al rival más cercano: lo Drena 4 s y te cura con lo que pierde. No afecta a Planta.' },
+    razorleaf: { id: 'razorleaf', name: 'Hoja Afilada', cd: 6, desc: 'Tres hojas en abanico ancho y corto: tumban al que tocan. Ideal de cerca.' },
+    stunspore: { id: 'stunspore', name: 'Paralizador', cd: 9, desc: 'Nube de esporas delante: Paraliza (60 %) a los rivales que entran. No afecta a Eléctricos.' },
+    sludge: { id: 'sludge', name: 'Bomba Lodo', cd: 8, desc: 'Bola de lodo: si toca, empuja y Envenena; donde cae deja un charco venenoso 4 s. No afecta a Veneno ni Acero.' },
+    smog: { id: 'smog', name: 'Niebla Tóxica', cd: 10, desc: 'Nube grande y densa: Envenena a los rivales que se quedan dentro (cada segundo, agrava). No afecta a Veneno ni Acero.' },
+    confray: { id: 'confray', name: 'Rayo Confuso', cd: 8, desc: 'Orbe lento que deja Confuso al rival: se desvía solo y sus pases salen torcidos. Inofensivo contra Normal y Psíquico.' },
+    curse: { id: 'curse', name: 'Maldición', cd: 11, desc: 'Asusta al rival más cercano (hasta 300 px): 4 s sin poder usar su habilidad. Inofensiva contra Normal y Fantasma.' },
   });
 
   /** Evoluciones que cambian tanto que no heredan (Gyarados no salpica; las Eeveelutions son de su tipo). */
@@ -201,6 +208,8 @@
     psychic: 'psychic', psywave: 'psychic', adapt: null, psybeam: 'psychic', pinmissile: 'bug',
     flamethrower: 'fire', firespin: 'fire', blaze: 'fire', watergun: 'water', bubble: 'water',
     thunderwave: 'electric', bolt: 'electric',
+    leechseed: 'grass', razorleaf: 'grass', stunspore: 'grass', sludge: 'poison', smog: 'poison',
+    confray: 'ghost', curse: 'ghost',
   };
 
   /**

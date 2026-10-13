@@ -67,6 +67,13 @@ PF.AI = (() => {
     bubble: (c) => c.foeHolder && c.dHolder < 240 && c.aimHolder,
     thunderwave: (c) => c.foeHolder && c.dHolder < 290 && c.aimHolder && !c.b.holder.status,
     bolt: (c) => c.foeHolder && c.dHolder < 320 && c.aimHolder,
+    leechseed: (c) => c.foeHolder && c.dHolder < 260 && c.aimHolder && !c.b.holder.status,
+    razorleaf: (c) => c.foeHolder && c.dHolder < 220 && c.aimHolder,
+    stunspore: (c) => c.foeHolder && c.dHolder < 190 && c.aimHolder && !c.b.holder.status,
+    sludge: (c) => c.foeHolder && c.dHolder < 250 && c.aimHolder,
+    smog: (c) => c.foeHolder && c.dHolder < 200 && c.aimHolder && !c.b.holder.status,
+    confray: (c) => c.foeHolder && c.dHolder < 280 && c.aimHolder && !c.b.holder.status,
+    curse: (c) => c.foeHolder && c.dHolder < 280 && c.aimHolder && !c.b.holder.status,
     adapt: (c) => (c.mine ? c.pressure < 150 : c.foeHolder && c.dHolder < 220),
     splash: (c) => c.pressure < 220,
   };

@@ -209,15 +209,28 @@ etiqueta de color aparece sobre la cabeza). Los tipos inmunes no lo reciben:
 La quemadura y el veneno no dejan K.O. (se frenan en el 10 % de vida), y las
 habilidades de Agua apagan tu propia quemadura.
 
-Movimientos con estado ya disponibles (Fuego, Agua y Eléctrico; el resto de
-los tipos, en camino): **Lanzallamas** (cono corto 1 s, hace soltar la pelota,
-puede quemar), **Giro Fuego** (remolino que frena y lastima), **Llamarada**
-(carga 0,6 s quieto y estalla; gasta mucha energía), **Pistola Agua** (chorro
-que empuja y desvía la pelota), **Burbuja** (atrapa y frena 2,5 s),
-**Onda Trueno** (paraliza; no afecta a Eléctricos ni a Tierra) y **Rayo** (línea
-instantánea que atraviesa a todos). Los Pokémon sin movimientos propios reciben
-un orden distinto dentro de su tipo, así que dos del mismo tipo ya no repiten
-siempre los mismos.
+Además de los estados de la tabla, **Drenado** (Planta): pierde vida y se la
+lleva quien lo sembró (4 s; no afecta a Planta).
+
+Movimientos con estado ya disponibles (Fuego, Agua, Eléctrico, Planta, Veneno y
+Fantasma; el resto de los tipos, en camino):
+- **Fuego:** *Lanzallamas* (cono corto 1 s, hace soltar la pelota, puede
+  quemar), *Giro Fuego* (remolino que frena y lastima) y *Llamarada* (carga 0,6 s
+  quieto y estalla; gasta mucha energía).
+- **Agua:** *Pistola Agua* (chorro que empuja y desvía la pelota) y *Burbuja*
+  (atrapa y frena 2,5 s).
+- **Eléctrico:** *Onda Trueno* (paraliza; no afecta a Eléctricos ni a Tierra) y
+  *Rayo* (línea instantánea que atraviesa a todos).
+- **Planta:** *Drenadoras* (semilla que persigue al más cercano y te cura con lo
+  que él pierde), *Hoja Afilada* (tres hojas en abanico ancho y corto) y
+  *Paralizador* (nube que paraliza).
+- **Veneno:** *Bomba Lodo* (empuja, envenena y deja un charco tóxico 4 s) y
+  *Niebla Tóxica* (nube grande que envenena y agrava a quien se queda).
+- **Fantasma:** *Rayo Confuso* (orbe lento que confunde; no afecta a Normal ni
+  Psíquico) y *Maldición* (asusta al más cercano hasta 300 px: 4 s sin habilidad).
+
+Los Pokémon sin movimientos propios reciben un orden distinto dentro de su tipo,
+así que dos del mismo tipo ya no repiten siempre los mismos.
 
 En el partido rápido se pueden elegir hasta 2 suplentes; en el modo historia,
 todo el club que no es titular está en el banco. Hay 3 cambios por partido,

@@ -419,6 +419,19 @@ PF.Render = (() => {
         ctx.beginPath(); ctx.ellipse(h.x, h.y, h.r * f, h.r * 0.5 * f, 0, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#ffd23f';
         ctx.beginPath(); ctx.ellipse(h.x, h.y - 2, h.r * 0.5 * f, h.r * 0.25 * f, 0, 0, Math.PI * 2); ctx.fill();
+      } else if (h.kind === 'spore' || h.kind === 'toxic') {
+        // nube de esporas amarillas o niebla / charco venenoso
+        const spore = h.kind === 'spore', cloud = spore || h.cloud;
+        ctx.globalAlpha = (cloud ? 0.3 : 0.5) * fade;
+        ctx.fillStyle = spore ? '#e8e060' : '#8a40b0';
+        ctx.beginPath(); ctx.ellipse(h.x, h.y, h.r, h.r * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = (cloud ? 0.4 : 0.6) * fade;
+        ctx.fillStyle = spore ? '#f6f0a0' : '#c070e0';
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 + m.clock * (cloud ? 0.7 : 0.3), k = 0.35 + 0.2 * Math.sin(m.clock * 2 + i);
+          const bx = h.x + Math.cos(a) * h.r * 0.55, by = h.y + Math.sin(a) * h.r * 0.3 - (cloud ? 8 : 0);
+          ctx.beginPath(); ctx.arc(bx, by, h.r * (cloud ? 0.34 : 0.16) * (0.8 + k), 0, Math.PI * 2); ctx.fill();
+        }
       } else if (h.kind === 'firespin') {
         // remolino: llamas que giran alrededor
         ctx.globalAlpha = 0.35 * fade;
@@ -471,6 +484,23 @@ PF.Render = (() => {
         }
         ctx.fillStyle = '#fff'; ctx.fillRect(-2, -2, 4, 4);
         ctx.restore();
+      } else if (pr.kind === 'leaf') {
+        ctx.save();
+        ctx.translate(pr.x, pr.y);
+        ctx.rotate(Math.atan2(pr.vy, pr.vx));
+        ctx.fillStyle = '#2c9a4a';
+        ctx.beginPath(); ctx.ellipse(0, 0, pr.r * 1.5, pr.r * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = pr.color;
+        ctx.beginPath(); ctx.ellipse(-1, 0, pr.r * 1.2, pr.r * 0.38, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      } else if (pr.kind === 'hex') {
+        const w = 0.8 + 0.2 * Math.sin(m.clock * 20);
+        ctx.fillStyle = 'rgba(80,50,140,0.35)';
+        ctx.beginPath(); ctx.arc(pr.x, pr.y, pr.r * 1.7, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#2a1a50';
+        ctx.beginPath(); ctx.arc(pr.x, pr.y, pr.r, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = pr.color; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(pr.x, pr.y, pr.r * w, 0, Math.PI * 2); ctx.stroke();
       } else if (pr.kind === 'bubble') {
         const w = 1 + 0.06 * Math.sin(m.clock * 12);
         ctx.fillStyle = 'rgba(184,230,255,0.28)';
@@ -494,8 +524,11 @@ PF.Render = (() => {
         ctx.fillStyle = '#e8f8ff';
         ctx.beginPath(); ctx.arc(pr.x - 3, pr.y - 3, pr.r * 0.4, 0, Math.PI * 2); ctx.fill();
       } else {
-        ctx.fillStyle = 'rgba(127,184,255,0.35)';
+        // aura, psicorrayo, semilla, lodo: bola con halo del color de la habilidad
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = pr.color;
         ctx.beginPath(); ctx.arc(pr.x, pr.y, pr.r * 1.7, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
         ctx.fillStyle = pr.color;
         ctx.beginPath(); ctx.arc(pr.x, pr.y, pr.r, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#fff';
