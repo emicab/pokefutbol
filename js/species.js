@@ -20,11 +20,11 @@
   };
   /** Habilidades por tipo, para especies sin habilidades propias. */
   const TYPE_ABILITIES = {
-    normal: ['quick', 'slam'], fire: ['fireshot', 'embers', 'flamethrower', 'firespin', 'blaze'],
+    normal: ['quick', 'slam', 'hyperbeam', 'rest'], fire: ['fireshot', 'embers', 'flamethrower', 'firespin', 'blaze'],
     water: ['hydro', 'puddle', 'watergun', 'bubble'], grass: ['vine', 'sleep', 'leechseed', 'razorleaf', 'stunspore'],
     electric: ['zap', 'quick', 'thunderwave', 'bolt'], ice: ['ice', 'surf', 'blizzard'], fighting: ['punch', 'throw', 'jumpkick', 'counter'], poison: ['sludge', 'smog', 'sleep'],
     ground: ['dig', 'wall', 'quake', 'rockthrow'], flying: ['quick', 'jump', 'gust'], psychic: ['confusion', 'psywave', 'hypnosis', 'barrier'], bug: ['pinmissile', 'quick', 'web'],
-    rock: ['wall', 'dig', 'rockthrow', 'quake'], ghost: ['phase', 'teleport', 'confray', 'curse'], dragon: ['surf', 'psywave'], dark: ['teleport', 'shuriken'],
+    rock: ['wall', 'dig', 'rockthrow', 'quake'], ghost: ['phase', 'teleport', 'confray', 'curse'], dragon: ['dragontail', 'dragondance', 'surf', 'psywave'], dark: ['teleport', 'shuriken'],
     steel: ['wall', 'aura'], fairy: ['sing', 'roll'],
   };
 
@@ -96,6 +96,10 @@
     barrier: { id: 'barrier', name: 'Barrera', cd: 12, desc: 'Escudo psíquico 2,2 s: bloquea los dos próximos golpes y los estados de los rivales (placajes y habilidades).' },
     gust: { id: 'gust', name: 'Tornado', cd: 9, desc: 'Cono de viento: aparta a los rivales, rechaza la pelota y devuelve los proyectiles que vienen hacia ti.' },
     web: { id: 'web', name: 'Telaraña', cd: 10, desc: 'Red pegajosa 4 s delante: los rivales dentro van lentísimos y la pelota se frena.' },
+    hyperbeam: { id: 'hyperbeam', name: 'Hiperrayo', cd: 14, desc: 'Cargas 0,9 s quieto (se ve hacia dónde apuntas) y disparas un rayo enorme de 420 px: arrasa a todos en línea. Después quedas agotado 1 s. Gasta mucha energía.' },
+    rest: { id: 'rest', name: 'Descanso', cd: 14, desc: 'Te quedas quieto 2 s durmiendo y recuperas el 25 % de tu vida. Si te golpean, se corta.' },
+    dragontail: { id: 'dragontail', name: 'Cola Dragón', cd: 9, desc: 'Barrido de 360°: aparta a todos los rivales cercanos y manda la pelota hacia ti.' },
+    dragondance: { id: 'dragondance', name: 'Danza Dragón', cd: 12, desc: 'Durante 4 s corres mucho más y tiras un 25 % más fuerte.' },
     curse: { id: 'curse', name: 'Maldición', cd: 11, desc: 'Asusta al rival más cercano (hasta 300 px): 4 s sin poder usar su habilidad. Inofensiva contra Normal y Fantasma.' },
   });
 
@@ -131,6 +135,8 @@
       x ^= x >>> 15; x = Math.imul(x, 2246822519) >>> 0; x ^= x >>> 13;
       return x;
     };
+    // (sólo hay tres Dragón: sin barajar, para que todos tengan sus movimientos propios)
+    if (type === 'dragon') return base.slice();
     const out = base.slice().sort((a, b) => h(a) - h(b));
     // Volador casi nunca es el tipo principal: sin esto su movimiento propio casi no salía
     if (type === 'flying') out.sort((a, b) => (b === 'gust') - (a === 'gust'));
@@ -223,6 +229,7 @@
     leechseed: 'grass', razorleaf: 'grass', stunspore: 'grass', sludge: 'poison', smog: 'poison',
     confray: 'ghost', curse: 'ghost', blizzard: 'ice', jumpkick: 'fighting', counter: 'fighting',
     quake: 'ground', rockthrow: 'rock', hypnosis: 'psychic', barrier: 'psychic', gust: 'flying', web: 'bug',
+    hyperbeam: 'normal', rest: null, dragontail: 'dragon', dragondance: null,
   };
 
   /**

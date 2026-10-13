@@ -731,6 +731,51 @@ PF.Abilities = (() => {
       PF.Audio.sfx.vine();
     },
 
+    // ------------------------------------------------ Normal y Dragón
+
+    /** Hiperrayo: carga quieto 0,9 s (apunta a donde mirabas) y dispara un rayo enorme (lo hace tick). */
+    hyperbeam(m, p) {
+      p.chan = { id: 'hyper', type: 'normal', t: 0, dur: 0.9, root: true, speed: 0 };
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡HIPERRAYO!', '#ffe9a8', 1.1);
+      PF.Audio.sfx.zap();
+    },
+
+    /** Descanso: 2 s quieto durmiendo, recupera el 25 % de la vida (lo hace tick). */
+    rest(m, p) {
+      p.chan = { id: 'rest', t: 0, dur: 2, root: true, speed: 0, z: 0 };
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡DESCANSO!', '#9cff9c', 1);
+      PF.Audio.sfx.sing();
+    },
+
+    /** Cola Dragón: barrido de 360°; aparta a todos y manda la pelota hacia ti. */
+    dragontail(m, p) {
+      const M = PF.Match, R = 175;
+      for (const q of near(m, p, R)) {
+        const d = U.dist(p.x, p.y, q.x, q.y) || 1;
+        M.knock(m, q, (q.x - p.x) / d, (q.y - p.y) / d, 680 - d, 0.8);
+      }
+      const b = m.ball;
+      if (!safe(b) && b.holder !== p && (!b.holder || b.holder.team !== p.team) && U.dist(p.x, p.y, b.x, b.y) < R + 40) {
+        if (b.holder) { b.holder.pickupCd = 0.6; b.holder.charge = -1; b.holder = null; }
+        const dx = p.x - b.x, dy = p.y - b.y, d = Math.hypot(dx, dy) || 1;
+        b.vx = (dx / d) * 520; b.vy = (dy / d) * 520; b.last = p; b.vine = null;
+      }
+      p.spinT = 0.35;
+      PF.FX.ring(m.fx, p.x, p.y, R * 1.2, '#9f90ff', 0.4, 10);
+      PF.FX.burst(m.fx, p.x, p.y - 10, 24, '#7a6aff', 300, 0.5, 5);
+      PF.FX.text(m.fx, p.x, p.y - 70, '¡COLA DRAGÓN!', '#b4a8ff', 1.1);
+      PF.Audio.sfx.slam();
+      m.shake = Math.max(m.shake, 7);
+    },
+
+    /** Danza Dragón: 4 s de velocidad y de tiro (el efecto lo aplica match.js con turbo y buff). */
+    dragondance(m, p) {
+      p.turbo = 4; p.buff = 4;
+      PF.FX.ring(m.fx, p.x, p.y, 70, '#9f90ff', 0.4, 8);
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡DANZA DRAGÓN!', '#b4a8ff', 1.1);
+      PF.Audio.sfx.phase();
+    },
+
     /** Mewtwo: onda que aparta y aturde a los rivales alrededor. */
     psywave(m, p) {
       const M = PF.Match, R = 230;
@@ -800,6 +845,46 @@ PF.Abilities = (() => {
         m.shake = Math.max(m.shake, 12);
         m.freeze = 0.06;
         return true;
+      }
+      if (c.id === 'hyper') {
+        const LEN = 420, W = 34;
+        const fx = Math.cos(p.facing), fy = Math.sin(p.facing);
+        if (c.t < c.dur) {
+          if (Math.random() < 0.5) PF.FX.particle(m.fx, p.x + fx * 24 + U.rand(-30, 30), p.y + fy * 24 + U.rand(-30, 30) - 14, fx * -60, fy * -60, '#fff3b0', 0.3, 4);
+          return false;
+        }
+        // disparo: arrasa todo lo que esté en la línea
+        for (const q of foes(m, p)) {
+          const dx = q.x - p.x, dy = q.y - p.y;
+          const along = dx * fx + dy * fy, side = Math.abs(dx * fy - dy * fx);
+          if (along < 0 || along > LEN || side > W + M.radius(q)) continue;
+          if (M.knock(m, q, fx, fy, 760, 1.3)) PF.FX.burst(m.fx, q.x, q.y - 16, 16, '#fff3b0', 260);
+        }
+        const b = m.ball;
+        if (!safe(b) && b.holder !== p && (!b.holder || b.holder.team !== p.team)) {
+          const dx = b.x - p.x, dy = b.y - p.y;
+          const along = dx * fx + dy * fy, side = Math.abs(dx * fy - dy * fx);
+          if (along > 0 && along < LEN && side < W + b.r) {
+            if (b.holder) { b.holder.pickupCd = 0.6; b.holder = null; }
+            b.vx = fx * 1000; b.vy = fy * 1000; b.last = p; b.vine = null;
+          }
+        }
+        for (let i = 0; i < 36; i++) {
+          const k = i / 36;
+          PF.FX.particle(m.fx, p.x + fx * LEN * k, p.y + fy * LEN * k - 14, fx * 120 + U.rand(-60, 60), fy * 120 + U.rand(-60, 60), U.pick(['#fff3b0', '#ffd23f', '#ffffff']), U.rand(0.3, 0.5), U.rand(6, 11));
+        }
+        PF.FX.text(m.fx, p.x + fx * 120, p.y + fy * 120 - 50, '¡BUUUM!', '#fff3b0', 1.4);
+        PF.Audio.sfx.slam();
+        m.shake = Math.max(m.shake, 14);
+        m.freeze = 0.07;
+        p.down = Math.max(p.down, 1.0);   // queda agotado
+        return true;
+      }
+      if (c.id === 'rest') {
+        p.hp = Math.min(p.maxHp, p.hp + (p.maxHp * 0.25 * dt) / c.dur);
+        c.z -= dt;
+        if (c.z <= 0) { c.z = 0.5; PF.FX.text(m.fx, p.x + U.rand(-10, 10), p.y - 56, 'Zzz', '#9cff9c', 0.6, 0.7); }
+        return false;
       }
       if (c.id === 'barrier') return false;   // el escudo lo dibuja render.js y lo aplica match.js
       if (c.id === 'counter') {

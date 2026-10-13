@@ -212,7 +212,7 @@ habilidades de Agua apagan tu propia quemadura.
 Además de los estados de la tabla, **Drenado** (Planta): pierde vida y se la
 lleva quien lo sembró (4 s; no afecta a Planta).
 
-Movimientos nuevos ya disponibles (todos los tipos salvo Dragón y Normal, en camino):
+Movimientos nuevos ya disponibles (todos los tipos):
 - **Fuego:** *Lanzallamas* (cono corto 1 s, hace soltar la pelota, puede
   quemar), *Giro Fuego* (remolino que frena y lastima) y *Llamarada* (carga 0,6 s
   quieto y estalla; gasta mucha energía).
@@ -244,6 +244,13 @@ Movimientos nuevos ya disponibles (todos los tipos salvo Dragón y Normal, en ca
   Voladores son de tipo doble, así que su movimiento propio es siempre el segundo.
 - **Bicho:** *Telaraña* (red de 4 s: los rivales dentro van lentísimos y la
   pelota se frena).
+- **Normal:** *Hiperrayo* (cargas 0,9 s quieto con una mira visible y disparas un
+  rayo de 420 px que arrasa; si te golpean antes, se corta; después quedas
+  agotado 1 s) y *Descanso* (2 s quieto durmiendo: recuperas el 25 % de la
+  vida; si te golpean, se corta).
+- **Dragón:** *Cola Dragón* (barrido de 360° que aparta a todos y manda la pelota
+  hacia ti) y *Danza Dragón* (4 s de velocidad y +25 % de tiro). Sólo hay tres
+  Dragón, así que cada uno tiene sus dos movimientos propios.
 
 Los Pokémon sin movimientos propios reciben un orden distinto dentro de su tipo,
 así que dos del mismo tipo ya no repiten siempre los mismos.

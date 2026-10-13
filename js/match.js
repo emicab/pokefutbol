@@ -242,7 +242,7 @@ PF.Match = (() => {
       stats: { goals: 0, assists: 0, tackles: 0, saves: 0 },
       stamina: PF.staminaMax(def), maxStamina: PF.staminaMax(def), agility: PF.agility(def),
       hp: PF.hpMax(def), maxHp: PF.hpMax(def), ko: 0, fainted: false, hurtT: -9, rank: PF.powerRank(def),
-      status: null, statusT: 0, statusLvl: 0, statusFrom: null, confT: 0, confAng: 0, chan: null, jk: 0, jkOn: false, jkHit: false, mire: 0,
+      status: null, statusT: 0, statusLvl: 0, statusFrom: null, confT: 0, confAng: 0, chan: null, jk: 0, jkOn: false, jkHit: false, mire: 0, buff: 0,
       types: PF.typesOf(def), tiredWarned: false,
       gkHold: false, gkT: 0, assistFrom: null, assistT: 0, ctrl: null,
       pressT: 0, pressCd: 0, pressCdMax: 1, pressLock: false, diveCd: 0, down: 0,
@@ -858,7 +858,7 @@ PF.Match = (() => {
     const b = m.ball, st = m.stadium;
     const digging = p.dig > 0;
     for (const k of ['stun', 'tackleCd', 'pickupCd', 'phase', 'turbo', 'giant', 'slow', 'fireShot', 'wall', 'embers',
-      'slip', 'burnCd', 'dig', 'ram', 'spinT', 'magnet', 'diving', 'pressCd', 'diveCd', 'down', 'ko', 'jk', 'mire']) {
+      'slip', 'burnCd', 'dig', 'ram', 'spinT', 'magnet', 'diving', 'pressCd', 'diveCd', 'down', 'ko', 'jk', 'mire', 'buff']) {
       p[k] = Math.max(0, p[k] - dt);
     }
     // Patada Salto que no tocó a nadie: se tropieza
@@ -1047,7 +1047,7 @@ PF.Match = (() => {
   }
 
   /** Energía extra de algunas habilidades muy fuertes (además del costo por recarga). */
-  const ABILITY_EXTRA = { fireshot: 14.5, blaze: 8 };
+  const ABILITY_EXTRA = { fireshot: 14.5, blaze: 8, hyperbeam: 8 };
   const abilityCost = (p) => STAMINA.ability + p.def.ability.cd * STAMINA.abilityCd + (ABILITY_EXTRA[p.def.ability.id] || 0);
   /** Aviso de "sin energía" (como mucho uno por segundo). */
   function noEnergy(m, p) {
@@ -1206,7 +1206,7 @@ PF.Match = (() => {
     spend(p, STAMINA.shot + STAMINA.shotCharge * k);
     const aim = shotAim(p);
     // un toque ya sale rápido (más que un pase); cargar le suma fuerza
-    const power = U.lerp(SHOT_TAP, SHOT_FULL, k) * p.def.power * p.bonus.power * m.mods[p.team].power * (b.big > 0 ? 0.85 : 1) * (0.75 + 0.25 * fatigue(p)) * (p.status === 'burn' ? 0.85 : 1);
+    const power = U.lerp(SHOT_TAP, SHOT_FULL, k) * p.def.power * p.bonus.power * m.mods[p.team].power * (b.big > 0 ? 0.85 : 1) * (0.75 + 0.25 * fatigue(p)) * (p.status === 'burn' ? 0.85 : 1) * (p.buff > 0 ? 1.25 : 1);
     let sp = 1180 * power;
     const fire = p.fireShot > 0;
     if (fire) sp = 1600 * p.def.power;

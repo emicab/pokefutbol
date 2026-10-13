@@ -83,6 +83,10 @@ PF.AI = (() => {
     barrier: (c) => c.mine && c.pressure < 100 && c.foesNear > 0,
     gust: (c) => c.foeHolder && c.dHolder < 260 && c.aimHolder,
     web: (c) => c.foeHolder && c.dHolder < 250 && c.aimHolder,
+    hyperbeam: (c) => c.foeHolder && c.dHolder < 360 && c.aimHolder,
+    rest: (c) => !c.mine && c.hpPct < 45 && c.pressure > 260 && c.dMe > 300,
+    dragontail: (c) => (c.mine ? c.pressure < 120 && c.foesNear > 0 : c.foeHolder && c.dHolder < 170),
+    dragondance: (c) => (c.mine ? c.dGoal < 650 && c.pressure > 120 : c.chasing && !c.foeHolder && c.dMe > 220),
     adapt: (c) => (c.mine ? c.pressure < 150 : c.foeHolder && c.dHolder < 220),
     splash: (c) => c.pressure < 220,
   };
@@ -372,6 +376,7 @@ PF.AI = (() => {
       pressure: M.nearestFoeDist(m, p, p.x, p.y),
       foesNear: foes.filter((q) => U.dist(p.x, p.y, q.x, q.y) < 220).length,
       chasing: ai.chasing,
+      hpPct: M.hpPct(p),
     };
 
     // ---------------------------------------------- con la pelota
