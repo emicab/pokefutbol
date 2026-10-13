@@ -36,7 +36,33 @@ PF.Career = (() => {
     shop: { name: 'Tienda', icon: '🛒', desc: 'Gasta tus monedas en mejoras, Pociones y caramelos.' },
     event: { name: 'Evento', icon: '❓', desc: 'Un encuentro en el camino: puede salir bien… o no tanto.' },
     leader: { name: 'Líder', icon: '🏅', desc: 'El líder del gimnasio. Si ganas, la medalla y un Pokémon de su equipo.' },
+    rival: { name: 'Azul', icon: '😤', desc: 'Tu rival Azul te corta el paso. Su equipo crece con vos. Premio: 100 monedas, una mejora y quizás un Pokémon.' },
   };
+
+  // ------------------------------------------------------------------ historia: rival y frases
+  const RIVAL = 'Azul';
+  /** Línea evolutiva que elige el rival: la que le gana en tipo a tu inicial. */
+  const RIVAL_LINES = { fire: [7, 8, 9], water: [1, 2, 3], grass: [4, 5, 6], electric: [27, 28, 112] };
+  /** Equipo del rival en cada encuentro (L = su línea inicial); nivel por encima del gimnasio. */
+  const RIVAL_TEAMS = [(L) => [L[1], 17, 64], (L) => [L[1], 17, 64], (L) => [L[2], 18, 65]];
+
+  /** Frases de entrenadores comunes. */
+  const SAY = {
+    pre: ['¡Mis Pokémon están calentando!', '¡No te pienso dejar pasar!', 'Hoy me siento imparable.', 'Prepárate, que juego en serio.', '¿Un partido? ¡Acepto!'],
+    beaten: ['¡Buen partido! Me ganaste.', 'Vaya… eres bueno. Seguiré entrenando.', '¡Esta no la vi venir!', 'Me diste una lección.'],
+    victory: ['¡Gané! Entrena más.', 'Mejor suerte la próxima.', '¡Ja! Esa fue fácil.', 'Todavía te falta.'],
+  };
+  const ELITE_SAY = {
+    pre: ['Soy de la élite del gimnasio. No te lo pondré fácil.', 'Pocos llegan hasta acá. Veamos qué tienes.'],
+    beaten: ['Impresionante. Te lo ganaste.', 'Uf… hacía mucho que no perdía.'],
+    victory: ['La élite no se rinde. Vuelve cuando estés listo.', 'Aún no estás a la altura.'],
+  };
+
+  const RIVAL_TALK = [
+    { pre: ['¡Mira quién anda por acá! ¿Ya tienes la Medalla Roca? Yo también.', '¡Y mi {c} está imbatible! Juguemos, a ver quién es mejor.'], beaten: '¡¿Qué?! Fue suerte… la próxima te gano.', victory: '¡Ja! Eres mucho más lento que mi {c}. Entrena un poco.' },
+    { pre: ['¡Otra vez nos vemos! Escuché que vas por las medallas. Yo también.', 'Mi {c} es más fuerte ahora. No me voy a contener.'], beaten: '¡Grr! Me estás alcanzando… pero no por mucho.', victory: 'Sigues un paso atrás. ¿Seguro que sabes jugar?' },
+    { pre: ['Sólo queda la Liga, y yo voy a estar ahí.', 'Si no me vences hoy, ni sueñes con enfrentar al Campeón.'], beaten: 'Está bien… Te espero en la Liga. Allí no seré tan amable.', victory: '¡Fue pan comido! No llegarás a la Liga.' },
+  ];
   const TRAINERS = ['Campista', 'Joven', 'Karateka', 'Pescador', 'Excursionista', 'Scout', 'Motociclista', 'Cinturón negro', 'Estudiante', 'Jugadora'];
   const NAMES = ['Álex', 'Marta', 'Tomás', 'Rocío', 'Bruno', 'Lía', 'Nico', 'Sofi', 'Dante', 'Vera', 'Iván', 'Lola'];
   const MAP_LAYERS = 4;   // capas de la ruta; después viene el líder
@@ -81,6 +107,52 @@ PF.Career = (() => {
     });
   }
 
+  /** Línea evolutiva del rival: la que le gana en tipo a tu inicial (se fija al empezar). */
+  function rivalLine() {
+    const c = data();
+    if (!c.rival) {
+      const first = c.club[0] ? PF.species(c.club[0].dex) : null;
+      c.rival = { line: RIVAL_LINES[first && first.type] || RIVAL_LINES.fire };
+      save();
+    }
+    return c.rival.line;
+  }
+
+  const storyOf = (who, text, extra) => Object.assign({ who, text }, extra);
+  const OAK = { icon: '🎓' };
+
+  /** Presentación de la historia (una sola vez, al empezar el club). */
+  function introPages() {
+    const c = data(), st = PF.species(c.club[0].dex), L = rivalLine(), rv = PF.species(L[0]);
+    return [
+      storyOf('Prof. Roble', `¡Bienvenido a Pueblo Paleta! Aquí el fútbol Pokémon es lo más grande, y hoy empieza la historia de ${c.name}.`, OAK),
+      storyOf('Prof. Roble', `Ese ${st.name} será tu primer compañero. Con los Pokémon que conozcas en el camino vas a armar un club de campeones.`, { dex: st.dex }),
+      storyOf(RIVAL, `¡Eh, ${c.name}! Yo elegí a ${rv.name}: ¡le gana en tipo a tu ${st.name}! Nos vemos en los gimnasios… si es que llegas.`, { dex: L[0] }),
+      storyOf('Prof. Roble', 'Conquista los seis gimnasios, gana la Liga y derrota al Campeón. ¡Mucha suerte!', OAK),
+    ];
+  }
+
+  /** Lo que dice Azul antes de enfrentarte. */
+  function rivalPages(foe) {
+    return foe.pre.map((t) => storyOf(RIVAL, t, { dex: foe.members[0].dex }));
+  }
+
+  /** Final de la historia: al ganarle la Liga al Campeón. */
+  function epiloguePages() {
+    const c = data(), L = rivalLine();
+    return [
+      storyOf(RIVAL, '…Lo admito. Hoy fuiste mejor. No me gusta decirlo, pero te lo ganaste.', { dex: L[2] }),
+      storyOf('Prof. Roble', `¡${c.name} es el nuevo Campeón de PokéFútbol! Desde Pueblo Paleta estoy muy orgulloso.`, OAK),
+      storyOf(RIVAL, 'La próxima vez no tendrás tanta suerte. Cuando quieras, revancha.', { dex: L[2] }),
+    ];
+  }
+
+  /** Respuesta del rival tras el partido: { who, text } o null. */
+  function reply(foe, won, lost) {
+    if (!foe || !foe.lines || (!won && !lost)) return null;
+    return { who: foe.who || foe.title, text: won ? foe.lines.beaten : foe.lines.victory };
+  }
+
   // ------------------------------------------------------------------ club
   function start(starterDex, name) {
     PF.Save.data.career = {
@@ -91,6 +163,8 @@ PF.Career = (() => {
     c.club.push(newMember(starterDex, 6, 10));
     for (const dex of U.shuffle(PF.CAREER_COMMONS).slice(0, 2)) c.club.push(newMember(dex, 4));
     c.lineup = c.club.map((m) => m.uid);
+    c.intro = true;   // la historia arranca con la presentación (se muestra una vez)
+    rivalLine();
     save();
   }
 
@@ -136,7 +210,7 @@ PF.Career = (() => {
   // ------------------------------------------------------------------ copa
   function startRun(gymId) {
     const run = { gym: gymId, stage: 0, perks: [], lives: 0, map: null, at: null };
-    run.map = genMap();
+    run.map = genMap(gymOf(run).rival !== undefined);
     data().run = run;
     save();
   }
@@ -150,15 +224,16 @@ PF.Career = (() => {
    * Capas de nodos: 4 pasos con 2-3 opciones cada uno y, al final, el líder.
    * Cada nodo conecta con 1-2 de la capa siguiente (todos los de la última, con el líder).
    */
-  function genMap() {
+  function genMap(rival) {
     const pool = [
       ['trainer', 'trainer', 'wild'],
       ['trainer', 'trainer', 'wild', 'event'],
       ['elite', 'trainer', 'shop', 'event', 'center'],
       ['center', 'shop', 'event'],
     ];
+    if (rival) pool[2] = ['rival'];   // en los gimnasios con rival, un paso obligado
     const map = pool.map((types, l) => {
-      const n = l === MAP_LAYERS - 1 ? 2 : 2 + (Math.random() < 0.55 ? 1 : 0);
+      const n = types.length === 1 ? 1 : l === MAP_LAYERS - 1 ? 2 : 2 + (Math.random() < 0.55 ? 1 : 0);
       let pick = U.shuffle(types).slice(0, n);
       if (l === MAP_LAYERS - 1 && !pick.some((t) => t === 'center' || t === 'shop')) pick[0] = 'center';   // antes del líder siempre hay descanso o tienda
       return pick.map((type, i) => ({ l, i, type, to: [], done: false }));
@@ -186,7 +261,7 @@ PF.Career = (() => {
 
   /** Copas guardadas antes del mapa: se les arma uno nuevo. */
   function ensureMap(run) {
-    if (!run.map) { run.map = genMap(); run.at = null; run.stage = 0; save(); }
+    if (!run.map) { run.map = genMap(gymOf(run).rival !== undefined); run.at = null; run.stage = 0; save(); }
     return run.map;
   }
 
@@ -212,20 +287,33 @@ PF.Career = (() => {
     if (nd.foe) return nd.foe;
     const g = gymOf(run), [lo, hi] = g.levels;
     const ivs = (a, b) => ({ spd: randIv(a, b), pow: randIv(a, b), mass: randIv(a, b) });
+    const pickLines = (pool) => ({ pre: U.pick(pool.pre), beaten: U.pick(pool.beaten), victory: U.pick(pool.victory) });
     const mk = (dex, level, iv) => ({ uid: -1, dex, level: Math.max(2, level), xp: 0, abil: Math.random() < 0.5 ? 0 : 1, ivs: iv });
     let foe;
     if (nd.type === 'leader') {
-      foe = { title: `Líder ${g.leader}`, leader: true, diff: g.diff, time: 120, members: g.team.map((dex) => mk(dex, hi, { spd: 22, pow: 22, mass: 22 })) };
+      const team = g.id === 'liga' ? [18, rivalLine()[2], 65] : g.team;   // el Campeón es Azul, con su compañero de siempre
+      foe = { title: g.id === 'liga' ? g.leader : `Líder ${g.leader}`, who: g.leader, leader: true, diff: g.diff, time: 120, lines: g.say, members: team.map((dex) => mk(dex, hi, { spd: 22, pow: 22, mass: 22 })) };
     } else {
       const lvl = Math.round(U.lerp(lo, (lo + hi) / 2, nd.l / (MAP_LAYERS - 1)));
-      if (nd.type === 'wild') {
-        const dexes = [...new Set(U.shuffle(g.pool.concat(PF.CAREER_COMMONS)))].slice(0, TEAM_SIZE);
-        foe = { title: 'Pokémon salvajes', wild: true, diff: easier[g.diff], time: 75, members: dexes.map((d) => mk(d, lvl - 2 + Math.floor(U.rand(-1, 2)), ivs(2, 16))) };
-      } else if (nd.type === 'elite') {
-        foe = { title: `Entrenador élite ${U.pick(NAMES)}`, elite: true, diff: harder[g.diff], time: 120, members: U.shuffle(g.pool).slice(0, TEAM_SIZE).map((d) => mk(d, lvl + 2 + Math.floor(U.rand(0, 2)), ivs(12, 26))) };
-      } else {
+      if (nd.type === 'rival') {
+        const L = rivalLine(), lv = Math.round(U.lerp(lo, hi, 0.8)) + 1;
+        const talk = RIVAL_TALK[g.rival], c = PF.species(L[1]).name;
+        const fill = (t) => t.replace(/{c}/g, c);
         foe = {
-          title: `${U.pick(TRAINERS)} ${U.pick(NAMES)}`, diff: nd.l === 0 ? easier[g.diff] : g.diff, time: 120,
+          title: RIVAL, who: RIVAL, rival: true, diff: g.diff, time: 120, mods: { speed: 1.02 },
+          pre: talk.pre.map(fill), lines: { pre: fill(talk.pre[0]), beaten: talk.beaten, victory: fill(talk.victory) },
+          members: RIVAL_TEAMS[g.rival](L).map((d, i) => mk(d, lv + (i === 0 ? 1 : 0), ivs(14, 26))),
+        };
+      } else if (nd.type === 'wild') {
+        const dexes = [...new Set(U.shuffle(g.pool.concat(PF.CAREER_COMMONS)))].slice(0, TEAM_SIZE);
+        foe = { title: 'Pokémon salvajes', who: 'Salvajes', wild: true, diff: easier[g.diff], time: 75, members: dexes.map((d) => mk(d, lvl - 2 + Math.floor(U.rand(-1, 2)), ivs(2, 16))) };
+      } else if (nd.type === 'elite') {
+        const en = U.pick(NAMES);
+        foe = { title: `Entrenador élite ${en}`, who: en, elite: true, lines: pickLines(ELITE_SAY), diff: harder[g.diff], time: 120, members: U.shuffle(g.pool).slice(0, TEAM_SIZE).map((d) => mk(d, lvl + 2 + Math.floor(U.rand(0, 2)), ivs(12, 26))) };
+      } else {
+        const nm = U.pick(NAMES);
+        foe = {
+          title: `${U.pick(TRAINERS)} ${nm}`, who: nm, lines: pickLines(SAY), diff: nd.l === 0 ? easier[g.diff] : g.diff, time: 120,
           members: U.shuffle(g.pool).slice(0, TEAM_SIZE).map((d) => mk(d, lvl + Math.floor(U.rand(-1, 2)), ivs(5, 20))),
         };
       }
@@ -344,6 +432,7 @@ PF.Career = (() => {
       }
       completeNode(run, node);
       if (node.type === 'elite') PF.Save.data.coins += 120;
+      if (node.type === 'rival') PF.Save.data.coins += 100;
       save();
       return { result: 'next' };
     }
@@ -440,19 +529,22 @@ PF.Career = (() => {
 
   // ------------------------------------------------------------------ partido
   /** Configuración del partido de la etapa actual (para main.js). */
+  const mulMods = (...ms) => { const o = {}; for (const m of ms) for (const k in m) o[k] = (o[k] || 1) * m[k]; return o; };
+
   function matchConfig(opp) {
     const c = data(), run = c.run, g = gymOf(run);
+    const rule = opp.leader ? g.rule || {} : {};
     const mine = lineupMembers();
     const defs = mine.map(defOf);
     const spots = spotsFor(defs);
     const bench = c.club.filter((mb) => !c.lineup.includes(mb.uid)).map(defOf);   // todo el que no es titular
     return {
-      size: TEAM_SIZE, keeperMode: c.keeper, stadium: g.stadium, time: opp.time || 120,
+      size: TEAM_SIZE, keeperMode: c.keeper, stadium: g.stadium, time: rule.time || opp.time || 120, startScore: rule.score,
       teams: [defs, opp.members.map(defOf)],
       bench: [bench, []],
       formations: [spots, null],
       diff: opp.diff,
-      mods: [runMods(run), opp.leader ? { speed: 1.04 } : opp.elite ? { speed: 1.02 } : {}],
+      mods: [mulMods(runMods(run), rule.me), mulMods(opp.leader ? { speed: 1.04 } : opp.elite ? { speed: 1.02 } : opp.mods, rule.foe)],
     };
   }
 
@@ -472,7 +564,7 @@ PF.Career = (() => {
   return {
     TEAM_SIZE, CLUB_MAX, LEVEL_MAX, ABILITY2_LEVEL, PERKS, NODE_INFO, MAP_LAYERS, CENTER,
     data, start, defOf, ivGrade, xpToNext, member, lineupMembers, toggleLineup, release, addMember,
-    gymStatus, startRun, ensureMap, nodeAt, isAvailable, completeNode, eventOf, shopOf, buy, pickOption, grantXp, gymOf, opponent, perkChoices, takePerk, applyMatch, evolve, advanceRun,
+    gymStatus, startRun, ensureMap, rivalLine, introPages, rivalPages, epiloguePages, reply, nodeAt, isAvailable, completeNode, eventOf, shopOf, buy, pickOption, grantXp, gymOf, opponent, perkChoices, takePerk, applyMatch, evolve, advanceRun,
     leaderRecruits, wildJoin, matchConfig, spotsFor, saveSpots,
   };
 })();

@@ -299,6 +299,22 @@ Tu club es persistente; cada gimnasio se juega como una copa.
   - ❓ **Evento:** uno de cuatro encuentros con dos opciones (un cofre, un
     veterano que entrena, un Pokémon herido, una fuente termal).
 
+- **Azul, tu rival:** elige la línea evolutiva que le gana en tipo a tu inicial
+  y te corta el paso en tres gimnasios (Celeste, Azulona y Canela): ese paso
+  del mapa es obligado. Su equipo crece con vos y cada vez te dice algo antes y
+  después del partido. Si le ganas, 100 monedas, una mejora y quizás un
+  Pokémon. Al final de la Liga el Campeón es él.
+- **Líderes con regla propia:** cada líder cambia el partido, y lo ves antes de
+  jugar y pasando el mouse por su nodo del mapa. Brock: arquero con +30 % de
+  reflejos. Misty: sus habilidades recargan 30 % más rápido. Surge: arranca
+  ganando 1–0. Erika: tus Pokémon se cansan 25 % más rápido. Sabrina: tus
+  habilidades recargan 25 % más lento. Blaine: sus tiros +15 % de potencia y
+  el partido dura 90 s. El Campeón: +10 % de velocidad, +10 % de tiro y
+  recarga −15 %.
+- **Diálogos:** una presentación del Prof. Roble al empezar un club nuevo,
+  frases de cada entrenador, líder y rival (antes y después del partido) y un
+  final al ganarle a Azul en la Liga.
+
 Las especies del modo historia salen de la Pokédex (`js/pokedex.js`): stats
 de cancha y habilidades por tipo se calculan solos (`js/species.js`), así que
 cualquier Pokémon importado se puede usar.

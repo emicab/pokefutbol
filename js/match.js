@@ -334,21 +334,22 @@ PF.Match = (() => {
    * opts.time       segundos · opts.replays  repetición de los goles
    * opts.keeperMode 'dynamic' (arquero dinámico: ataja el más cercano a su arco) o 'fixed'
    * opts.formations [[[d, f]...], [[d, f]...]] posiciones (si falta, autoFormation)
-   * opts.mods       [{speed, power, cd, reflex}, ...] multiplicadores por equipo (mejoras de la historia)
+   * opts.score      marcador inicial [equipo 0, equipo 1] (reglas de los líderes)
+   * opts.mods       [{speed, power, cd, reflex, drain}, ...] multiplicadores por equipo (mejoras de la historia)
    * opts.bench      [[def...], [def...]] suplentes de cada equipo (hasta 3 cambios)
    * opts.flip       true: el equipo 0 defiende el arco derecho
    * Antes hay que llamar a PF.configureField(n) con el tamaño del equipo.
    */
   function create(opts) {
     const keeperMode = opts.keeperMode || 'dynamic';
-    const neutral = { speed: 1, power: 1, cd: 1, reflex: 1 };
+    const neutral = { speed: 1, power: 1, cd: 1, reflex: 1, drain: 1 };
     const m = {
       players: [],
       ball: {
         x: F.cx, y: F.cy, vx: 0, vy: 0, r: BALL_R, holder: null, last: null, fire: 0,
         vine: null, vineT: 0, vineColor: '#7dff9e', passTo: null, passT: 0, passFrom: null, spin: 0, big: 0, crazy: 0, curve: 1,
       },
-      score: [0, 0], time: opts.time ?? PF.MATCH_TIME, totalTime: opts.time ?? PF.MATCH_TIME, golden: false,
+      score: opts.score ? opts.score.slice() : [0, 0], time: opts.time ?? PF.MATCH_TIME, totalTime: opts.time ?? PF.MATCH_TIME, golden: false,
       state: 'kickoff', stateT: 0, clock: 0, kickoffTeam: Math.random() < 0.5 ? 0 : 1, kicker: null,
       goalTeam: -1, ownGoal: false, winner: -1, scorer: null,
       items: [], itemT: 7, hazards: [], projs: [],
@@ -887,7 +888,7 @@ PF.Match = (() => {
     // fuera de juego se descansa
     if (m.state === 'play') {
       const frac = Math.hypot(p.vx, p.vy) / p.def.speed;
-      if (frac > 0.55 && p.stun <= 0) spend(p, STAMINA.run * frac * Math.sqrt(p.def.mass) * dt * (m.keeper[p.team] === p ? 0.5 : 1));
+      if (frac > 0.55 && p.stun <= 0) spend(p, STAMINA.run * frac * Math.sqrt(p.def.mass) * m.mods[p.team].drain * dt * (m.keeper[p.team] === p ? 0.5 : 1));
       spend(p, -STAMINA.regen * recov(p) * (1 - 0.75 * Math.min(1, frac)) * dt * (p.maxStamina / 100));
       if (!p.fainted) p.hp = Math.min(p.maxHp, p.hp + HP.regen * dt * (p.maxHp / 100));
       if (p.stamina <= 0 && hasHuman(m, p.team) && !p.tiredWarned) {

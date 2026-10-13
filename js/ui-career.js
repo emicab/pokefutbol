@@ -224,7 +224,9 @@ PF.CareerUI = (() => {
             <div class="vsx">VS</div>
             <div class="vsteam">${team(info.members)}</div>
           </div>
-          <div class="vstitle">${C().NODE_INFO[node.type].icon} ${info.title}${info.leader ? ' — ¡el líder del gimnasio!' : info.elite ? ' — ¡cuidado, es de élite!' : info.wild ? ` — partido corto, ${info.time} s` : ''}</div>
+          <div class="vstitle">${C().NODE_INFO[node.type].icon} ${info.title}${info.leader ? (g.id === 'liga' ? ' — ¡la gran final!' : ' — ¡el líder del gimnasio!') : info.elite ? ' — ¡cuidado, es de élite!' : info.wild ? ` — partido corto, ${info.time} s` : ''}</div>
+          ${info.lines ? `<div class="quote"><b>${info.who}</b> “${info.lines.pre}”</div>` : ''}
+          ${info.leader && g.rule ? `<div class="rule">⚠ <b>${g.rule.name}</b> — ${g.rule.desc}</div>` : ''}
           ${perks.length ? `<div class="perks">Mejoras: ${perks.map((p) => `<b title="${p.desc}">${p.name}</b>`).join(' · ')}</div>` : ''}
           <div class="row">
             <button class="btn danger" data-act="quit">Abandonar copa</button>
@@ -263,6 +265,7 @@ PF.CareerUI = (() => {
             }).join('')}
           </div>
           ${res.abilityUnlocks.map((mb) => `<div class="new">¡${PF.species(mb.dex).name} aprendió una segunda habilidad!</div>`).join('')}
+          ${res.reply ? `<div class="quote"><b>${res.reply.who}</b> “${res.reply.text}”</div>` : ''}
           <div class="reward"><div class="total"><span>Monedas</span>${coinHTML('+' + res.coins)}</div></div>
           <button class="btn big" data-act="go">Continuar</button>
         </div>
@@ -340,6 +343,56 @@ PF.CareerUI = (() => {
     show(s);
   }
 
+  // ------------------------------------------------------------------ diálogo
+  /** pages: [{ who, text, dex?, icon? }] · onDone() al terminar o saltar. */
+  function story(pages, onDone) {
+    let i = 0, timer = 0, full = '';
+    const s = el(`
+      <div class="screen career story">
+        <div class="box menu sbox">
+          <div class="sline">
+            <div class="sface"></div>
+            <div class="sbody"><b class="swho"></b><p class="stext"></p></div>
+          </div>
+          <div class="row">
+            <button class="btn small" data-act="skip">Saltar</button>
+            <button class="btn big" data-act="next">Siguiente</button>
+          </div>
+        </div>
+      </div>`);
+    const txt = s.querySelector('.stext'), who = s.querySelector('.swho'), face = s.querySelector('.sface');
+    const stop = () => { clearInterval(timer); timer = 0; };
+    const page = () => {
+      const p = pages[i];
+      who.textContent = p.who;
+      who.classList.toggle('rival', p.who === 'Azul');
+      PF.UI.clearPortraits();
+      face.innerHTML = p.dex ? portrait(p.dex, 120, 104, 1.5) : `<span class="sicon">${p.icon || '💬'}</span>`;
+      face.querySelectorAll('canvas[data-dex]').forEach((cv) => PF.UI.addPortrait(cv, +cv.dataset.dex, +(cv.dataset.sc || 1)));
+      full = p.text;
+      txt.textContent = '';
+      let n = 0;
+      stop();
+      timer = setInterval(() => {
+        if (!s.isConnected) return stop();
+        n += 2;
+        txt.textContent = full.slice(0, n);
+        if (n >= full.length) stop();
+      }, 24);
+      s.querySelector('[data-act=next]').textContent = i === pages.length - 1 ? 'Seguir' : 'Siguiente';
+    };
+    const next = () => {
+      if (timer) { stop(); txt.textContent = full; return; }   // primero se completa el texto
+      if (++i >= pages.length) { onDone(); return; }
+      PF.Audio.sfx.click();
+      page();
+    };
+    s.querySelector('[data-act=next]').onclick = next;
+    s.querySelector('[data-act=skip]').onclick = () => { stop(); onDone(); };
+    show(s);
+    page();
+  }
+
   // ------------------------------------------------------------------ mapa de la copa
   /** h = { onNode(nd), onClub(), onAbandon() } */
   function map(run, h) {
@@ -392,7 +445,7 @@ PF.CareerUI = (() => {
     s.querySelectorAll('.rnode').forEach((b) => {
       const nd = lay[+b.dataset.l][+b.dataset.i], inf = info[nd.type];
       const say = () => {
-        infoEl.innerHTML = `<b>${inf.icon} ${nd.type === 'leader' ? 'Líder ' + g.leader : inf.name}</b> — ${inf.desc}${nd.done ? ' <i>(ya pasaste por acá)</i>' : !C().isAvailable(run, nd) ? ' <i>(todavía no se puede llegar)</i>' : ''}`;
+        infoEl.innerHTML = `<b>${inf.icon} ${nd.type === 'leader' ? 'Líder ' + g.leader : inf.name}</b> — ${inf.desc}${nd.type === 'leader' && g.rule ? `<br>⚠ <b>${g.rule.name}</b>: ${g.rule.desc}` : ''}${nd.done ? ' <i>(ya pasaste por acá)</i>' : !C().isAvailable(run, nd) ? ' <i>(todavía no se puede llegar)</i>' : ''}`;
       };
       b.onmouseenter = b.onfocus = say;
       b.onclick = () => { if (C().isAvailable(run, nd)) { PF.Audio.sfx.click(); h.onNode(nd); } else { PF.Audio.sfx.fail(); say(); } };
@@ -458,5 +511,5 @@ PF.CareerUI = (() => {
     show(s);
   }
 
-  return { start, hub, map, shop, versus, post, evolve, choose, runEnd };
+  return { start, hub, map, shop, story, versus, post, evolve, choose, runEnd };
 })();

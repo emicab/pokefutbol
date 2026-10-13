@@ -426,23 +426,41 @@
   PF.CAREER_COMMONS = [16, 19, 74, 66, 92, 54, 39, 129, 63, 58, 133, 100, 43, 77, 120, 111];
 
   /**
-   * Gimnasios: cada uno es una copa de 3 partidos (2 entrenadores + líder).
-   * pool = especies de los entrenadores · leader = equipo del líder.
+   * Gimnasios: cada uno es una copa (mapa de rutas + líder).
+   * pool = especies de los entrenadores · leader = equipo del líder
+   * rule = regla del partido contra el líder: foe/me = multiplicadores de mods
+   *        (speed, power, cd, reflex, drain), score = marcador inicial, time = duración
+   * say = lo que dice el líder: antes del partido, al perder (beaten) y al ganar (victory)
+   * rival = nº de encuentro con el rival (Azul): ocupa el paso 3 del mapa
    */
   PF.GYMS = [
     { id: 'roca', name: 'Gimnasio Plateada', leader: 'Brock', type: 'rock', badge: 'Medalla Roca',
-      levels: [8, 12], diff: 'easy', stadium: 'playa', pool: [74, 95, 111, 75], team: [74, 111, 95] },
+      levels: [8, 12], diff: 'easy', stadium: 'playa', pool: [74, 95, 111, 75], team: [74, 111, 95],
+      rule: { name: 'Muro de roca', desc: 'Su arquero tiene +30 % de reflejos.', foe: { reflex: 1.3 } },
+      say: { pre: 'Mis Pokémon son duros como la roca. ¿Podrás con mi defensa?', beaten: '¡Imposible! Mi muro se vino abajo… La Medalla Roca es tuya.', victory: 'Firme como una roca. Entrena y vuelve.' } },
     { id: 'agua', name: 'Gimnasio Celeste', leader: 'Misty', type: 'water', badge: 'Medalla Cascada',
-      levels: [14, 18], diff: 'easy', stadium: 'estadio', pool: [120, 54, 129, 7, 8], team: [120, 54, 121] },
+      levels: [14, 18], diff: 'easy', stadium: 'estadio', pool: [120, 54, 129, 7, 8], team: [120, 54, 121], rival: 0,
+      rule: { name: 'Marea viva', desc: 'Sus habilidades recargan un 30 % más rápido.', foe: { cd: 0.7 } },
+      say: { pre: '¡Mi estilo es agresivo, como las olas! ¿Te animas a mojarte?', beaten: '¡Vaya! Eres bueno. Toma la Medalla Cascada.', victory: '¡Ja! Te dejé empapado.' } },
     { id: 'rayo', name: 'Gimnasio Carmín', leader: 'Lt. Surge', type: 'electric', badge: 'Medalla Trueno',
-      levels: [20, 24], diff: 'normal', stadium: 'estadio', pool: [100, 25, 101, 26], team: [100, 101, 26] },
+      levels: [20, 24], diff: 'normal', stadium: 'estadio', pool: [100, 25, 101, 26], team: [100, 101, 26],
+      rule: { name: 'Ventaja eléctrica', desc: 'Arranca ganando 1–0.', score: [0, 1] },
+      say: { pre: '¡Ey, novato! Esto es una cancha, no un picnic. Ya voy 1–0, ¿eh?', beaten: '¡Me electrocutaste! Estás a la altura. La Medalla Trueno es tuya.', victory: '¡Te dejé sin chispa, muchacho!' } },
     { id: 'planta', name: 'Gimnasio Azulona', leader: 'Erika', type: 'grass', badge: 'Medalla Arcoíris',
-      levels: [26, 30], diff: 'normal', stadium: 'estadio', pool: [43, 44, 1, 2], team: [44, 2, 45] },
+      levels: [26, 30], diff: 'normal', stadium: 'estadio', pool: [43, 44, 1, 2], team: [44, 2, 45], rival: 1,
+      rule: { name: 'Perfume dulce', desc: 'Tus Pokémon se cansan un 25 % más rápido.', me: { drain: 1.25 } },
+      say: { pre: 'Qué día tan agradable… Respira hondo y huele ese perfume. Juguemos con calma.', beaten: 'Oh, qué lástima… has sido excelente. La Medalla Arcoíris es tuya.', victory: 'Jujuju, tan bien que te estabas durmiendo.' } },
     { id: 'psiquico', name: 'Gimnasio Azafrán', leader: 'Sabrina', type: 'psychic', badge: 'Medalla Pantano',
-      levels: [32, 36], diff: 'normal', stadium: 'hielo', pool: [63, 64, 122, 54], team: [64, 122, 65] },
+      levels: [32, 36], diff: 'normal', stadium: 'hielo', pool: [63, 64, 122, 54], team: [64, 122, 65],
+      rule: { name: 'Mente en blanco', desc: 'Tus habilidades recargan un 25 % más lento.', me: { cd: 1.25 } },
+      say: { pre: 'Sabía que vendrías. Ya vi cómo termina este partido.', beaten: 'No lo vi venir… Tu energía supera mi visión. Toma la Medalla Pantano.', victory: 'Lo vi todo. Era inevitable.' } },
     { id: 'fuego', name: 'Gimnasio Canela', leader: 'Blaine', type: 'fire', badge: 'Medalla Volcán',
-      levels: [38, 42], diff: 'hard', stadium: 'volcan', pool: [58, 77, 4, 5], team: [59, 78, 6] },
+      levels: [38, 42], diff: 'hard', stadium: 'volcan', pool: [58, 77, 4, 5], team: [59, 78, 6], rival: 2,
+      rule: { name: 'Llamas intensas', desc: 'Sus tiros tienen +15 % de potencia y el partido dura 90 s.', foe: { power: 1.15 }, time: 90 },
+      say: { pre: '¡Mis Pokémon queman cualquier cancha! Tienes noventa segundos antes de volverte ceniza.', beaten: '¡Me apagaste! Qué fuego tienes. Toma la Medalla Volcán.', victory: '¡Te quemaste, chico! Vuelve cuando seas más duro.' } },
     { id: 'liga', name: 'Liga Pokémon', leader: 'Campeón Azul', type: 'dragon', badge: 'Copa de Campeón',
-      levels: [45, 50], diff: 'hard', stadium: 'estadio', pool: [18, 65, 59, 112, 130, 9], team: [18, 130, 65] },
+      levels: [45, 50], diff: 'hard', stadium: 'estadio', pool: [18, 65, 59, 112, 130, 9], team: [18, 130, 65],
+      rule: { name: 'El campeón', desc: 'Es más rápido (+10 %), tira más fuerte (+10 %) y recarga antes (−15 %).', foe: { speed: 1.06, power: 1.1, cd: 0.85 } },
+      say: { pre: 'Llegaste hasta acá. Soy el Campeón, y yo no pierdo.', beaten: '…No puede ser. Me ganaste. Ahora el Campeón eres tú.', victory: 'Ya lo ves: el mejor soy yo. Vuelve a intentarlo.' } },
   ];
 })();

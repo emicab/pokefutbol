@@ -53,7 +53,7 @@
     PF.configureField(cfg.size);
     match = PF.Match.create({
       teams: cfg.teams, formations: cfg.formations, keeperMode: cfg.keeperMode, mods: cfg.mods, bench: cfg.bench,
-      humanTeam: 0, time: cfg.time, stadium: cfg.stadium, replays: st.replays,
+      humanTeam: 0, time: cfg.time, stadium: cfg.stadium, replays: st.replays, score: cfg.startScore,
       flip: Math.random() < 0.5,   // tu equipo arranca de un lado al azar
       skills: [PF.AI.SKILLS.mate, PF.AI.SKILLS[cfg.diff]],
     });
@@ -156,10 +156,17 @@
   function toCareer() {
     toMenu();
     if (!C.data()) {
-      PF.CareerUI.start((dex, name) => { C.start(dex, name); careerHub(); }, toTitle);
+      PF.CareerUI.start((dex, name) => { C.start(dex, name); careerIntro(); }, toTitle);
       return;
     }
+    if (C.data().intro) return careerIntro();
     careerHub();
+  }
+
+  /** Presentación de la historia: una sola vez. */
+  function careerIntro() {
+    toMenu();
+    PF.CareerUI.story(C.introPages(), () => { C.data().intro = false; PF.Save.save(); careerHub(); });
   }
 
   function careerHub() {
@@ -189,6 +196,7 @@
     if (nd.type === 'center') return careerCenter(nd);
     if (nd.type === 'shop') return careerShop(nd);
     if (nd.type === 'event') return careerEvent(nd);
+    if (nd.type === 'rival') return PF.CareerUI.story(C.rivalPages(C.opponent(C.data().run, nd)), () => careerStage(nd));
     careerStage(nd);
   }
 
@@ -264,6 +272,7 @@
     toMenu();
     PF.Audio.setAmbience(0.25);
     const res = C.applyMatch(m, opp);
+    res.reply = C.reply(opp, res.won, res.lost);
     countPlays(m, 0);
     countStats(m, opp.diff);
     const unlocked = checkChallenges();
@@ -296,7 +305,8 @@
         full ? [] : opts.map((o) => ({ dex: o.dex, title: PF.species(o.dex).name, sub: `Nv ${o.level}`, color: PF.species(o.dex).color })),
         (i) => {
           if (i !== null) { const o = opts[i]; C.addMember(o.dex, o.level, 12); PF.UI.toast(`¡${PF.species(o.dex).name} se unió al club!`); }
-          PF.CareerUI.runEnd(out, careerHub);
+          const end = () => PF.CareerUI.runEnd(out, careerHub);
+          if (out.gym.id === 'liga' && out.first) PF.CareerUI.story(C.epiloguePages(), end); else end();
         },
         full ? 'Continuar' : 'Ahora no',
       );
@@ -316,7 +326,8 @@
         full ? 'Continuar' : 'Ahora no');
     }
     if (nd.type === 'elite') PF.UI.toast('¡Premio de la élite: +120 monedas!');
-    const wild = C.wildJoin(g, nd.type === 'elite' ? 0.5 : 0.25);
+    if (nd.type === 'rival') PF.UI.toast('¡Le ganaste a Azul! +100 monedas.');
+    const wild = C.wildJoin(g, nd.type === 'elite' ? 0.5 : nd.type === 'rival' ? 0.35 : 0.25);
     if (!wild) return careerPerks(careerMap);
     PF.CareerUI.choose('¡Un Pokémon quiere unirse!', 'Le gustó cómo juega tu equipo.',
       [{ dex: wild.dex, title: PF.species(wild.dex).name, sub: `Nv ${wild.level}`, color: PF.species(wild.dex).color }],

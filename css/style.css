@@ -519,3 +519,18 @@ input.code {
 .opt.sold { opacity: 0.4; cursor: default; }
 .opt.poor { opacity: 0.7; }
 .opt.poor .price { color: #ff8a8a; }
+
+/* diálogos de la historia */
+.sbox { min-width: 760px; max-width: 860px; gap: 18px; }
+.sline { display: flex; gap: 20px; align-items: center; width: 100%; min-height: 130px; }
+.sface { width: 130px; flex: none; display: flex; justify-content: center; }
+.sface canvas { image-rendering: pixelated; background: radial-gradient(circle at 50% 85%, rgba(255, 255, 255, 0.18), transparent 70%); }
+.sicon { font-size: 76px; line-height: 1; }
+.sbody { flex: 1; text-align: left; }
+.swho { font-weight: normal; font-size: 20px; color: var(--yellow); }
+.swho.rival { color: #ff7a7f; }
+.stext { margin: 8px 0 0; font-size: 21px; line-height: 1.35; min-height: 84px; }
+.quote { max-width: 720px; text-align: center; font-size: 18px; color: var(--text); background: var(--ink); border: 2px solid var(--line); border-radius: 8px; padding: 6px 14px; }
+.quote b { color: var(--yellow); font-weight: normal; margin-right: 6px; }
+.rule { max-width: 720px; text-align: center; font-size: 16px; color: #ffb066; }
+.rule b { font-weight: normal; color: var(--yellow); }
