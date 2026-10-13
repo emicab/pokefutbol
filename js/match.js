@@ -947,7 +947,7 @@ PF.Match = (() => {
     if (p.charge >= 0) sp *= 0.55;
     if (p.turbo > 0) sp *= 1.4;
     if (p.giant > 0) sp *= 0.9;
-    if (p.phase > 0) sp *= 1.2;
+    if (p.phase > 0) sp *= 1.1;
     if (p.dig > 0) sp *= 1.3;
     if (p.slow > 0) sp *= 0.55;
     if (p.status === 'para') sp *= 0.65;
@@ -1121,7 +1121,7 @@ PF.Match = (() => {
   function wallBump(m, w, v, nx, ny) {
     v.x = w.x + nx * (radius(w) + radius(v) + 1);
     v.y = w.y + ny * (radius(w) + radius(v) + 1);
-    if (withHit(m, w, 'rock', () => knock(m, v, nx, ny, 320, 0.4))) {
+    if (withHit(m, w, 'rock', () => knock(m, v, nx, ny, 450, 0.7))) {
       PF.FX.text(m.fx, v.x, v.y - 50, '¡BOING!', '#e8e0cc', 0.8, 0.7);
       PF.Audio.sfx.bounce(600);
     }
@@ -1202,7 +1202,7 @@ PF.Match = (() => {
   }
 
   /** Tiro Ígneo: velocidad (×poder; antes 1600) y empuje al atravesar a un rival. */
-  const FIRE_SPEED = 1350, FIRE_KNOCK = 440, FIRE_STUN = 0.9;
+  const FIRE_SPEED = 1200, FIRE_KNOCK = 440, FIRE_STUN = 0.9;
 
   function shoot(m, p, k) {
     const b = m.ball;
@@ -1339,13 +1339,13 @@ PF.Match = (() => {
     if (s === 'burn' || s === 'poison') {
       const floor = p.maxHp * DOT_FLOOR;
       if (m.state === 'play' && p.hp > floor) {
-        p.hp = Math.max(floor, p.hp - p.maxHp * (s === 'burn' ? 0.015 : 0.012 * p.statusLvl) * dt);
+        p.hp = Math.max(floor, p.hp - p.maxHp * (s === 'burn' ? 0.02 : 0.02 * p.statusLvl) * dt);
         p.hurtT = m.clock;
       }
       if (Math.random() < dt * 8) PF.FX.particle(m.fx, p.x + U.rand(-10, 10), p.y - U.rand(10, 36), 0, -50, STATUS[s].color, 0.4, 3);
     } else if (s === 'seed') {
       // Drenadoras: lo que pierde se lo lleva quien lo sembró (si sigue en pie)
-      const floor = p.maxHp * DOT_FLOOR, take = p.maxHp * 0.016 * dt, src = p.statusFrom;
+      const floor = p.maxHp * DOT_FLOOR, take = p.maxHp * 0.025 * dt, src = p.statusFrom;
       if (m.state === 'play' && p.hp > floor) {
         const lost = Math.min(take, p.hp - floor);
         p.hp -= lost; p.hurtT = m.clock;
@@ -1421,8 +1421,8 @@ PF.Match = (() => {
     if (b.fireTried && b.fireTried.includes(p)) return false;
     (b.fireTried = b.fireTried || []).push(p);
     const eff = PF.typeEffect('fire', p.types);
-    let chance = eff < 1 ? 0.65 : eff > 1 ? 0.1 : 0.25;
-    if (isActiveKeeper(m, p)) chance += 0.4;
+    let chance = eff < 1 ? 0.65 : eff > 1 ? 0.2 : 0.35;
+    if (isActiveKeeper(m, p)) chance += 0.45;
     if (Math.random() >= chance) return false;
     b.fire = 0;
     b.vx *= 0.3; b.vy *= 0.3;
@@ -1687,7 +1687,7 @@ PF.Match = (() => {
       if (!pr.dead || !pr.puddle) continue;
       const prev = m.hit;
       m.hit = pr.hit;
-      addHazard(m, { kind: 'toxic', x: U.clamp(pr.x, F.x0 + 30, F.x1 - 30), y: U.clamp(pr.y, F.y0 + 30, F.y1 - 30), r: 70, life: 4, team: pr.team, chance: 0.5 });
+      addHazard(m, { kind: 'toxic', x: U.clamp(pr.x, F.x0 + 30, F.x1 - 30), y: U.clamp(pr.y, F.y0 + 30, F.y1 - 30), r: 70, life: 4, team: pr.team, chance: 0.7 });
       m.hit = prev;
       PF.FX.burst(m.fx, pr.x, pr.y, 12, '#b06fd0', 200, 0.4, 4);
     }
@@ -1748,7 +1748,8 @@ PF.Match = (() => {
           h.hit.add(p);
           applyStatus(m, p, 'para', 4, 0.6);
         } else if (h.kind === 'toxic') {
-          // charco o niebla: cada segundo que está dentro se envenena (o se agrava)
+          // charco o niebla: cada segundo que está dentro se envenena (o se agrava); la niebla además frena
+          if (h.cloud) p.slow = Math.max(p.slow, 0.3);
           if (h.t >= (h.next.get(p) || 0.15)) {
             h.next.set(p, h.t + 1);
             applyStatus(m, p, 'poison', 6, h.chance ?? 0.6);

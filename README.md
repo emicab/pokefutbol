@@ -191,8 +191,8 @@ Los tipos también deciden los golpes de las habilidades: si el rival es
 Tierra) no le hace nada, y si es **poco eficaz** tiene 50 % de aguantarlo de
 pie («¡Resiste!»). El **Tiro Ígneo** de Charmander ya no es imparable: cada
 rival que cruza puede frenarlo (65 % si resiste el fuego, como los de Agua o
-Roca; 25 % si es neutro; 10 % si es débil) y el arquero en su área suma 40 %.
-Además sale algo más despacio que antes (un 16 % menos) y empuja y aturde menos
+Roca; 35 % si es neutro; 20 % si es débil) y el arquero en su área suma 45 %.
+Además sale bastante más despacio que antes (un 25 % menos) y empuja y aturde menos
 a los rivales que atraviesa.
 Si lo frenan, el fuego se apaga y la pelota pierde fuerza.
 
@@ -201,8 +201,8 @@ etiqueta de color aparece sobre la cabeza). Los tipos inmunes no lo reciben:
 
 | Estado | Efecto | Dura | Inmune |
 |---|---|---|---|
-| Quemado | pierde ~1,5 % de vida por s y tira un 15 % más flojo | 4 s | Fuego |
-| Envenenado | pierde vida por s (un 2º impacto lo agrava) | 6 s | Veneno, Acero |
+| Quemado | pierde ~2 % de vida por s y tira un 15 % más flojo | 4 s | Fuego |
+| Envenenado | pierde ~2 % de vida por s (un 2º impacto lo agrava) | 6 s | Veneno, Acero |
 | Paralizado | 65 % de la velocidad y a veces se traba un instante | 4 s | Eléctrico |
 | Congelado | inmóvil y luego lento unos segundos; un golpe de Fuego lo derrite | 1,2 s | Hielo |
 | Confuso | se desvía solo y los pases le salen torcidos | 3 s | Psíquico |
@@ -215,15 +215,15 @@ Además de los estados de la tabla, **Drenado** (Planta): pierde vida y se la
 lleva quien lo sembró (4 s; no afecta a Planta).
 
 Movimientos nuevos ya disponibles (todos los tipos):
-- **Fuego:** *Lanzallamas* (cono corto 1 s, hace soltar la pelota, puede
+- **Fuego:** *Lanzallamas* (cono corto de 230 px durante 1 s, hace soltar la pelota, puede
   quemar), *Giro Fuego* (remolino que frena y lastima) y *Llamarada* (carga 0,6 s
   quieto y estalla; gasta mucha energía).
 - **Agua:** *Pistola Agua* (chorro que empuja y desvía la pelota) y *Burbuja*
-  (atrapa y frena 2,5 s).
+  (atrapa y frena 3,5 s).
 - **Eléctrico:** *Onda Trueno* (paraliza; no afecta a Eléctricos ni a Tierra) y
   *Rayo* (línea instantánea que atraviesa a todos).
-- **Planta:** *Drenadoras* (semilla que persigue al más cercano y te cura con lo
-  que él pierde), *Hoja Afilada* (tres hojas en abanico ancho y corto) y
+- **Planta:** *Drenadoras* (semilla que persigue al más cercano y lo drena 5 s: te cura con
+  lo que él pierde), *Hoja Afilada* (tres hojas en abanico ancho y corto) y
   *Paralizador* (nube que paraliza).
 - **Veneno:** *Bomba Lodo* (empuja, envenena y deja un charco tóxico 4 s) y
   *Niebla Tóxica* (nube grande que envenena y agrava a quien se queda).
@@ -232,9 +232,9 @@ Movimientos nuevos ya disponibles (todos los tipos):
 - **Hielo:** *Ventisca* (cono ancho: frena 2,5 s a los rivales y a la pelota, 25 %
   de congelar; no afecta a Hielo).
 - **Lucha:** *Patada Salto* (embestida que cuenta como mucho más pesada; si no
-  toca a nadie, te tropiezas y pierdes energía) y *Contraataque* (1 s en guardia,
-  más lento: el primer golpe de un rival, de habilidad o de choque, se le
-  devuelve ×1,6 y lo aturde).
+  toca a nadie, te tropiezas y pierdes energía) y *Contraataque* (1,2 s en guardia,
+  algo más lento: el primer golpe de un rival, de habilidad o de choque, se le
+  devuelve ×1,6 y lo aturde; y al que se te pega encima lo golpeas ×1,3).
 - **Tierra/Roca:** *Terremoto* (fisura de 340 px que atraviesa y tumba a todos
   los que pisan el suelo, no a los Voladores) y *Lanzarrocas* (roca pesada que
   empuja fuerte y desvía la pelota).
@@ -246,9 +246,9 @@ Movimientos nuevos ya disponibles (todos los tipos):
   Voladores son de tipo doble, así que su movimiento propio es siempre el segundo.
 - **Bicho:** *Telaraña* (red de 4 s: los rivales dentro van lentísimos y la
   pelota se frena).
-- **Normal:** *Hiperrayo* (cargas 0,9 s quieto con una mira visible y disparas un
-  rayo de 420 px que arrasa; si te golpean antes, se corta; después quedas
-  agotado 1 s) y *Descanso* (2 s quieto durmiendo: recuperas el 25 % de la
+- **Normal:** *Hiperrayo* (cargas 0,7 s quieto con una mira visible y disparas un
+  rayo de 460 px y bastante ancho que arrasa; se corrige solo hacia un rival
+  casi en la mira; si te golpean antes, se corta; después quedas agotado 0,7 s) y *Descanso* (2 s quieto durmiendo: recuperas el 30 % de la
   vida; si te golpean, se corta).
 - **Dragón:** *Cola Dragón* (barrido de 360° que aparta a todos y manda la pelota
   hacia ti) y *Danza Dragón* (4 s de velocidad y +25 % de tiro). Sólo hay tres
@@ -365,7 +365,7 @@ Dieciséis tienen stats y habilidades hechas a mano:
 | Charmander | **Tiro Ígneo**: bola de fuego que atraviesa y derriba (gasta mucha energía: 20) | **Ascuas**: rastro de fuego |
 | Squirtle | **Hidrobomba**: abanico que barre rivales y pelota | **Charco**: los rivales patinan |
 | Bulbasaur | **Látigo Cepa**: trae la pelota desde cerca (260 px), aunque la tenga un rival | **Somnífero**: nube que duerme |
-| Gengar | **Intangible**: 3 s sin que nadie te toque | **Teletransporte**: reaparece más adelante |
+| Gengar | **Intangible**: 2,2 s sin que nadie te toque | **Teletransporte**: reaparece más adelante |
 | Snorlax | **Golpe Cuerpo**: salto y onda expansiva | **Bloqueo**: muralla que rebota tiros |
 | Eevee | **Adaptabilidad**: una habilidad al azar de otro | **Ataque Rápido** |
 | Psyduck | **Confusión**: los rivales dan vueltas mareados | **Hidrobomba** |

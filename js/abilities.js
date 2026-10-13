@@ -103,7 +103,7 @@ PF.Abilities = (() => {
 
     /** Gengar: intangible y más rápido durante 3 s. */
     phase(m, p) {
-      p.phase = 3;
+      p.phase = 2.2;
       PF.FX.burst(m.fx, p.x, p.y - 20, 22, '#a27bff', 200, 0.5, 4);
       PF.FX.text(m.fx, p.x, p.y - 64, '¡BUUU!', '#c9a8ff', 1.2);
       PF.Audio.sfx.phase();
@@ -135,7 +135,7 @@ PF.Abilities = (() => {
     puddle(m, p) {
       const x = U.clamp(p.x + Math.cos(p.facing) * 150, F.x0 + 40, F.x1 - 40);
       const y = U.clamp(p.y + Math.sin(p.facing) * 150, F.y0 + 40, F.y1 - 40);
-      PF.Match.addHazard(m, { kind: 'puddle', x, y, r: 85, life: 6, team: p.team });
+      PF.Match.addHazard(m, { kind: 'puddle', x, y, r: 100, life: 7, team: p.team });
       PF.FX.burst(m.fx, x, y, 30, '#8fd8ff', 260, 0.5, 4);
       PF.FX.text(m.fx, x, y - 40, '¡CHOF!', '#8fd8ff', 1.1);
       PF.Audio.sfx.water();
@@ -166,7 +166,7 @@ PF.Abilities = (() => {
 
     /** Snorlax: muralla inamovible durante 3,5 s. */
     wall(m, p) {
-      p.wall = 3.5;
+      p.wall = 4.5;
       PF.FX.ring(m.fx, p.x, p.y, 90, '#e8e0cc', 0.4, 8);
       PF.FX.text(m.fx, p.x, p.y - 70, '¡NO PASAS!', '#e8e0cc', 1.1);
       PF.Audio.sfx.slam();
@@ -223,7 +223,7 @@ PF.Abilities = (() => {
 
     /** Jigglypuff: rueda arrollando a todos (no se detiene al chocar). */
     roll(m, p) {
-      p.dash = 0.5; p.ram = 0.5; p.dashSpeed = 720;
+      p.dash = 0.4; p.ram = 0.4; p.dashSpeed = 600;
       p.dashDx = Math.cos(p.facing); p.dashDy = Math.sin(p.facing);
       PF.FX.text(m.fx, p.x, p.y - 60, '¡RODAR!', '#ff9ccf', 1);
       PF.Audio.sfx.swoosh();
@@ -393,7 +393,7 @@ PF.Abilities = (() => {
 
     /** Lanzallamas: chorro de fuego en cono corto durante 1 s (lo mueve tick). Puede quemar. */
     flamethrower(m, p) {
-      p.chan = { id: 'flame', type: 'fire', t: 0, dur: 1, acc: 0, speed: 0.6 };
+      p.chan = { id: 'flame', type: 'fire', t: 0, dur: 1, acc: 0, speed: 0.8 };
       PF.FX.text(m.fx, p.x, p.y - 64, '¡LANZALLAMAS!', '#ff9a3d', 1);
       PF.Audio.sfx.fire();
     },
@@ -434,7 +434,7 @@ PF.Abilities = (() => {
       PF.Match.addProjectile(m, {
         x: p.x + Math.cos(a) * 26, y: p.y - 16 + Math.sin(a) * 26,
         vx: Math.cos(a) * 300, vy: Math.sin(a) * 300,
-        team: p.team, kind: 'bubble', life: 0.95, r: 22, stun: 0.05, inPlace: true, slowT: 2.5,
+        team: p.team, kind: 'bubble', life: 0.95, r: 26, stun: 0.05, inPlace: true, slowT: 3.5,
         color: '#b8e6ff', hitText: '¡BURBUJA!',
       });
       PF.FX.text(m.fx, p.x, p.y - 64, '¡BURBUJA!', '#b8e6ff', 0.9);
@@ -484,8 +484,8 @@ PF.Abilities = (() => {
       PF.Match.addProjectile(m, {
         x: p.x + Math.cos(a) * 24, y: p.y - 16 + Math.sin(a) * 24,
         vx: Math.cos(a) * 600, vy: Math.sin(a) * 600,
-        team: p.team, kind: 'seed', life: 0.45, r: 12, stun: 0.15, inPlace: true, homing: true,
-        status: 'seed', statusDur: 4, statusChance: 1,
+        team: p.team, kind: 'seed', life: 0.45, r: 12, stun: 0.45, inPlace: true, homing: true,
+        status: 'seed', statusDur: 5, statusChance: 1,
         color: '#7dff9e', hitText: '¡DRENADO!',
       });
       PF.FX.text(m.fx, p.x, p.y - 64, '¡DRENADORAS!', '#7dff9e', 0.9);
@@ -523,8 +523,8 @@ PF.Abilities = (() => {
       PF.Match.addProjectile(m, {
         x: p.x + Math.cos(a) * 24, y: p.y - 16 + Math.sin(a) * 24,
         vx: Math.cos(a) * 520, vy: Math.sin(a) * 520,
-        team: p.team, kind: 'sludge', life: 0.5, r: 16, stun: 0.5, force: 260, puddle: true,
-        status: 'poison', statusDur: 6, statusChance: 0.6,
+        team: p.team, kind: 'sludge', life: 0.5, r: 16, stun: 0.7, force: 260, puddle: true,
+        status: 'poison', statusDur: 6, statusChance: 0.8,
         color: '#b06fd0', hitText: '¡LODO!',
       });
       PF.FX.text(m.fx, p.x, p.y - 64, '¡BOMBA LODO!', '#c78fe0', 0.9);
@@ -535,7 +535,7 @@ PF.Abilities = (() => {
     smog(m, p) {
       const x = U.clamp(p.x + Math.cos(p.facing) * 90, F.x0 + 40, F.x1 - 40);
       const y = U.clamp(p.y + Math.sin(p.facing) * 90, F.y0 + 40, F.y1 - 40);
-      PF.Match.addHazard(m, { kind: 'toxic', x, y, r: 110, life: 3, team: p.team, chance: 0.8, cloud: true });
+      PF.Match.addHazard(m, { kind: 'toxic', x, y, r: 120, life: 4, team: p.team, chance: 0.8, cloud: true });
       PF.FX.burst(m.fx, x, y, 26, '#a060c0', 220, 0.6, 5);
       PF.FX.text(m.fx, x, y - 54, '¡NIEBLA TÓXICA!', '#c78fe0', 1);
       PF.Audio.sfx.phase();
@@ -546,9 +546,9 @@ PF.Abilities = (() => {
       const a = p.facing;
       PF.Match.addProjectile(m, {
         x: p.x + Math.cos(a) * 24, y: p.y - 16 + Math.sin(a) * 24,
-        vx: Math.cos(a) * 380, vy: Math.sin(a) * 380,
-        team: p.team, kind: 'hex', life: 0.8, r: 15, stun: 0.2, inPlace: true,
-        status: 'conf', statusDur: 3, statusChance: 1,
+        vx: Math.cos(a) * 450, vy: Math.sin(a) * 450,
+        team: p.team, kind: 'hex', life: 0.7, r: 15, stun: 0.4, inPlace: true,
+        status: 'conf', statusDur: 4, statusChance: 1,
         color: '#a58fe8', hitText: '¿¡?!',
       });
       PF.FX.text(m.fx, p.x, p.y - 64, '¡RAYO CONFUSO!', '#a58fe8', 0.9);
@@ -617,7 +617,7 @@ PF.Abilities = (() => {
 
     /** Contraataque: 1 s de postura; el primer golpe de un rival se le devuelve (match.js: counterHit). */
     counter(m, p) {
-      p.chan = { id: 'counter', type: 'fighting', t: 0, dur: 1, speed: 0.5, pulse: 0 };
+      p.chan = { id: 'counter', type: 'fighting', t: 0, dur: 1.2, speed: 0.7, pulse: 0 };
       PF.FX.ring(m.fx, p.x, p.y, 60, '#ffd23f', 0.3, 5);
       PF.FX.text(m.fx, p.x, p.y - 64, '¡EN GUARDIA!', '#ffd23f', 1);
       PF.Audio.sfx.slam();
@@ -735,7 +735,7 @@ PF.Abilities = (() => {
 
     /** Hiperrayo: carga quieto 0,9 s (apunta a donde mirabas) y dispara un rayo enorme (lo hace tick). */
     hyperbeam(m, p) {
-      p.chan = { id: 'hyper', type: 'normal', t: 0, dur: 0.9, root: true, speed: 0 };
+      p.chan = { id: 'hyper', type: 'normal', t: 0, dur: 0.7, root: true, speed: 0 };
       PF.FX.text(m.fx, p.x, p.y - 64, '¡HIPERRAYO!', '#ffe9a8', 1.1);
       PF.Audio.sfx.zap();
     },
@@ -800,20 +800,20 @@ PF.Abilities = (() => {
     value(m, p, dt) {
       const c = p.chan, M = PF.Match;
       if (c.id === 'flame') {
-        const R = 200, HALF = 0.38, fx = Math.cos(p.facing), fy = Math.sin(p.facing);
+        const R = 230, HALF = 0.38, fx = Math.cos(p.facing), fy = Math.sin(p.facing);
         for (let i = 0; i < 3; i++) {
           const a = p.facing + U.rand(-HALF, HALF), s = U.rand(260, 560);
           PF.FX.particle(m.fx, p.x + fx * 24, p.y + fy * 24 - 14, Math.cos(a) * s, Math.sin(a) * s,
             U.pick(['#ffb347', '#ff6b3d', '#ffe066']), U.rand(0.25, 0.4), U.rand(4, 7));
         }
         c.acc += dt;
-        if (c.acc >= 0.25) {
-          c.acc -= 0.25;
+        if (c.acc >= 0.2) {
+          c.acc -= 0.2;
           PF.Audio.sfx.fire();
           for (const q of foes(m, p)) {
             const dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy);
             if (d > R + M.radius(q) || d < 1 || Math.abs(U.angDiff(p.facing, Math.atan2(dy, dx))) > HALF + 0.15) continue;
-            if (M.stunInPlace(m, q, 0.2)) M.applyStatus(m, q, 'burn', 4, 0.25);
+            if (M.stunInPlace(m, q, 0.3)) M.applyStatus(m, q, 'burn', 4, 0.35);
           }
         }
         return false;
@@ -847,18 +847,26 @@ PF.Abilities = (() => {
         return true;
       }
       if (c.id === 'hyper') {
-        const LEN = 420, W = 34;
-        const fx = Math.cos(p.facing), fy = Math.sin(p.facing);
+        const LEN = 460, W = 44;
+        let fx = Math.cos(p.facing), fy = Math.sin(p.facing);
         if (c.t < c.dur) {
           if (Math.random() < 0.5) PF.FX.particle(m.fx, p.x + fx * 24 + U.rand(-30, 30), p.y + fy * 24 + U.rand(-30, 30) - 14, fx * -60, fy * -60, '#fff3b0', 0.3, 4);
           return false;
         }
-        // disparo: arrasa todo lo que esté en la línea
+        // disparo: si hay un rival casi en la mira, se corrige hacia él; arrasa todo lo que esté en la línea
+        let aimFoe = null, ad = 0.6;
+        for (const q of foes(m, p)) {
+          const dx = q.x - p.x, dy = q.y - p.y;
+          if (Math.hypot(dx, dy) > LEN || M.untouchable(q)) continue;
+          const da = Math.abs(U.angDiff(p.facing, Math.atan2(dy, dx)));
+          if (da < ad) { ad = da; aimFoe = q; }
+        }
+        if (aimFoe) { p.facing = Math.atan2(aimFoe.y - p.y, aimFoe.x - p.x); fx = Math.cos(p.facing); fy = Math.sin(p.facing); }
         for (const q of foes(m, p)) {
           const dx = q.x - p.x, dy = q.y - p.y;
           const along = dx * fx + dy * fy, side = Math.abs(dx * fy - dy * fx);
           if (along < 0 || along > LEN || side > W + M.radius(q)) continue;
-          if (M.knock(m, q, fx, fy, 760, 1.3)) PF.FX.burst(m.fx, q.x, q.y - 16, 16, '#fff3b0', 260);
+          if (M.knock(m, q, fx, fy, 900, 1.6)) PF.FX.burst(m.fx, q.x, q.y - 16, 16, '#fff3b0', 260);
         }
         const b = m.ball;
         if (!safe(b) && b.holder !== p && (!b.holder || b.holder.team !== p.team)) {
@@ -877,11 +885,11 @@ PF.Abilities = (() => {
         PF.Audio.sfx.slam();
         m.shake = Math.max(m.shake, 14);
         m.freeze = 0.07;
-        p.down = Math.max(p.down, 1.0);   // queda agotado
+        p.down = Math.max(p.down, 0.7);   // queda agotado
         return true;
       }
       if (c.id === 'rest') {
-        p.hp = Math.min(p.maxHp, p.hp + (p.maxHp * 0.25 * dt) / c.dur);
+        p.hp = Math.min(p.maxHp, p.hp + (p.maxHp * 0.3 * dt) / c.dur);
         c.z -= dt;
         if (c.z <= 0) { c.z = 0.5; PF.FX.text(m.fx, p.x + U.rand(-10, 10), p.y - 56, 'Zzz', '#9cff9c', 0.6, 0.7); }
         return false;
@@ -891,6 +899,21 @@ PF.Abilities = (() => {
         // aura dorada mientras espera el golpe
         c.pulse -= dt;
         if (c.pulse <= 0) { c.pulse = 0.2; PF.FX.ring(m.fx, p.x, p.y, 52, '#ffd23f', 0.2, 3); }
+        // además de devolver el primer golpe (match.js), contraataca al que se le pega encima
+        for (const q of foes(m, p)) {
+          if (M.untouchable(q) || U.dist(p.x, p.y, q.x, q.y) > M.radius(p) + M.radius(q) + 14) continue;
+          const d = U.dist(p.x, p.y, q.x, q.y) || 1;
+          m.hit = { from: p, type: 'fighting', mult: 1.3 };
+          const ok = M.knock(m, q, (q.x - p.x) / d, (q.y - p.y) / d, 540, 0.9);
+          m.hit = { from: p, type: 'fighting' };
+          if (ok) {
+            PF.FX.text(m.fx, q.x, q.y - 70, '¡CONTRAATAQUE!', '#ffd23f', 1.1, 1.2);
+            PF.FX.ring(m.fx, p.x, p.y, 70, '#ffd23f', 0.3, 6);
+            PF.Audio.sfx.tackle();
+            m.shake = Math.max(m.shake, 6);
+            return true;
+          }
+        }
         return false;
       }
       return true;

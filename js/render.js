@@ -360,8 +360,8 @@ PF.Render = (() => {
       // mira del Hiperrayo: la línea se hace más intensa hasta el disparo
       const k = Math.min(1, p.chan.t / p.chan.dur), a = p.facing;
       ctx.globalAlpha = 0.15 + 0.5 * k;
-      ctx.strokeStyle = '#fff3b0'; ctx.lineWidth = 6 + 18 * k;
-      ctx.beginPath(); ctx.moveTo(p.x, p.y - 14); ctx.lineTo(p.x + Math.cos(a) * 420, p.y - 14 + Math.sin(a) * 420); ctx.stroke();
+      ctx.strokeStyle = '#fff3b0'; ctx.lineWidth = 8 + 24 * k;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y - 14); ctx.lineTo(p.x + Math.cos(a) * 460, p.y - 14 + Math.sin(a) * 460); ctx.stroke();
       ctx.globalAlpha = 1;
     }
     if (p.chan && p.chan.id === 'barrier') {

@@ -17,7 +17,7 @@ PF.ROSTER = [
     abilities: [
       { id: 'zap', name: 'Impactrueno', cd: 9,
         desc: 'Electrocuta a los rivales cercanos: quedan aturdidos y sueltan la pelota.' },
-      { id: 'quick', name: 'Ataque Rápido', cd: 5,
+      { id: 'quick', name: 'Ataque Rápido', cd: 6,
         desc: 'Embestida veloz sin soltar la pelota: arrolla a quien se cruce.' },
     ],
   },
@@ -25,7 +25,7 @@ PF.ROSTER = [
     id: 'charmander', dex: 4, name: 'Charmander', type: 'Fuego', color: '#ff8a3d',
     speed: 315, power: 1.12, mass: 1.0, radius: 18,
     abilities: [
-      { id: 'fireshot', name: 'Tiro Ígneo', cd: 10,
+      { id: 'fireshot', name: 'Tiro Ígneo', cd: 12,
         desc: 'Bola de fuego que atraviesa y derriba. Con la pelota, dispara al instante. Gasta mucha energía.' },
       { id: 'embers', name: 'Ascuas', cd: 9,
         desc: 'Durante 3 s dejas un rastro de fuego que tumba a los rivales que lo pisan.' },
@@ -55,8 +55,8 @@ PF.ROSTER = [
     id: 'gengar', dex: 94, name: 'Gengar', type: 'Fantasma', color: '#a27bff',
     speed: 322, power: 1.05, mass: 1.05, radius: 20,
     abilities: [
-      { id: 'phase', name: 'Intangible', cd: 10,
-        desc: '3 s atravesando a todos: nadie te roba ni te placa, y corres más.' },
+      { id: 'phase', name: 'Intangible', cd: 12,
+        desc: '2,2 s atravesando a todos: nadie te roba ni te placa, y corres más.' },
       { id: 'teleport', name: 'Teletransporte', cd: 6,
         desc: 'Desapareces y reapareces más adelante, con la pelota incluida.' },
     ],
@@ -67,8 +67,8 @@ PF.ROSTER = [
     abilities: [
       { id: 'slam', name: 'Golpe Cuerpo', cd: 9,
         desc: 'Salta y aplasta: la onda expansiva tumba a todos los rivales alrededor.' },
-      { id: 'wall', name: 'Bloqueo', cd: 10,
-        desc: '3,5 s hecho una muralla: inamovible, rebota tiros y rivales. Portero ideal.' },
+      { id: 'wall', name: 'Bloqueo', cd: 9,
+        desc: '4,5 s hecho una muralla: inamovible, rebota tiros y rivales. Portero ideal.' },
     ],
   },
 
@@ -78,7 +78,7 @@ PF.ROSTER = [
     abilities: [
       { id: 'adapt', name: 'Adaptabilidad', cd: 8,
         desc: 'Cada vez usa una habilidad al azar de otro Pokémon. ¡Sorpresa!' },
-      { id: 'quick', name: 'Ataque Rápido', cd: 5,
+      { id: 'quick', name: 'Ataque Rápido', cd: 6,
         desc: 'Embestida veloz sin soltar la pelota: arrolla a quien se cruce.' },
     ],
   },
@@ -98,7 +98,7 @@ PF.ROSTER = [
     abilities: [
       { id: 'sing', name: 'Canto', cd: 12,
         desc: 'Todos los rivales cerca de ti se duermen escuchándote.' },
-      { id: 'roll', name: 'Rodar', cd: 8,
+      { id: 'roll', name: 'Rodar', cd: 10,
         desc: 'Rueda a toda velocidad arrollando a todos los que se crucen.' },
     ],
   },
@@ -126,8 +126,8 @@ PF.ROSTER = [
     id: 'onix', dex: 95, name: 'Onix', type: 'Roca', color: '#a9a39a',
     speed: 252, power: 1.1, mass: 2.8, radius: 29, scale: 0.6,
     abilities: [
-      { id: 'wall', name: 'Bloqueo', cd: 10,
-        desc: '3,5 s hecho una muralla: inamovible, rebota tiros y rivales.' },
+      { id: 'wall', name: 'Bloqueo', cd: 9,
+        desc: '4,5 s hecho una muralla: inamovible, rebota tiros y rivales.' },
       { id: 'dig', name: 'Excavar', cd: 9,
         desc: 'Se mete bajo tierra y sale de golpe, tumbando a los de alrededor.' },
     ],
@@ -148,7 +148,7 @@ PF.ROSTER = [
     abilities: [
       { id: 'pinmissile', name: 'Pin Misil', cd: 9,
         desc: 'Cinco agujas en abanico que aturden al que tocan.' },
-      { id: 'quick', name: 'Ataque Rápido', cd: 5,
+      { id: 'quick', name: 'Ataque Rápido', cd: 6,
         desc: 'Embestida veloz sin soltar la pelota: arrolla a quien se cruce.' },
     ],
   },
