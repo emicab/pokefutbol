@@ -167,23 +167,100 @@
     PF.CareerUI.hub({
       focus: careerFocus,
       onBack: toTitle,
-      onChallenge: (gymId) => { C.startRun(gymId); careerStage(); },
-      onContinue: careerStage,
+      onChallenge: (gymId) => { C.startRun(gymId); careerMap(); },
+      onContinue: careerMap,
     });
   }
 
-  function careerStage() {
+  /** Mapa de la copa: de acá se elige cada paso. */
+  function careerMap() {
+    toMenu();
+    PF.Audio.setAmbience(0.25);
+    const run = C.data().run;
+    if (!run) return careerHub();
+    PF.CareerUI.map(run, {
+      onNode: careerNode,
+      onClub: careerHub,
+      onAbandon: () => { C.data().run = null; PF.Save.save(); careerHub(); },
+    });
+  }
+
+  function careerNode(nd) {
+    if (nd.type === 'center') return careerCenter(nd);
+    if (nd.type === 'shop') return careerShop(nd);
+    if (nd.type === 'event') return careerEvent(nd);
+    careerStage(nd);
+  }
+
+  /** Partido de un nodo (entrenador, salvajes, élite o líder). */
+  function careerStage(nd) {
     toMenu();
     const run = C.data().run;
     if (!run) return careerHub();
-    const opp = C.opponent(run);
-    PF.CareerUI.versus(opp, () => {
+    const opp = C.opponent(run, nd);
+    PF.CareerUI.versus(opp, nd, () => {
       const cfg = C.matchConfig(opp);
-      playMatch(cfg, (m) => careerAfter(m, opp), { label: 'Volver al club (la copa sigue)', fn: careerHub });
-    }, () => { C.data().run = null; PF.Save.save(); careerHub(); });
+      playMatch(cfg, (m) => careerAfter(m, opp, nd), { label: 'Volver al mapa (la copa sigue)', fn: careerMap });
+    }, careerMap, () => { C.data().run = null; PF.Save.save(); careerHub(); });
   }
 
-  function careerAfter(m, opp) {
+  /** Resultado de un nodo sin partido: experiencia, mejora o Pokémon nuevo; después, el mapa. */
+  function careerResolve(nd, r) {
+    C.completeNode(C.data().run, nd);
+    if (r.msg) PF.UI.toast(r.msg);
+    const done = () => {
+      if (r.perk) return careerPerks(careerMap);
+      if (r.recruit) {
+        const o = r.recruit, sp = PF.species(o.dex);
+        return PF.CareerUI.choose('¡Quiere unirse!', 'Se recuperó y te mira con confianza.',
+          [{ dex: o.dex, title: sp.name, sub: `Nv ${o.level}`, color: sp.color }],
+          (i) => { if (i !== null) { C.addMember(o.dex, o.level, o.ivMin); PF.UI.toast(`¡${sp.name} se unió al club!`); } careerMap(); },
+          'No, gracias');
+      }
+      careerMap();
+    };
+    if (r.xp) {
+      if (r.xp.abilityUnlocks.length) PF.UI.toast(`¡${r.xp.abilityUnlocks.map((mb) => PF.species(mb.dex).name).join(', ')} aprendió una segunda habilidad!`);
+      return evolveAll(r.xp.evolutions.slice(), done);
+    }
+    done();
+  }
+
+  function careerCenter(nd) {
+    PF.CareerUI.choose('💖 Centro Pokémon', 'La enfermera sonríe: "¡Tus Pokémon están en buenas manos!". ¿Qué prefieres?',
+      C.CENTER.map((o) => ({ title: o.title, sub: o.sub })),
+      (i) => careerResolve(nd, C.pickOption(C.data().run, nd, i)));
+  }
+
+  function careerEvent(nd) {
+    const ev = C.eventOf(nd);
+    PF.CareerUI.choose(`❓ ${ev.title}`, ev.text,
+      ev.options.map((o) => ({ title: o.title, sub: o.sub })),
+      (i) => careerResolve(nd, C.pickOption(C.data().run, nd, i)));
+  }
+
+  function careerShop(nd) {
+    const run = C.data().run;
+    let pending = [];
+    PF.CareerUI.shop(run, nd, (i) => {
+      const r = C.buy(run, nd, i);
+      if (r.xp) pending = pending.concat(r.xp.evolutions.filter((mb) => !pending.includes(mb)));
+      return r;
+    }, () => {
+      C.completeNode(run, nd);
+      evolveAll(pending, careerMap);
+    });
+  }
+
+  /** Elegir una mejora entre tres y seguir con `next`. */
+  function careerPerks(next) {
+    const ch = C.perkChoices(C.data().run);
+    PF.CareerUI.choose('Elige una mejora', 'Dura hasta que termine esta copa.',
+      ch.map((p) => ({ title: p.name, sub: p.desc })),
+      (i) => { C.takePerk(C.data().run, ch[i].id); next(); });
+  }
+
+  function careerAfter(m, opp, nd) {
     toMenu();
     PF.Audio.setAmbience(0.25);
     const res = C.applyMatch(m, opp);
@@ -192,7 +269,7 @@
     const unlocked = checkChallenges();
     PF.Save.save();
     if (unlocked.length) PF.UI.toast(`¡Nuevo Pokémon para partido rápido: ${unlocked.join(', ')}!`);
-    PF.CareerUI.post(m, res, () => evolveAll(res.evolutions.slice(), () => afterRun(m)));
+    PF.CareerUI.post(m, res, () => evolveAll(res.evolutions.slice(), () => afterRun(m, opp, nd)));
   }
 
   /** Evoluciones pendientes, una tras otra. */
@@ -202,12 +279,12 @@
     PF.CareerUI.evolve(mb, () => evolveAll(list, done));
   }
 
-  function afterRun(m) {
+  function afterRun(m, opp, nd) {
     const run = C.data().run;
     const g = run && C.gymOf(run);
-    const out = C.advanceRun(m.winner === 0);
+    const out = C.advanceRun(m.winner === 0, nd);
     if (!out) return careerHub();
-    if (out.result === 'retry') { PF.UI.toast('¡Usaste la Poción! Repites el partido.'); return careerStage(); }
+    if (out.result === 'retry') { PF.UI.toast('¡Usaste la Poción! Repites el partido.'); return careerStage(nd); }
     if (out.result === 'lost') return PF.CareerUI.runEnd(out, careerHub);
     if (out.result === 'won') {
       // reclutar a uno del equipo del líder
@@ -225,18 +302,25 @@
       );
       return;
     }
-    // siguiente etapa: quizá alguien quiere unirse, luego elegir mejora
-    const wild = C.wildJoin(g);
-    const perks = () => {
-      const ch = C.perkChoices(C.data().run);
-      PF.CareerUI.choose('Elige una mejora', 'Dura hasta que termine esta copa.',
-        ch.map((p) => ({ title: p.name, sub: p.desc })),
-        (i) => { C.takePerk(C.data().run, ch[i].id); careerStage(); });
-    };
-    if (!wild) return perks();
+    // salvajes: uno de ellos se une. Entrenadores: quizá alguien se une, y una mejora
+    if (nd.type === 'wild') {
+      const full = C.data().club.length >= C.CLUB_MAX;
+      const opts = opp.members.map((mb) => ({ dex: mb.dex, level: Math.max(2, mb.level - 2) }));
+      return PF.CareerUI.choose('¡Los salvajes se rinden!',
+        full ? 'Tu club está lleno (9): no puede unirse nadie. Libera a alguien la próxima vez.' : 'Uno de ellos quiere unirse a tu club. ¿A quién eliges?',
+        full ? [] : opts.map((o) => ({ dex: o.dex, title: PF.species(o.dex).name, sub: `Nv ${o.level}`, color: PF.species(o.dex).color })),
+        (i) => {
+          if (i !== null) { const o = opts[i]; C.addMember(o.dex, o.level, 8); PF.UI.toast(`¡${PF.species(o.dex).name} se unió al club!`); }
+          careerMap();
+        },
+        full ? 'Continuar' : 'Ahora no');
+    }
+    if (nd.type === 'elite') PF.UI.toast('¡Premio de la élite: +120 monedas!');
+    const wild = C.wildJoin(g, nd.type === 'elite' ? 0.5 : 0.25);
+    if (!wild) return careerPerks(careerMap);
     PF.CareerUI.choose('¡Un Pokémon quiere unirse!', 'Le gustó cómo juega tu equipo.',
       [{ dex: wild.dex, title: PF.species(wild.dex).name, sub: `Nv ${wild.level}`, color: PF.species(wild.dex).color }],
-      (i) => { if (i !== null) { C.addMember(wild.dex, wild.level); PF.UI.toast(`¡${PF.species(wild.dex).name} se unió al club!`); } perks(); },
+      (i) => { if (i !== null) { C.addMember(wild.dex, wild.level); PF.UI.toast(`¡${PF.species(wild.dex).name} se unió al club!`); } careerPerks(careerMap); },
       'No, gracias');
   }
 

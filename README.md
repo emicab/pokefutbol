@@ -280,12 +280,24 @@ Tu club es persistente; cada gimnasio se juega como una copa.
   Charmeleon 36 → Charizard, Magikarp 20 → Gyarados, Eevee 25 → Vaporeon,
   Jolteon o Flareon a elección...).
 - **Gimnasios:** 7 copas (Brock, Misty, Lt. Surge, Erika, Sabrina, Blaine y
-  la Liga) de 3 partidos: dos entrenadores y el líder. Entre partido y
-  partido eliges una mejora temporal (velocidad, tiro, recarga, reflejos,
-  experiencia, monedas o una Poción que da otra oportunidad). Si pierdes, la
-  copa se termina, pero tu club conserva la experiencia. Al ganarle al líder
-  te llevas la medalla y reclutas a uno de su equipo; a veces, además, un
-  Pokémon salvaje pide unirse.
+  la Liga). Cada copa es un **mapa de rutas**: 4 pasos con 2-3 caminos a
+  elegir y, al final, el líder. Si pierdes, la copa se termina, pero tu club
+  conserva la experiencia. Al ganarle al líder te llevas la medalla y reclutas
+  a uno de su equipo. Cada camino conecta con 1-2 del paso siguiente, y los
+  nodos son:
+  - 🧢 **Entrenador:** partido normal; premio, una mejora temporal (velocidad,
+    tiro, recarga, reflejos, experiencia, monedas o una Poción que da otra
+    oportunidad) y, a veces, un Pokémon que quiere unirse.
+  - 🌿 **Salvajes:** partido corto (75 s) y más fácil; al ganar, uno de ellos
+    se une a tu club.
+  - 👑 **Élite:** rival más duro (nivel +2 a +3, IVs altos, dificultad mayor);
+    premio de 120 monedas, una mejora y más chances de reclutar.
+  - 💖 **Centro Pokémon:** una Poción, entrenamiento para todo el club
+    (casi la mitad de un nivel) o elegir una mejora.
+  - 🛒 **Tienda:** mejoras (90 monedas), Poción (130) y caramelos para todo el
+    club (110).
+  - ❓ **Evento:** uno de cuatro encuentros con dos opciones (un cofre, un
+    veterano que entrena, un Pokémon herido, una fuente termal).
 
 Las especies del modo historia salen de la Pokédex (`js/pokedex.js`): stats
 de cancha y habilidades por tipo se calculan solos (`js/species.js`), así que

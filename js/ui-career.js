@@ -184,8 +184,8 @@ PF.CareerUI = (() => {
       box.innerHTML = '<div class="bt">Gimnasios</div>';
       if (car.run) {
         const g = C().gymOf(car.run);
-        const r = el(`<div class="gym run"><div><b>${g.name}</b><small>Copa en curso · partido ${car.run.stage + 1} de 3</small></div>
-          <button class="btn small big" ${ready ? '' : 'disabled'}>Continuar</button></div>`);
+        const r = el(`<div class="gym run"><div><b>${g.name}</b><small>Copa en curso · paso ${car.run.at ? car.run.at.l + 2 : 1} de ${C().MAP_LAYERS + 1}</small></div>
+          <button class="btn small big" ${ready ? '' : 'disabled'}>Ver mapa</button></div>`);
         r.querySelector('button').onclick = () => h.onContinue();
         box.appendChild(r);
       }
@@ -207,7 +207,7 @@ PF.CareerUI = (() => {
   }
 
   // ------------------------------------------------------------------ previa
-  function versus(info, onGo, onAbandon) {
+  function versus(info, node, onGo, onMap, onAbandon) {
     const run = C().data().run, g = C().gymOf(run);
     const team = (members) => members.map((mb) => {
       const sp = PF.species(mb.dex);
@@ -218,21 +218,23 @@ PF.CareerUI = (() => {
       <div class="screen career">
         <div class="box menu vs">
           <h2>${g.name}</h2>
-          <div class="stage">${[0, 1, 2].map((i) => `<i class="${i < run.stage ? 'done' : i === run.stage ? 'cur' : ''}">${i === 2 ? 'Líder' : 'Entrenador ' + (i + 1)}</i>`).join('')}</div>
+          <div class="stage">${Array.from({ length: C().MAP_LAYERS + 1 }, (_, i) => `<i class="${i < node.l ? 'done' : i === node.l ? 'cur' : ''}">${i === C().MAP_LAYERS ? 'Líder' : 'Paso ' + (i + 1)}</i>`).join('')}</div>
           <div class="vsrow">
             <div class="vsteam">${team(C().lineupMembers())}</div>
             <div class="vsx">VS</div>
             <div class="vsteam">${team(info.members)}</div>
           </div>
-          <div class="vstitle">${info.title}${info.leader ? ' — ¡el líder del gimnasio!' : ''}</div>
+          <div class="vstitle">${C().NODE_INFO[node.type].icon} ${info.title}${info.leader ? ' — ¡el líder del gimnasio!' : info.elite ? ' — ¡cuidado, es de élite!' : info.wild ? ` — partido corto, ${info.time} s` : ''}</div>
           ${perks.length ? `<div class="perks">Mejoras: ${perks.map((p) => `<b title="${p.desc}">${p.name}</b>`).join(' · ')}</div>` : ''}
           <div class="row">
             <button class="btn danger" data-act="quit">Abandonar copa</button>
+            <button class="btn" data-act="map">Volver al mapa</button>
             <button class="btn big" data-act="go">¡A jugar!</button>
           </div>
         </div>
       </div>`);
     s.querySelector('[data-act=go]').onclick = onGo;
+    s.querySelector('[data-act=map]').onclick = onMap;
     const q = s.querySelector('[data-act=quit]');
     q.onclick = () => { if (q.dataset.sure) onAbandon(); else { q.dataset.sure = '1'; q.textContent = '¿Seguro? Se pierde la copa'; } };
     show(s);
@@ -338,6 +340,107 @@ PF.CareerUI = (() => {
     show(s);
   }
 
+  // ------------------------------------------------------------------ mapa de la copa
+  /** h = { onNode(nd), onClub(), onAbandon() } */
+  function map(run, h) {
+    const g = C().gymOf(run), info = C().NODE_INFO;
+    C().ensureMap(run);
+    const lay = run.map;
+    const px = (nd) => 9 + nd.l * (82 / C().MAP_LAYERS);
+    const py = (nd) => ((nd.i + 1) / (lay[nd.l].length + 1)) * 100;
+    const mine = C().lineupMembers();
+    for (const mb of mine) PF.Sprites.preload(mb.dex);
+    PF.Sprites.preload(g.team[2]);
+    const perks = run.perks.map((id) => C().PERKS.find((p) => p.id === id)).filter(Boolean);
+    // líneas: recorrido hecho (verde), próximos pasos (amarillo), el resto apagado
+    const lines = [];
+    for (const col of lay) for (const nd of col) for (const j of nd.to) {
+      const nx = lay[nd.l + 1][j];
+      const walked = nd.done && nx.done;
+      const next = run.at ? (run.at.l === nd.l && run.at.i === nd.i && C().isAvailable(run, nx)) : false;
+      lines.push(`<line x1="${px(nd)}" y1="${py(nd)}" x2="${px(nx)}" y2="${py(nx)}" class="${walked ? 'walk' : next ? 'next' : ''}"/>`);
+    }
+    const nodes = lay.flat().map((nd) => {
+      const av = C().isAvailable(run, nd), cls = nd.done ? 'done' : av ? 'avail' : 'lock';
+      const inf = info[nd.type];
+      const face = nd.type === 'leader' ? portrait(g.team[2], 84, 74, 1.25) : `<span class="ico">${inf.icon}</span>`;
+      return `<button class="rnode t-${nd.type} ${cls}" data-l="${nd.l}" data-i="${nd.i}" style="left:${px(nd)}%;top:${py(nd)}%;--tc:${nd.type === 'leader' ? PF.species(g.team[2]).color : '#5b6f99'}" ${av ? '' : 'tabindex="-1"'}>
+        ${face}${nd.done ? '<em>✔</em>' : ''}<small>${nd.type === 'leader' ? g.leader : inf.name}</small></button>`;
+    }).join('');
+    const s = el(`
+      <div class="screen career rmapscreen">
+        <div class="selhead">
+          <h2>${g.name}</h2>
+          <div class="rsub">Líder ${g.leader} · ${PF.TYPE_ES[g.type]} · Nv ${g.levels[0]}–${g.levels[1]}</div>
+          ${coinHTML(PF.Save.data.coins)}
+        </div>
+        <div class="rmap box">
+          <svg class="rlines" viewBox="0 0 100 100" preserveAspectRatio="none">${lines.join('')}</svg>
+          ${nodes}
+        </div>
+        <div class="rinfo">${run.at ? 'Elige tu próximo paso.' : 'Elige por dónde empezar: cada camino tiene sus propios rivales y sorpresas.'}</div>
+        <div class="rteam">
+          ${mine.map((mb) => `<span class="rmon" style="--tc:${PF.species(mb.dex).color}">${portrait(mb.dex, 40, 36, 0.5)}<small>Nv ${mb.level}</small></span>`).join('')}
+          <span class="perks">${perks.length ? 'Mejoras: ' + perks.map((p) => `<b title="${p.desc}">${p.name}</b>`).join(' · ') : 'Sin mejoras todavía'}</span>
+        </div>
+        <div class="row">
+          <button class="btn danger" data-act="quit">Abandonar copa</button>
+          <button class="btn" data-act="club">Volver al club</button>
+        </div>
+      </div>`);
+    const infoEl = s.querySelector('.rinfo');
+    s.querySelectorAll('.rnode').forEach((b) => {
+      const nd = lay[+b.dataset.l][+b.dataset.i], inf = info[nd.type];
+      const say = () => {
+        infoEl.innerHTML = `<b>${inf.icon} ${nd.type === 'leader' ? 'Líder ' + g.leader : inf.name}</b> — ${inf.desc}${nd.done ? ' <i>(ya pasaste por acá)</i>' : !C().isAvailable(run, nd) ? ' <i>(todavía no se puede llegar)</i>' : ''}`;
+      };
+      b.onmouseenter = b.onfocus = say;
+      b.onclick = () => { if (C().isAvailable(run, nd)) { PF.Audio.sfx.click(); h.onNode(nd); } else { PF.Audio.sfx.fail(); say(); } };
+    });
+    s.querySelector('[data-act=club]').onclick = h.onClub;
+    const q = s.querySelector('[data-act=quit]');
+    q.onclick = () => { if (q.dataset.sure) h.onAbandon(); else { q.dataset.sure = '1'; q.textContent = '¿Seguro? Se pierde la copa'; } };
+    show(s);
+    const first = s.querySelector('.rnode.avail');
+    if (first) first.focus();
+  }
+
+  // ------------------------------------------------------------------ tienda
+  /** buy(i) → { ok, msg }. */
+  function shop(run, node, buy, onLeave) {
+    const sh = C().shopOf(run, node);
+    const s = el(`
+      <div class="screen career">
+        <div class="box menu choose">
+          <h2>🛒 Tienda</h2>
+          <div class="intro">Un vendedor ambulante te muestra su mercadería. Lo que compras dura hasta que termine esta copa.</div>
+          <div class="coinline"></div>
+          <div class="options"></div>
+          <button class="btn big" data-act="leave">Seguir camino</button>
+        </div>
+      </div>`);
+    const draw = () => {
+      s.querySelector('.coinline').innerHTML = coinHTML(PF.Save.data.coins);
+      const box = s.querySelector('.options');
+      box.innerHTML = sh.items.map((it, i) => `<div class="opt ${sh.sold[i] ? 'sold' : PF.Save.data.coins < it.price ? 'poor' : ''}" data-i="${i}" tabindex="0" role="button">
+        <b>${it.title}</b><small>${it.sub}</small>
+        <span class="price">${sh.sold[i] ? 'Vendido' : coinHTML(it.price)}</span></div>`).join('');
+      box.querySelectorAll('.opt').forEach((o) => {
+        const go = () => {
+          const r = buy(+o.dataset.i);
+          PF.UI.toast(r.msg);
+          if (r.ok) PF.Audio.sfx.pickup(); else PF.Audio.sfx.fail();
+          draw();
+        };
+        o.onclick = go;
+        o.onkeydown = (e) => { if (e.key === 'Enter') go(); };
+      });
+    };
+    s.querySelector('[data-act=leave]').onclick = onLeave;
+    draw();
+    show(s);
+  }
+
   function runEnd(out, onBack) {
     const won = out.result === 'won';
     const s = el(`
@@ -355,5 +458,5 @@ PF.CareerUI = (() => {
     show(s);
   }
 
-  return { start, hub, versus, post, evolve, choose, runEnd };
+  return { start, hub, map, shop, versus, post, evolve, choose, runEnd };
 })();

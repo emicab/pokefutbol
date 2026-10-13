@@ -1,12 +1,15 @@
 /* ============ career.js — modo historia: club, niveles, evoluciones, gimnasios ============
  * Mixto: el CLUB es persistente (niveles, IVs, evoluciones, medallas) y cada
- * GIMNASIO se juega como una copa de 3 partidos (2 entrenadores + líder) con
- * mejoras temporales que se eligen entre partido y partido. Perder termina la
- * copa (salvo que tengas una Poción), pero la experiencia ganada se queda.
+ * GIMNASIO se juega como una copa: un MAPA de rutas (4 pasos y el líder) donde
+ * se elige el camino entre partidos, Centros, tiendas y eventos, con mejoras
+ * temporales que duran toda la copa. Perder termina la copa (salvo que tengas
+ * una Poción), pero la experiencia ganada se queda.
  *
  * Datos en PF.Save.data.career (null hasta empezar):
  *   name, club: [miembro], lineup: [uid x3], spots: {modo: {defId: [d, f]}}, keeper,
- *   badges: [gymId], run: null | { gym, stage, perks, lives }, nextUid
+ *   badges: [gymId], run: null | { gym, stage, perks, lives, map, at }, nextUid
+ * run.map = capas 0..3 (2-3 nodos) + capa 4 (el líder) · nodo = { l, i, type, to: [i de la
+ *   capa siguiente], done, foe?, shop?, ev? } · run.at = null | { l, i } (último nodo cumplido)
  * miembro = { uid, dex, level, xp, ivs: { spd, pow, mass }, abil }
  */
 PF.Career = (() => {
@@ -23,6 +26,20 @@ PF.Career = (() => {
     { id: 'monedas', name: 'Amuleto Moneda', desc: '+60 % de monedas en esta copa.' },
     { id: 'pocion', name: 'Poción', desc: 'Una vida extra: si pierdes, repites el partido.' },
   ];
+
+  /** Tipos de nodo del mapa. */
+  const NODE_INFO = {
+    trainer: { name: 'Entrenador', icon: '🧢', desc: 'Partido contra un entrenador. Premio: una mejora para la copa.' },
+    wild: { name: 'Salvajes', icon: '🌿', desc: 'Partido corto (75 s) contra Pokémon salvajes. Si ganas, uno se une al club.' },
+    elite: { name: 'Élite', icon: '👑', desc: 'Rival más duro. Premio: una mejora, 120 monedas y a veces un Pokémon.' },
+    center: { name: 'Centro Pokémon', icon: '💖', desc: 'Descanso: una Poción, entrenamiento para todo el club o una mejora.' },
+    shop: { name: 'Tienda', icon: '🛒', desc: 'Gasta tus monedas en mejoras, Pociones y caramelos.' },
+    event: { name: 'Evento', icon: '❓', desc: 'Un encuentro en el camino: puede salir bien… o no tanto.' },
+    leader: { name: 'Líder', icon: '🏅', desc: 'El líder del gimnasio. Si ganas, la medalla y un Pokémon de su equipo.' },
+  };
+  const TRAINERS = ['Campista', 'Joven', 'Karateka', 'Pescador', 'Excursionista', 'Scout', 'Motociclista', 'Cinturón negro', 'Estudiante', 'Jugadora'];
+  const NAMES = ['Álex', 'Marta', 'Tomás', 'Rocío', 'Bruno', 'Lía', 'Nico', 'Sofi', 'Dante', 'Vera', 'Iván', 'Lola'];
+  const MAP_LAYERS = 4;   // capas de la ruta; después viene el líder
 
   const data = () => PF.Save.data.career;
   const save = () => PF.Save.save();
@@ -118,31 +135,104 @@ PF.Career = (() => {
 
   // ------------------------------------------------------------------ copa
   function startRun(gymId) {
-    data().run = { gym: gymId, stage: 0, perks: [], lives: 0 };
+    const run = { gym: gymId, stage: 0, perks: [], lives: 0, map: null, at: null };
+    run.map = genMap();
+    data().run = run;
     save();
   }
 
   const gymOf = (run) => PF.GYMS.find((g) => g.id === run.gym);
   const easier = { hard: 'normal', normal: 'easy', easy: 'easy' };
+  const harder = { easy: 'normal', normal: 'hard', hard: 'hard' };
 
-  /** Rival de la etapa actual: entrenadores con el pool del gimnasio, o el líder. */
-  function opponent(run) {
-    const g = gymOf(run), [lo, hi] = g.levels;
-    if (run.stage >= 2) {
-      return {
-        title: `Líder ${g.leader}`, leader: true, diff: g.diff,
-        members: g.team.map((dex) => ({ uid: -1, dex, level: hi, xp: 0, abil: Math.random() < 0.5 ? 0 : 1, ivs: { spd: 22, pow: 22, mass: 22 } })),
-      };
+  // ------------------------------------------------------------------ mapa de rutas
+  /**
+   * Capas de nodos: 4 pasos con 2-3 opciones cada uno y, al final, el líder.
+   * Cada nodo conecta con 1-2 de la capa siguiente (todos los de la última, con el líder).
+   */
+  function genMap() {
+    const pool = [
+      ['trainer', 'trainer', 'wild'],
+      ['trainer', 'trainer', 'wild', 'event'],
+      ['elite', 'trainer', 'shop', 'event', 'center'],
+      ['center', 'shop', 'event'],
+    ];
+    const map = pool.map((types, l) => {
+      const n = l === MAP_LAYERS - 1 ? 2 : 2 + (Math.random() < 0.55 ? 1 : 0);
+      let pick = U.shuffle(types).slice(0, n);
+      if (l === MAP_LAYERS - 1 && !pick.some((t) => t === 'center' || t === 'shop')) pick[0] = 'center';   // antes del líder siempre hay descanso o tienda
+      return pick.map((type, i) => ({ l, i, type, to: [], done: false }));
+    });
+    map.push([{ l: MAP_LAYERS, i: 0, type: 'leader', to: [], done: false }]);
+    for (let l = 0; l < MAP_LAYERS; l++) {
+      const cur = map[l], nxt = map[l + 1];
+      for (const nd of cur) {
+        const c = Math.round(((nd.i + 0.5) / cur.length) * nxt.length - 0.5);
+        nd.to.push(U.clamp(c, 0, nxt.length - 1));
+        if (nxt.length > 1 && Math.random() < 0.45) {
+          const o = U.clamp(c + (Math.random() < 0.5 ? -1 : 1), 0, nxt.length - 1);
+          if (!nd.to.includes(o)) nd.to.push(o);
+        }
+      }
+      nxt.forEach((nn, j) => {   // todo nodo tiene que poder alcanzarse
+        if (cur.some((nd) => nd.to.includes(j))) return;
+        let best = cur[0];
+        for (const nd of cur) if (Math.abs(nd.i / cur.length - j / nxt.length) < Math.abs(best.i / cur.length - j / nxt.length)) best = nd;
+        best.to.push(j);
+      });
     }
-    const lvl = Math.round(U.lerp(lo, (lo + hi) / 2, run.stage));
-    return {
-      title: `Entrenador ${run.stage + 1} de ${g.name}`, leader: false,
-      diff: run.stage === 0 ? easier[g.diff] : g.diff,
-      members: U.shuffle(g.pool).slice(0, TEAM_SIZE).map((dex) => ({
-        uid: -1, dex, level: lvl + Math.floor(U.rand(-1, 2)), xp: 0, abil: Math.random() < 0.5 ? 0 : 1,
-        ivs: { spd: randIv(5, 20), pow: randIv(5, 20), mass: randIv(5, 20) },
-      })),
-    };
+    return map;
+  }
+
+  /** Copas guardadas antes del mapa: se les arma uno nuevo. */
+  function ensureMap(run) {
+    if (!run.map) { run.map = genMap(); run.at = null; run.stage = 0; save(); }
+    return run.map;
+  }
+
+  const nodeAt = (run, l, i) => run.map[l] && run.map[l][i];
+
+  /** ¿Se puede ir a ese nodo ahora? (el siguiente paso desde donde estás) */
+  function isAvailable(run, nd) {
+    if (nd.done) return false;
+    if (!run.at) return nd.l === 0;
+    return nd.l === run.at.l + 1 && nodeAt(run, run.at.l, run.at.i).to.includes(nd.i);
+  }
+
+  /** Nodo cumplido: el camino sigue desde ahí. */
+  function completeNode(run, nd) {
+    nd.done = true;
+    run.at = { l: nd.l, i: nd.i };
+    run.stage++;
+    save();
+  }
+
+  /** Rival (guardado en el nodo, así no cambia al reintentar ni al recargar). */
+  function opponent(run, nd) {
+    if (nd.foe) return nd.foe;
+    const g = gymOf(run), [lo, hi] = g.levels;
+    const ivs = (a, b) => ({ spd: randIv(a, b), pow: randIv(a, b), mass: randIv(a, b) });
+    const mk = (dex, level, iv) => ({ uid: -1, dex, level: Math.max(2, level), xp: 0, abil: Math.random() < 0.5 ? 0 : 1, ivs: iv });
+    let foe;
+    if (nd.type === 'leader') {
+      foe = { title: `Líder ${g.leader}`, leader: true, diff: g.diff, time: 120, members: g.team.map((dex) => mk(dex, hi, { spd: 22, pow: 22, mass: 22 })) };
+    } else {
+      const lvl = Math.round(U.lerp(lo, (lo + hi) / 2, nd.l / (MAP_LAYERS - 1)));
+      if (nd.type === 'wild') {
+        const dexes = [...new Set(U.shuffle(g.pool.concat(PF.CAREER_COMMONS)))].slice(0, TEAM_SIZE);
+        foe = { title: 'Pokémon salvajes', wild: true, diff: easier[g.diff], time: 75, members: dexes.map((d) => mk(d, lvl - 2 + Math.floor(U.rand(-1, 2)), ivs(2, 16))) };
+      } else if (nd.type === 'elite') {
+        foe = { title: `Entrenador élite ${U.pick(NAMES)}`, elite: true, diff: harder[g.diff], time: 120, members: U.shuffle(g.pool).slice(0, TEAM_SIZE).map((d) => mk(d, lvl + 2 + Math.floor(U.rand(0, 2)), ivs(12, 26))) };
+      } else {
+        foe = {
+          title: `${U.pick(TRAINERS)} ${U.pick(NAMES)}`, diff: nd.l === 0 ? easier[g.diff] : g.diff, time: 120,
+          members: U.shuffle(g.pool).slice(0, TEAM_SIZE).map((d) => mk(d, lvl + Math.floor(U.rand(-1, 2)), ivs(5, 20))),
+        };
+      }
+    }
+    nd.foe = foe;
+    save();
+    return foe;
   }
 
   /** Multiplicadores de equipo por las mejoras de la copa. */
@@ -166,6 +256,26 @@ PF.Career = (() => {
     run.perks.push(id);
     if (id === 'pocion') run.lives++;
     save();
+  }
+
+  function addXp(mb, xp) {
+    mb.xp += xp;
+    while (mb.level < LEVEL_MAX && mb.xp >= xpToNext(mb.level)) { mb.xp -= xpToNext(mb.level); mb.level++; }
+    if (mb.level >= LEVEL_MAX) mb.xp = 0;
+  }
+
+  /** Experiencia para todo el club (una fracción de lo que le falta a cada uno para subir). */
+  function grantXp(frac) {
+    const evolutions = [], abilityUnlocks = [];
+    for (const mb of data().club) {
+      const before = mb.level;
+      addXp(mb, Math.round(xpToNext(mb.level) * frac));
+      if (before < ABILITY2_LEVEL && mb.level >= ABILITY2_LEVEL) abilityUnlocks.push(mb);
+      const evo = PF.species(mb.dex).evolve;
+      if (evo && mb.level >= evo.level) evolutions.push(mb);
+    }
+    save();
+    return { evolutions, abilityUnlocks };
   }
 
   // ------------------------------------------------------------------ después del partido
@@ -195,9 +305,7 @@ PF.Career = (() => {
       } else xp = 12;   // suplente: entrena
       xp = Math.round(xp * U.clamp(1 + (oppLevel - mb.level) * 0.06, 0.5, 2) * xpMult);
       const before = mb.level;
-      mb.xp += xp;
-      while (mb.level < LEVEL_MAX && mb.xp >= xpToNext(mb.level)) { mb.xp -= xpToNext(mb.level); mb.level++; }
-      if (mb.level >= LEVEL_MAX) mb.xp = 0;
+      addXp(mb, xp);
       if (before < ABILITY2_LEVEL && mb.level >= ABILITY2_LEVEL) abilityUnlocks.push(mb);
       const evo = PF.species(mb.dex).evolve;
       if (evo && mb.level >= evo.level) evolutions.push(mb);   // también si quedó pendiente
@@ -221,11 +329,11 @@ PF.Career = (() => {
   }
 
   /** Resultado de la copa tras un partido: 'next' | 'retry' | 'won' | 'lost'. */
-  function advanceRun(won) {
+  function advanceRun(won, node) {
     const c = data(), run = c.run;
     if (!run) return null;
     if (won) {
-      if (run.stage >= 2) {
+      if (node.type === 'leader') {
         const g = gymOf(run);
         const first = !c.badges.includes(g.id);
         if (first) c.badges.push(g.id);
@@ -234,7 +342,8 @@ PF.Career = (() => {
         save();
         return { result: 'won', gym: g, first };
       }
-      run.stage++;
+      completeNode(run, node);
+      if (node.type === 'elite') PF.Save.data.coins += 120;
       save();
       return { result: 'next' };
     }
@@ -249,10 +358,84 @@ PF.Career = (() => {
     return g.team.map((dex) => ({ dex, level: g.levels[1] - 4 }));
   }
 
-  /** A veces, tras ganarle a un entrenador, un Pokémon salvaje quiere unirse. */
-  function wildJoin(g) {
-    if (Math.random() > 0.35 || data().club.length >= CLUB_MAX) return null;
+  /** A veces, tras ganarle a un entrenador, un Pokémon salvaje quiere unirse (más seguido con los de élite). */
+  function wildJoin(g, chance = 0.25) {
+    if (Math.random() > chance || data().club.length >= CLUB_MAX) return null;
     return { dex: U.pick(g.pool.concat(PF.CAREER_COMMONS)), level: g.levels[0] - 2 };
+  }
+
+  // ------------------------------------------------------------------ nodos sin partido
+  const spend = (n) => { PF.Save.data.coins -= n; save(); };
+  const gain = (n) => { PF.Save.data.coins += n; save(); return `+${n} monedas.`; };
+
+  /** Opciones del Centro Pokémon. `apply(run)` devuelve { msg, perk?, evos? }. */
+  const CENTER = [
+    { title: 'Poción', sub: 'Una vida extra: si pierdes un partido, lo repites.', apply: (run) => { takePerk(run, 'pocion'); return { msg: '¡Una Poción para la copa!' }; } },
+    { title: 'Entrenamiento', sub: 'Todo el club gana experiencia (casi la mitad de un nivel).', apply: () => ({ msg: 'El club entrenó a fondo.', xp: grantXp(0.45) }) },
+    { title: 'Estrategia', sub: 'Eliges una mejora entre tres.', apply: () => ({ msg: '', perk: true }) },
+  ];
+
+  /** Eventos del camino (se sortea uno al entrar). */
+  const EVENTS = [
+    { title: 'Un cofre en el camino', text: 'Está cerrado con un candado oxidado. Dentro suena algo.', options: [
+      { title: 'Forzarlo', sub: '70 %: 180 monedas · 30 %: estaba vacío.', apply: () => (Math.random() < 0.7 ? { msg: gain(180) } : { msg: 'Estaba vacío… ¡qué lástima!' }) },
+      { title: 'Buscar la llave', sub: 'Seguro: 60 monedas.', apply: () => ({ msg: gain(60) }) },
+    ] },
+    { title: 'Un veterano te desafía a entrenar', text: 'Dice que llevó a su equipo hasta la Liga hace veinte años.', options: [
+      { title: 'Entrenar con él', sub: 'Todo el club gana experiencia.', apply: () => ({ msg: 'Una práctica durísima, pero valió la pena.', xp: grantXp(0.35) }) },
+      { title: 'Pedirle un consejo', sub: 'Eliges una mejora entre tres.', apply: () => ({ msg: '', perk: true }) },
+    ] },
+    { title: 'Un Pokémon herido', text: 'Está tirado al costado del camino y te mira con desconfianza.', options: [
+      { title: 'Cuidarlo', sub: 'Si tienes lugar, se une al club (con buenos IVs).', apply: (run) => {
+        const g = gymOf(run);
+        if (data().club.length >= CLUB_MAX) return { msg: 'Tu club está lleno. Lo dejaste con unas bayas.' };
+        return { msg: '', recruit: { dex: U.pick(g.pool.concat(PF.CAREER_COMMONS)), level: g.levels[0] - 3, ivMin: 14 } };
+      } },
+      { title: 'Seguir de largo', sub: 'Encuentras 50 monedas más adelante.', apply: () => ({ msg: gain(50) }) },
+    ] },
+    { title: 'Una fuente termal', text: 'El agua está tibia y huele a azufre. Tu equipo la mira con ganas.', options: [
+      { title: 'Darse un baño', sub: 'Una Poción para la copa.', apply: (run) => { takePerk(run, 'pocion'); return { msg: '¡Salieron como nuevos! Una Poción para la copa.' }; } },
+      { title: 'Vender el agua', sub: 'Llenas frascos y ganas 100 monedas.', apply: () => ({ msg: gain(100) }) },
+    ] },
+  ];
+
+  /** Evento de un nodo (se sortea una vez y queda guardado). */
+  function eventOf(nd) {
+    if (nd.ev === undefined) { nd.ev = Math.floor(Math.random() * EVENTS.length); save(); }
+    return EVENTS[nd.ev];
+  }
+
+  /** Ofertas de la tienda de un nodo (se arman una vez). */
+  function shopOf(run, nd) {
+    if (!nd.shop) {
+      const perks = perkChoices(run).filter((p) => p.id !== 'pocion').slice(0, 2);
+      nd.shop = {
+        sold: [],
+        items: perks.map((p) => ({ kind: 'perk', id: p.id, title: p.name, sub: p.desc, price: 90 })).concat([
+          { kind: 'perk', id: 'pocion', title: 'Poción', sub: 'Una vida extra: si pierdes, repites el partido.', price: 130 },
+          { kind: 'xp', title: 'Caramelos Raros', sub: 'Todo el club gana experiencia (un tercio de nivel).', price: 110 },
+        ]),
+      };
+      save();
+    }
+    return nd.shop;
+  }
+
+  /** Compra el ítem i. Devuelve { ok, msg, xp? }. */
+  function buy(run, nd, i) {
+    const shop = shopOf(run, nd), it = shop.items[i];
+    if (!it || shop.sold[i]) return { ok: false, msg: 'Ya lo compraste.' };
+    if (PF.Save.data.coins < it.price) return { ok: false, msg: `Te faltan ${it.price - PF.Save.data.coins} monedas.` };
+    spend(it.price);
+    shop.sold[i] = true;
+    if (it.kind === 'perk') { takePerk(run, it.id); return { ok: true, msg: `¡${it.title} para la copa!` }; }
+    return { ok: true, msg: 'El club se puso las pilas.', xp: grantXp(0.33) };
+  }
+
+  /** Resuelve la opción elegida de un Centro o evento. */
+  function pickOption(run, nd, i) {
+    const opt = nd.type === 'center' ? CENTER[i] : eventOf(nd).options[i];
+    return opt.apply(run);
   }
 
   // ------------------------------------------------------------------ partido
@@ -264,12 +447,12 @@ PF.Career = (() => {
     const spots = spotsFor(defs);
     const bench = c.club.filter((mb) => !c.lineup.includes(mb.uid)).map(defOf);   // todo el que no es titular
     return {
-      size: TEAM_SIZE, keeperMode: c.keeper, stadium: g.stadium, time: 120,
+      size: TEAM_SIZE, keeperMode: c.keeper, stadium: g.stadium, time: opp.time || 120,
       teams: [defs, opp.members.map(defOf)],
       bench: [bench, []],
       formations: [spots, null],
       diff: opp.diff,
-      mods: [runMods(run), opp.leader ? { speed: 1.04 } : {}],
+      mods: [runMods(run), opp.leader ? { speed: 1.04 } : opp.elite ? { speed: 1.02 } : {}],
     };
   }
 
@@ -287,9 +470,9 @@ PF.Career = (() => {
   }
 
   return {
-    TEAM_SIZE, CLUB_MAX, LEVEL_MAX, ABILITY2_LEVEL, PERKS,
+    TEAM_SIZE, CLUB_MAX, LEVEL_MAX, ABILITY2_LEVEL, PERKS, NODE_INFO, MAP_LAYERS, CENTER,
     data, start, defOf, ivGrade, xpToNext, member, lineupMembers, toggleLineup, release, addMember,
-    gymStatus, startRun, gymOf, opponent, perkChoices, takePerk, applyMatch, evolve, advanceRun,
+    gymStatus, startRun, ensureMap, nodeAt, isAvailable, completeNode, eventOf, shopOf, buy, pickOption, grantXp, gymOf, opponent, perkChoices, takePerk, applyMatch, evolve, advanceRun,
     leaderRecruits, wildJoin, matchConfig, spotsFor, saveSpots,
   };
 })();
