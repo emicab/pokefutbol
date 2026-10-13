@@ -212,8 +212,7 @@ habilidades de Agua apagan tu propia quemadura.
 Además de los estados de la tabla, **Drenado** (Planta): pierde vida y se la
 lleva quien lo sembró (4 s; no afecta a Planta).
 
-Movimientos nuevos ya disponibles (Fuego, Agua, Eléctrico, Planta, Veneno,
-Fantasma, Hielo, Lucha y Tierra/Roca; el resto de los tipos, en camino):
+Movimientos nuevos ya disponibles (todos los tipos salvo Dragón y Normal, en camino):
 - **Fuego:** *Lanzallamas* (cono corto 1 s, hace soltar la pelota, puede
   quemar), *Giro Fuego* (remolino que frena y lastima) y *Llamarada* (carga 0,6 s
   quieto y estalla; gasta mucha energía).
@@ -237,6 +236,14 @@ Fantasma, Hielo, Lucha y Tierra/Roca; el resto de los tipos, en camino):
 - **Tierra/Roca:** *Terremoto* (fisura de 340 px que atraviesa y tumba a todos
   los que pisan el suelo, no a los Voladores) y *Lanzarrocas* (roca pesada que
   empuja fuerte y desvía la pelota).
+- **Psíquico:** *Hipnosis* (duerme 1,8 s al más cercano al que miras, hasta 280
+  px) y *Barrera* (escudo 2,2 s que bloquea los 2 próximos golpes y también los
+  estados de los rivales).
+- **Volador:** *Tornado* (cono de viento: aparta a los rivales, rechaza la
+  pelota y **devuelve los proyectiles** que vienen hacia ti). Casi todos los
+  Voladores son de tipo doble, así que su movimiento propio es siempre el segundo.
+- **Bicho:** *Telaraña* (red de 4 s: los rivales dentro van lentísimos y la
+  pelota se frena).
 
 Los Pokémon sin movimientos propios reciben un orden distinto dentro de su tipo,
 así que dos del mismo tipo ya no repiten siempre los mismos.

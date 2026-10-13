@@ -23,7 +23,7 @@
     normal: ['quick', 'slam'], fire: ['fireshot', 'embers', 'flamethrower', 'firespin', 'blaze'],
     water: ['hydro', 'puddle', 'watergun', 'bubble'], grass: ['vine', 'sleep', 'leechseed', 'razorleaf', 'stunspore'],
     electric: ['zap', 'quick', 'thunderwave', 'bolt'], ice: ['ice', 'surf', 'blizzard'], fighting: ['punch', 'throw', 'jumpkick', 'counter'], poison: ['sludge', 'smog', 'sleep'],
-    ground: ['dig', 'wall', 'quake', 'rockthrow'], flying: ['quick', 'jump'], psychic: ['confusion', 'psywave'], bug: ['pinmissile', 'quick'],
+    ground: ['dig', 'wall', 'quake', 'rockthrow'], flying: ['quick', 'jump', 'gust'], psychic: ['confusion', 'psywave', 'hypnosis', 'barrier'], bug: ['pinmissile', 'quick', 'web'],
     rock: ['wall', 'dig', 'rockthrow', 'quake'], ghost: ['phase', 'teleport', 'confray', 'curse'], dragon: ['surf', 'psywave'], dark: ['teleport', 'shuriken'],
     steel: ['wall', 'aura'], fairy: ['sing', 'roll'],
   };
@@ -92,6 +92,10 @@
     counter: { id: 'counter', name: 'Contraataque', cd: 9, desc: 'Postura de 1 s (te mueves lento): el primer golpe que recibes se devuelve ×1,6 y aturde a quien lo dio.' },
     quake: { id: 'quake', name: 'Terremoto', cd: 10, desc: 'Fisura que avanza 340 px y atraviesa: tumba a todos los que pisan el suelo (no a los Voladores).' },
     rockthrow: { id: 'rockthrow', name: 'Lanzarrocas', cd: 7, desc: 'Roca pesada y recta: empuja fuerte al rival y desvía la pelota.' },
+    hypnosis: { id: 'hypnosis', name: 'Hipnosis', cd: 9, desc: 'Duerme 1,8 s al rival más cercano al que miras (hasta 280 px). Si no hay nadie, no se gasta.' },
+    barrier: { id: 'barrier', name: 'Barrera', cd: 12, desc: 'Escudo psíquico 2,2 s: bloquea los dos próximos golpes y los estados de los rivales (placajes y habilidades).' },
+    gust: { id: 'gust', name: 'Tornado', cd: 9, desc: 'Cono de viento: aparta a los rivales, rechaza la pelota y devuelve los proyectiles que vienen hacia ti.' },
+    web: { id: 'web', name: 'Telaraña', cd: 10, desc: 'Red pegajosa 4 s delante: los rivales dentro van lentísimos y la pelota se frena.' },
     curse: { id: 'curse', name: 'Maldición', cd: 11, desc: 'Asusta al rival más cercano (hasta 300 px): 4 s sin poder usar su habilidad. Inofensiva contra Normal y Fantasma.' },
   });
 
@@ -127,7 +131,10 @@
       x ^= x >>> 15; x = Math.imul(x, 2246822519) >>> 0; x ^= x >>> 13;
       return x;
     };
-    return base.slice().sort((a, b) => h(a) - h(b));
+    const out = base.slice().sort((a, b) => h(a) - h(b));
+    // Volador casi nunca es el tipo principal: sin esto su movimiento propio casi no salía
+    if (type === 'flying') out.sort((a, b) => (b === 'gust') - (a === 'gust'));
+    return out;
   }
 
   const cache = {};
@@ -215,7 +222,7 @@
     thunderwave: 'electric', bolt: 'electric',
     leechseed: 'grass', razorleaf: 'grass', stunspore: 'grass', sludge: 'poison', smog: 'poison',
     confray: 'ghost', curse: 'ghost', blizzard: 'ice', jumpkick: 'fighting', counter: 'fighting',
-    quake: 'ground', rockthrow: 'rock',
+    quake: 'ground', rockthrow: 'rock', hypnosis: 'psychic', barrier: 'psychic', gust: 'flying', web: 'bug',
   };
 
   /**

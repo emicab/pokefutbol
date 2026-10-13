@@ -356,6 +356,14 @@ PF.Render = (() => {
       ctx.fillStyle = '#c77dff'; ctx.fillText('lento', p.x, head - 4 + Math.sin(m.clock * 5) * 2);
     }
     if (p.status && !p.fainted) drawStatus(ctx, m, p, head, r);
+    if (p.chan && p.chan.id === 'barrier') {
+      // escudo psíquico (parpadea al final)
+      const left = p.chan.dur - p.chan.t;
+      ctx.globalAlpha = (left < 0.6 ? 0.25 + 0.2 * Math.sin(m.clock * 30) : 0.45);
+      ctx.strokeStyle = '#e6a8ff'; ctx.fillStyle = 'rgba(230,168,255,0.25)'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.ellipse(p.x, p.y - r * 0.6, r * 1.7, r * 1.9, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
     const order = PF.Match.ORDERS[m.order];
     if (!m.demo && m.state !== 'replay' && p.team === m.humanTeam && !p.human && order.short) {
       ctx.font = '13px Pixelify, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -419,6 +427,18 @@ PF.Render = (() => {
         ctx.beginPath(); ctx.ellipse(h.x, h.y, h.r * f, h.r * 0.5 * f, 0, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#ffd23f';
         ctx.beginPath(); ctx.ellipse(h.x, h.y - 2, h.r * 0.5 * f, h.r * 0.25 * f, 0, 0, Math.PI * 2); ctx.fill();
+      } else if (h.kind === 'web') {
+        // telaraña: anillos y radios
+        ctx.globalAlpha = 0.25 * fade;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.ellipse(h.x, h.y, h.r, h.r * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 0.85 * fade;
+        ctx.strokeStyle = '#f4f4f4'; ctx.lineWidth = 2;
+        for (let k = 1; k <= 3; k++) { ctx.beginPath(); ctx.ellipse(h.x, h.y, (h.r * k) / 3, (h.r * k * 0.55) / 3, 0, 0, Math.PI * 2); ctx.stroke(); }
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          ctx.beginPath(); ctx.moveTo(h.x, h.y); ctx.lineTo(h.x + Math.cos(a) * h.r, h.y + Math.sin(a) * h.r * 0.55); ctx.stroke();
+        }
       } else if (h.kind === 'spore' || h.kind === 'toxic') {
         // nube de esporas amarillas o niebla / charco venenoso
         const spore = h.kind === 'spore', cloud = spore || h.cloud;

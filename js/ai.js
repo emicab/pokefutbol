@@ -79,6 +79,10 @@ PF.AI = (() => {
     counter: (c) => c.foeHolder && c.dHolder < 120,
     quake: (c) => (c.mine ? c.pressure < 140 && c.aimGoal : c.foeHolder && c.dHolder < 300 && c.aimHolder),
     rockthrow: (c) => c.foeHolder && c.dHolder < 270 && c.aimHolder,
+    hypnosis: (c) => c.foeHolder && c.dHolder < 240 && c.aimHolder && !c.b.holder.stun,
+    barrier: (c) => c.mine && c.pressure < 100 && c.foesNear > 0,
+    gust: (c) => c.foeHolder && c.dHolder < 260 && c.aimHolder,
+    web: (c) => c.foeHolder && c.dHolder < 250 && c.aimHolder,
     adapt: (c) => (c.mine ? c.pressure < 150 : c.foeHolder && c.dHolder < 220),
     splash: (c) => c.pressure < 220,
   };

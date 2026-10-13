@@ -650,6 +650,87 @@ PF.Abilities = (() => {
       PF.Audio.sfx.slam();
     },
 
+    // ------------------------------------------------ con estados (Psíquico, Volador, Bicho)
+
+    /** Hipnosis: duerme al rival más cercano al que miras. */
+    hypnosis(m, p) {
+      const M = PF.Match, RANGE = 280, HALF = 0.6;
+      let best = null, bd = RANGE;
+      for (const q of foes(m, p)) {
+        const dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy);
+        if (d < bd && !M.untouchable(q) && Math.abs(U.angDiff(p.facing, Math.atan2(dy, dx))) < HALF) { bd = d; best = q; }
+      }
+      if (!best) {
+        PF.FX.text(m.fx, p.x, p.y - 56, 'no hay nadie...', '#cfcfcf', 0.6, 0.7);
+        PF.Audio.sfx.fail();
+        return false;
+      }
+      PF.FX.ring(m.fx, p.x, p.y, 50, '#e6a8ff', 0.3, 4);
+      if (M.stunInPlace(m, best, 1.8)) {
+        best.asleep = true;
+        PF.FX.text(m.fx, best.x, best.y - 50, 'Zzz...', '#e6a8ff', 1);
+        PF.FX.burst(m.fx, best.x, best.y - 20, 12, '#e6a8ff', 160);
+      }
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡HIPNOSIS!', '#e6a8ff', 1);
+      PF.Audio.sfx.sing();
+    },
+
+    /** Barrera: 2,2 s de escudo; bloquea los 2 próximos golpes y los estados (match.js). */
+    barrier(m, p) {
+      p.chan = { id: 'barrier', type: 'psychic', t: 0, dur: 2.2, hits: 2, speed: 0.8 };
+      PF.FX.ring(m.fx, p.x, p.y, 60, '#e6a8ff', 0.3, 6);
+      PF.FX.text(m.fx, p.x, p.y - 64, '¡BARRERA!', '#e6a8ff', 1);
+      PF.Audio.sfx.phase();
+    },
+
+    /** Tornado: cono de viento que aparta rivales, rechaza la pelota y devuelve proyectiles. */
+    gust(m, p) {
+      const M = PF.Match, R = 280, HALF = 0.5;
+      const fx = Math.cos(p.facing), fy = Math.sin(p.facing);
+      const inCone = (x, y, extra = 0) => {
+        const dx = x - p.x, dy = y - p.y, d = Math.hypot(dx, dy);
+        return d < R + extra && d > 1 && Math.abs(U.angDiff(p.facing, Math.atan2(dy, dx))) < HALF;
+      };
+      for (const q of foes(m, p)) {
+        if (!inCone(q.x, q.y, M.radius(q))) continue;
+        const d = U.dist(p.x, p.y, q.x, q.y) || 1;
+        M.knock(m, q, (q.x - p.x) / d, (q.y - p.y) / d, 520, 0.5);
+      }
+      // proyectiles rivales dentro del cono: vuelven contra quien los lanzó
+      let deflected = 0;
+      for (const pr of m.projs) {
+        if (pr.team === p.team || pr.dead || !inCone(pr.x, pr.y)) continue;
+        const s = Math.hypot(pr.vx, pr.vy) || 600;
+        pr.vx = fx * s; pr.vy = fy * s; pr.team = p.team; pr.t = 0; pr.seen = null;
+        pr.hit = m.hit;
+        deflected++;
+      }
+      if (deflected) PF.FX.text(m.fx, p.x + fx * 70, p.y + fy * 70 - 50, '¡DEVUELTO!', '#bfe0ff', 1);
+      const b = m.ball;
+      if (!safe(b) && (!b.holder || b.holder.team !== p.team) && inCone(b.x, b.y)) {
+        if (b.holder) { b.holder.pickupCd = 0.6; b.holder = null; }
+        b.vx = fx * 800; b.vy = fy * 800; b.last = p; b.vine = null;
+      }
+      for (let i = 0; i < 50; i++) {
+        const a = p.facing + U.rand(-HALF, HALF), s = U.rand(300, 780);
+        PF.FX.particle(m.fx, p.x + fx * 20, p.y + fy * 20 - 12, Math.cos(a) * s, Math.sin(a) * s,
+          U.pick(['#ffffff', '#d8ecff', '#bfe0ff']), U.rand(0.3, 0.55), U.rand(3, 5));
+      }
+      PF.FX.text(m.fx, p.x + fx * 110, p.y + fy * 110 - 50, '¡TORNADO!', '#bfe0ff', 1.2);
+      PF.Audio.sfx.water();
+      m.shake = Math.max(m.shake, 4);
+    },
+
+    /** Telaraña: red pegajosa que frena a los rivales y a la pelota (lo hace match.js). */
+    web(m, p) {
+      const x = U.clamp(p.x + Math.cos(p.facing) * 130, F.x0 + 40, F.x1 - 40);
+      const y = U.clamp(p.y + Math.sin(p.facing) * 130, F.y0 + 40, F.y1 - 40);
+      PF.Match.addHazard(m, { kind: 'web', x, y, r: 90, life: 4, team: p.team });
+      PF.FX.burst(m.fx, x, y, 20, '#f4f4f4', 220, 0.5, 3);
+      PF.FX.text(m.fx, x, y - 50, '¡TELARAÑA!', '#e8e8e8', 1);
+      PF.Audio.sfx.vine();
+    },
+
     /** Mewtwo: onda que aparta y aturde a los rivales alrededor. */
     psywave(m, p) {
       const M = PF.Match, R = 230;
@@ -720,6 +801,7 @@ PF.Abilities = (() => {
         m.freeze = 0.06;
         return true;
       }
+      if (c.id === 'barrier') return false;   // el escudo lo dibuja render.js y lo aplica match.js
       if (c.id === 'counter') {
         // aura dorada mientras espera el golpe
         c.pulse -= dt;

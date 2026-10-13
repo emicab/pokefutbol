@@ -242,7 +242,7 @@ PF.Match = (() => {
       stats: { goals: 0, assists: 0, tackles: 0, saves: 0 },
       stamina: PF.staminaMax(def), maxStamina: PF.staminaMax(def), agility: PF.agility(def),
       hp: PF.hpMax(def), maxHp: PF.hpMax(def), ko: 0, fainted: false, hurtT: -9, rank: PF.powerRank(def),
-      status: null, statusT: 0, statusLvl: 0, statusFrom: null, confT: 0, confAng: 0, chan: null, jk: 0, jkOn: false, jkHit: false,
+      status: null, statusT: 0, statusLvl: 0, statusFrom: null, confT: 0, confAng: 0, chan: null, jk: 0, jkOn: false, jkHit: false, mire: 0,
       types: PF.typesOf(def), tiredWarned: false,
       gkHold: false, gkT: 0, assistFrom: null, assistT: 0, ctrl: null,
       pressT: 0, pressCd: 0, pressCdMax: 1, pressLock: false, diveCd: 0, down: 0,
@@ -858,7 +858,7 @@ PF.Match = (() => {
     const b = m.ball, st = m.stadium;
     const digging = p.dig > 0;
     for (const k of ['stun', 'tackleCd', 'pickupCd', 'phase', 'turbo', 'giant', 'slow', 'fireShot', 'wall', 'embers',
-      'slip', 'burnCd', 'dig', 'ram', 'spinT', 'magnet', 'diving', 'pressCd', 'diveCd', 'down', 'ko', 'jk']) {
+      'slip', 'burnCd', 'dig', 'ram', 'spinT', 'magnet', 'diving', 'pressCd', 'diveCd', 'down', 'ko', 'jk', 'mire']) {
       p[k] = Math.max(0, p[k] - dt);
     }
     // Patada Salto que no tocó a nadie: se tropieza
@@ -951,6 +951,7 @@ PF.Match = (() => {
     if (p.dig > 0) sp *= 1.3;
     if (p.slow > 0) sp *= 0.55;
     if (p.status === 'para') sp *= 0.65;
+    if (p.mire > 0) sp *= 0.6;   // enredado en la telaraña (además del lento)
     if (p.chan && p.chan.speed !== undefined) sp *= p.chan.speed;
     if (p.wall > 0) sp *= 0.3;
 
@@ -1312,6 +1313,7 @@ PF.Match = (() => {
   function applyStatus(m, v, type, dur, chance = 1, from = null) {
     const S = STATUS[type];
     if (!S || v.fainted || untouchable(v) || v.gkHold) return false;
+    if (v.chan && v.chan.id === 'barrier') return false;   // la Barrera frena también los estados
     if (S.immune.some((t) => v.types.includes(t))) return false;
     if (v.status && !(type === 'poison' && v.status === 'poison')) return false;
     if (Math.random() >= chance) return false;
@@ -1467,10 +1469,20 @@ PF.Match = (() => {
     return true;
   }
 
+  /** Barrera: bloquea los próximos golpes de un rival (hits) mientras dure. */
+  function barrierBlocks(m, v) {
+    const h = m.hit, c = v.chan;
+    if (!c || c.id !== 'barrier' || !h || !h.from || h.from.team === v.team) return false;
+    if (--c.hits <= 0) v.chan = null;
+    PF.FX.text(m.fx, v.x, v.y - 80, '¡BLOQUEADO!', '#e6a8ff', 0.9, 1);
+    PF.FX.ring(m.fx, v.x, v.y, 55, '#e6a8ff', 0.25, 5);
+    return true;
+  }
+
   /** Empuja y aturde. Si tenía la pelota, la suelta. Devuelve false si no le afecta. */
   function knock(m, v, nx, ny, force, stun) {
     if (untouchable(v) || v.wall > 0 || v.gkHold) return false;   // al arquero con la pelota en las manos no se le toca
-    if (counterHit(m, v)) return false;
+    if (counterHit(m, v) || barrierBlocks(m, v)) return false;
     if (resists(m, v)) return false;
     if (m.ball.holder === v && !(m.hit && m.hit.keepBall)) loseBall(m, v, nx, ny);
     v.vx = nx * force; v.vy = ny * force;
@@ -1484,7 +1496,7 @@ PF.Match = (() => {
 
   function stunInPlace(m, v, stun) {
     if (untouchable(v) || v.gkHold) return false;
-    if (counterHit(m, v)) return false;
+    if (counterHit(m, v) || barrierBlocks(m, v)) return false;
     if (resists(m, v)) return false;
     if (m.ball.holder === v) loseBall(m, v, Math.cos(v.facing), Math.sin(v.facing));
     v.vx *= 0.15; v.vy *= 0.15;
@@ -1695,6 +1707,11 @@ PF.Match = (() => {
     if (!playing) return;
     for (const h of m.hazards) {
       m.hit = h.ctx;
+      // la red frena también la pelota suelta
+      if (h.kind === 'web' && !m.ball.holder && U.dist(m.ball.x, m.ball.y, h.x, h.y) < h.r) {
+        const k = Math.max(0, 1 - 5 * dt);
+        m.ball.vx *= k; m.ball.vy *= k;
+      }
       for (const p of m.players) {
         if (p.team === h.team || untouchable(p)) continue;
         if (U.dist(p.x, p.y, h.x, h.y) > h.r + radius(p) * 0.5) continue;
@@ -1721,6 +1738,9 @@ PF.Match = (() => {
               applyStatus(m, p, 'burn', 4, 0.5);
             }
           }
+        } else if (h.kind === 'web') {
+          p.slow = Math.max(p.slow, 0.3);
+          p.mire = 0.3;
         } else if (h.kind === 'spore' && h.t > 0.2 && !h.hit.has(p)) {
           h.hit.add(p);
           applyStatus(m, p, 'para', 4, 0.6);
