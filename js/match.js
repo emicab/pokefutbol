@@ -1201,6 +1201,9 @@ PF.Match = (() => {
     PF.FX.burst(m.fx, m.ball.x, m.ball.y, 10, '#fff', 220, 0.3, 3);
   }
 
+  /** Tiro Ígneo: velocidad (×poder; antes 1600) y empuje al atravesar a un rival. */
+  const FIRE_SPEED = 1350, FIRE_KNOCK = 440, FIRE_STUN = 0.9;
+
   function shoot(m, p, k) {
     const b = m.ball;
     spend(p, STAMINA.shot + STAMINA.shotCharge * k);
@@ -1209,7 +1212,7 @@ PF.Match = (() => {
     const power = U.lerp(SHOT_TAP, SHOT_FULL, k) * p.def.power * p.bonus.power * m.mods[p.team].power * (b.big > 0 ? 0.85 : 1) * (0.75 + 0.25 * fatigue(p)) * (p.status === 'burn' ? 0.85 : 1) * (p.buff > 0 ? 1.25 : 1);
     let sp = 1180 * power;
     const fire = p.fireShot > 0;
-    if (fire) sp = 1600 * p.def.power;
+    if (fire) sp = FIRE_SPEED * p.def.power;
     p.facing = aim.a;
     release(m, p, Math.cos(aim.a) * sp, Math.sin(aim.a) * sp);
     setAnim(p, 'Attack', true);
@@ -1411,15 +1414,15 @@ PF.Match = (() => {
 
   /**
    * Bola de fuego contra un rival: chance de frenarla según su tipo (resiste
-   * el fuego 65 %, neutro 15 %, débil nada; el arquero en su área +25 %).
+   * el fuego 65 %, neutro 25 %, débil 10 %; el arquero en su área +40 %).
    * Se sortea una vez por rival y tiro. Si la frena, se apaga y pierde fuerza.
    */
   function stopsFire(m, p, b) {
     if (b.fireTried && b.fireTried.includes(p)) return false;
     (b.fireTried = b.fireTried || []).push(p);
     const eff = PF.typeEffect('fire', p.types);
-    let chance = eff < 1 ? 0.65 : eff > 1 ? 0 : 0.15;
-    if (isActiveKeeper(m, p)) chance += 0.25;
+    let chance = eff < 1 ? 0.65 : eff > 1 ? 0.1 : 0.25;
+    if (isActiveKeeper(m, p)) chance += 0.4;
     if (Math.random() >= chance) return false;
     b.fire = 0;
     b.vx *= 0.3; b.vy *= 0.3;
@@ -1919,7 +1922,7 @@ PF.Match = (() => {
         // la bola de fuego atraviesa: derriba rivales e ignora compañeros
         if (p.team !== b.last.team && p.stun <= 0) {
           const s = Math.hypot(b.vx, b.vy) || 1;
-          if (withHit(m, b.last, 'fire', () => knock(m, p, b.vx / s, b.vy / s, 520, 1.2))) {
+          if (withHit(m, b.last, 'fire', () => knock(m, p, b.vx / s, b.vy / s, FIRE_KNOCK, FIRE_STUN))) {
             PF.FX.text(m.fx, p.x, p.y - 50, '¡ARDE!', '#ff8a3d');
             PF.FX.burst(m.fx, p.x, p.y - 10, 16, '#ff9a3d', 240);
             PF.Audio.sfx.tackle();

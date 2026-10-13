@@ -706,6 +706,16 @@ PF.Render = (() => {
     ctx.restore();
   }
 
+  /**
+   * Nombre de cada equipo en el marcador. Online: los entrenadores que lo manejan
+   * ("Ana + Luis"); sin ninguno, "CPU". Fuera de línea: los de names (TÚ / CPU).
+   */
+  function teamLabel(m, team, names) {
+    if (!m.online) return names[team];
+    const who = m.humans.filter((h) => h.team === team && !h.gone && h.name).map((h) => h.name);
+    return who.length ? who.join(' + ') : names[1];
+  }
+
   function drawHUD(ctx, m, names) {
     const cx = PF.W / 2;
     const n = PF.Match.teamOf(m, 0).length;
@@ -715,10 +725,14 @@ PF.Render = (() => {
       const right = m.sides[team] === 1, s = right ? 1 : -1;   // cada equipo en el lado donde juega
       ctx.fillStyle = PF.TEAM_COLORS[team];
       ctx.fillRect(cx + s * 196 - (right ? 14 : 0), 14, 14, 62);
-      ctx.font = '16px Pixelify, monospace';
+      // el nombre se achica hasta entrar en el espacio que hay (los largos se recortan)
+      let label = teamLabel(m, team, names), fs = 16;
+      ctx.font = `${fs}px Pixelify, monospace`;
+      while (ctx.measureText(label).width > 108 && fs > 11) { fs--; ctx.font = `${fs}px Pixelify, monospace`; }
+      while (ctx.measureText(label).width > 108 && label.length > 3) label = label.slice(0, -2) + '…';
       ctx.textAlign = right ? 'right' : 'left';
       ctx.fillStyle = '#a9b6d3';
-      ctx.fillText(names[team], cx + s * 172, 30);
+      ctx.fillText(label, cx + s * 172, 30);
       // táctica del entrenador de la CPU
       const tac = m.humanTeam >= 0 && team !== m.humanTeam && m.tactic[team];
       if (tac && tac !== 'neutral') {

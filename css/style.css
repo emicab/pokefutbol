@@ -335,6 +335,11 @@ input.code {
 .place .who { flex: 1; display: flex; flex-direction: column; gap: 4px; font-size: 18px; }
 .place .who .me { color: var(--yellow); }
 .place .who .none { color: var(--muted); }
+.place .who .rdy { color: #9cff6b; font-size: 14px; }
+.place .who .wt { color: var(--muted); font-size: 14px; }
+.netcard .readyline { margin: 6px 0 0; color: var(--muted); }
+.netcard .readyline.ok { color: #9cff6b; }
+.netcard .btn.on { background: #2e7d4f; border-color: #9cff6b; }
 .place .btn.small { min-width: 0; font-size: 15px; padding: 4px 14px; }
 .netteam label { font-size: 16px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
 .netteam .pname { font: inherit; font-size: 16px; width: 150px; background: var(--ink); color: var(--text); border: 2px solid var(--line); border-radius: 4px; padding: 2px 6px; }

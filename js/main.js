@@ -265,8 +265,8 @@
     screen = 'menu';
     online.view = 'lobby';
     PF.OnlineUI.lobby(online, {
-      onHost: hostRoom, onJoin: joinRoom, onStart: startOnlineHost, onTeam: onlineTeam, onBack: leaveOnline,
-      onPlace: choosePlace, onName: setName,
+      onHost: hostRoom, onJoin: joinRoom, onStart: () => startOnlineHost(false), onTeam: onlineTeam, onBack: leaveOnline,
+      onPlace: choosePlace, onName: setName, onReady: toggleReady,
     });
   }
   const redrawLobby = () => { if (online && online.view === 'lobby') drawLobby(); };
@@ -288,7 +288,7 @@
         redrawLobby();
       },
       (id) => {
-        online.room.members.push({ id, name: 'Invitado', place: 'spec', picks: [] });
+        online.room.members.push({ id, name: 'Invitado', place: 'spec', picks: [], ready: false });
         N.sendTo(id, { t: 'welcome', id });
         PF.Audio.sfx.coin();
         pushRoom();
@@ -309,8 +309,16 @@
       }
     }
     mb.place = place;
+    mb.ready = false;   // cambió de lugar: tiene que volver a marcarse listo
     pushRoom();
   }
+  N.on('ready', (msg, from) => {
+    if (!online || !online.room || N.role !== 'host') return;
+    const mb = online.room.members.find((x) => x.id === from);
+    if (!mb || mb.place === 'spec') return;
+    mb.ready = !!msg.ready;
+    pushRoom();
+  });
   N.on('hello', (msg, from) => {
     if (!online || !online.room || N.role !== 'host') return;
     const mb = online.room.members.find((x) => x.id === from);
@@ -318,6 +326,7 @@
     if (msg.v !== N.VERSION) { N.sendTo(from, { t: 'nope', text: 'Tienes otra versión del juego: recarga la página.' }); return; }
     mb.name = String(msg.name || 'Invitado').slice(0, 14);
     mb.picks = Array.isArray(msg.picks) ? msg.picks.filter((x) => x && PF.rosterById(x.id)) : [];
+    mb.ready = false;   // cambió el equipo o el nombre: se confirma de nuevo
     pushRoom();
   });
   N.on('place', (msg, from) => { if (online && online.room && N.role === 'host') tryPlace(from, msg.place); });
@@ -355,6 +364,14 @@
   });
 
   // ---- los dos
+  /** Invitado: marcarse (o desmarcarse) como listo. Sin que todos los que juegan estén listos, el anfitrión no puede empezar. */
+  function toggleReady() {
+    if (N.role !== 'guest' || !online || !online.room) return;
+    const me = online.room.members.find((x) => x.id === online.me);
+    if (!me || me.place === 'spec') return;
+    PF.Audio.sfx.click();
+    N.send({ t: 'ready', ready: !me.ready });
+  }
   function choosePlace(place) {
     PF.Audio.sfx.click();
     if (N.role === 'host') tryPlace('host', place);
@@ -392,11 +409,14 @@
    * cada uno pone su parte de Pokémon (el formato repartido entre ellos) y lo
    * que falta se completa al azar; un equipo sin jugadores es de la CPU.
    */
-  function startOnlineHost() {
+  function startOnlineHost(rematch = false) {
     const room = online.room, s = PF.Save.data.setup, size = s.size;
     room.members[0].picks = myPicks();
     const players = room.members.filter((x) => x.place !== 'spec');
     if (!players.length) { PF.UI.toast('Alguien tiene que estar en un equipo.'); return; }
+    // desde la sala hay que esperar a que todos los invitados que juegan estén listos (la revancha, no)
+    const waiting = players.filter((x) => x.id !== 'host' && !x.ready);
+    if (!rematch && waiting.length) { PF.UI.toast('Falta que estén listos: ' + waiting.map((x) => x.name).join(', ')); return; }
     const key = (x) => x.id + ':' + x.a;
     const teams = [[], []], bench = [[], []], formations = [null, null], humans = [], humanIds = [], skills = [];
     ['A', 'B'].forEach((place, team) => {
@@ -479,8 +499,14 @@
     online.view = 'result';
     const host = m.online === 'host';
     PF.UI.result(m, onlineReward(m),
-      host ? startOnlineHost : null,
-      host ? () => { N.send({ t: 'lobby' }); toOnline(); } : null,
+      host ? () => startOnlineHost(true) : null,
+      host ? () => {
+        // de vuelta en la sala todos tienen que confirmar de nuevo
+        online.room.members.forEach((x) => { x.ready = false; });
+        N.send({ t: 'lobby' });
+        toOnline();
+        pushRoom();
+      } : null,
       leaveOnline,
       {
         team: 'Volver a la sala', menu: 'Salir', title: m.humanTeam < 0 ? 'Final' : null,

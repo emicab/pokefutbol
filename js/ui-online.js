@@ -79,10 +79,22 @@ PF.OnlineUI = (() => {
         return `
           <div class="place" style="--pc:${pl.color}">
             <div class="ph">${pl.label}${cap}</div>
-            <div class="who">${who.map((x) => `<div class="${x.id === st.me ? 'me' : ''}">${esc(x.name)}${x.host ? ' 👑' : ''}${x.id === st.me ? ' (tú)' : ''}</div>`).join('') || '<div class="none">—</div>'}</div>
+            <div class="who">${who.map((x) => `<div class="${x.id === st.me ? 'me' : ''}">${esc(x.name)}${x.host ? ' 👑' : ''}${x.id === st.me ? ' (tú)' : ''}${pl.id !== 'spec' && !x.host ? (x.ready ? ' <span class="rdy">✔ listo</span>' : ' <span class="wt">…</span>') : ''}</div>`).join('') || '<div class="none">—</div>'}</div>
             ${mine ? '' : `<button class="btn small" data-place="${pl.id}">${pl.id === 'spec' ? 'Mirar' : 'Ir acá'}</button>`}
           </div>`;
       }).join('');
+      // los invitados que juegan tienen que marcarse listos; sin eso el anfitrión no empieza
+      const players = room.members.filter((x) => x.place !== 'spec');
+      const waiting = players.filter((x) => !x.host && !x.ready);
+      const me = room.members.find((x) => x.id === st.me);
+      const canStart = players.length > 0 && !waiting.length;
+      const footer = isHost
+        ? `<button class="btn big" data-act="start" ${canStart ? '' : 'disabled'}>¡Empezar!</button>
+           <p class="tiny readyline ${canStart ? 'ok' : ''}">${!players.length ? 'Elijan un equipo para jugar.' : waiting.length ? 'Esperando que estén listos: ' + waiting.map((x) => esc(x.name)).join(', ') : 'Todos listos.'}</p>`
+        : me && me.place !== 'spec'
+          ? `<button class="btn big ${me.ready ? 'on' : ''}" data-act="ready">${me.ready ? '✔ Listo (tocar para cancelar)' : '¡Estoy listo!'}</button>
+             <p class="tiny readyline">${me.ready ? 'Esperando a que el anfitrión empiece…' : 'Cuando estés listo, avísale al anfitrión: sin eso no puede empezar.'}</p>`
+          : '<p class="wait">Elige un equipo para jugar; si sólo quieres mirar, espera a que el anfitrión empiece.</p>';
       body = `
         <div class="box netcard wide room">
           <div class="roomhead">
@@ -90,11 +102,11 @@ PF.OnlineUI = (() => {
             <div>
               <p class="setupline">${setupLine(room.setup)}</p>
               <p class="matchline">${matchLine(room)}</p>
-              ${isHost ? '<p class="tiny">Pásales el código. El formato se cambia en «Armar equipo».</p>' : '<p class="tiny">Elige tu lugar. El anfitrión empieza el partido.</p>'}
+              ${isHost ? '<p class="tiny">Pásales el código. El formato se cambia en «Armar equipo».</p>' : '<p class="tiny">Elige tu lugar, arma tu equipo y márcate listo. El anfitrión empieza el partido.</p>'}
             </div>
           </div>
           <div class="places">${cols}</div>
-          ${isHost ? `<button class="btn big" data-act="start" ${room.members.some((x) => x.place !== 'spec') ? '' : 'disabled'}>¡Empezar!</button>` : '<p class="wait">Esperando a que el anfitrión empiece…</p>'}
+          ${footer}
         </div>`;
     }
     const s = el(`
@@ -126,6 +138,7 @@ PF.OnlineUI = (() => {
       inp.oninput = () => { inp.value = inp.value.toUpperCase(); };
     }
     if (q('[data-act=start]')) q('[data-act=start]').onclick = cb.onStart;
+    if (q('[data-act=ready]')) q('[data-act=ready]').onclick = cb.onReady;
     s.querySelectorAll('[data-place]').forEach((b) => { b.onclick = () => cb.onPlace(b.dataset.place); });
     root().appendChild(s);
   }

@@ -191,7 +191,9 @@ Los tipos también deciden los golpes de las habilidades: si el rival es
 Tierra) no le hace nada, y si es **poco eficaz** tiene 50 % de aguantarlo de
 pie («¡Resiste!»). El **Tiro Ígneo** de Charmander ya no es imparable: cada
 rival que cruza puede frenarlo (65 % si resiste el fuego, como los de Agua o
-Roca; 15 % si es neutro; nunca si es débil) y el arquero en su área suma 25 %.
+Roca; 25 % si es neutro; 10 % si es débil) y el arquero en su área suma 40 %.
+Además sale algo más despacio que antes (un 16 % menos) y empuja y aturde menos
+a los rivales que atraviesa.
 Si lo frenan, el fuego se apaga y la pelota pierde fuerza.
 
 **Estados.** Algunas habilidades dejan un estado secundario (uno a la vez; la
@@ -302,14 +304,19 @@ internet). Se juega desde https://emicab.github.io/pokefutbol/.
    A**, **Equipo B** o **Mirar**. Con eso sale el partido: 1 contra 1, 2
    contra 2, 3 contra 1, o todos en un equipo contra la CPU (un equipo sin
    jugadores lo maneja la CPU, con la dificultad del anfitrión).
-4. El anfitrión toca **¡Empezar!**
+4. Cada invitado que juega arma su equipo y toca **¡Estoy listo!** (cambiar de
+   lugar, de equipo o de nombre lo desmarca). El anfitrión toca **¡Empezar!**,
+   que sigue deshabilitado hasta que todos los invitados estén listos. La
+   revancha no pide confirmación; al volver a la sala hay que marcarse de nuevo.
 
 En cada equipo, cada jugador pone su parte de Pokémon (de su equipo del
 partido rápido; el formato se reparte entre los del mismo lado) y lo que
 falta se completa al azar. El formato, el tiempo, la cancha y el arquero son
 los del anfitrión (los cambia con «Armar equipo» desde la sala). Sobre cada
 Pokémon manejado por alguien aparece su **nombre** (el tuyo, en amarillo); el
-nombre se pone en la sala. Los que miran ven el partido en vivo.
+nombre se pone en la sala, y en el marcador cada equipo muestra el nombre de
+sus entrenadores («Ana + Luis»), o «CPU» si no tiene ninguno. Los que miran ven
+el partido en vivo.
 
 Cómo funciona: el anfitrión corre el partido y los demás le mandan sus teclas
 y reciben el estado en cada paso, así que **los invitados juegan con un poco
