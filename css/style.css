@@ -455,6 +455,9 @@ input.code {
 .subrow:hover { border-color: var(--edge); }
 .subrow.on { border-color: var(--yellow); box-shadow: 0 0 0 2px var(--yellow); }
 .subrow small { color: var(--muted); font-size: 12px; }
+.subrow .bars { display: flex; flex-direction: column; gap: 3px; }
+.subrow.ko { opacity: 0.5; cursor: not-allowed; }
+.subrow.ko small { color: #ff8a8a; }
 .ebar { height: 8px; background: #2a3550; border-radius: 2px; overflow: hidden; }
 .ebar b { display: block; height: 100%; }
 

@@ -187,6 +187,19 @@
     return Math.round(Math.max(65, Math.min(135, 70 + (hp - 79) * 0.95)));
   };
 
+  /**
+   * Vida (aguante a los golpes), aparte de la energía: de 60 (Pikachu, Magikarp)
+   * a ~140 (Chansey, Snorlax). Se pierde con choques y habilidades; en 0 el
+   * Pokémon queda K.O. unos segundos. En el modo historia sube con el nivel
+   * (career.js la deja en def.hpMax).
+   */
+  PF.hpMax = (def) => {
+    if (def.hpMax) return def.hpMax;
+    const d = PF.POKEDEX[def.dex];
+    const hp = def.hp || (d && d.hp) || 90, bst = (d && d.bst) || 450;
+    return Math.round(Math.max(60, Math.min(140, 66 + (hp - 79) * 0.8 + (bst - 450) * 0.04)));
+  };
+
   /** Agilidad (cuánto tarda en acelerar y frenar) según la velocidad: 0,85 lentos … 1,15 rápidos. */
   PF.agility = (def) => 0.85 + 0.3 * Math.max(0, Math.min(1, (def.speed - 230) / 120));
 
@@ -289,6 +302,12 @@
     if (SINGLE.has(dex)) return PF.POKEDEX[dex] && PF.POKEDEX[dex].bst >= 490 ? TIERS.strong : TIERS.f1;
     return TIERS[['f1', 'f2', 'f3'][(STAGE[dex] || 1) - 1]];
   };
+  /**
+   * Rango de poder por tier (1 fase 1 … 5 legendario): en los choques y
+   * golpes, la diferencia de rango pesa un poco a favor del de más tier.
+   */
+  const RANK = { f1: 1, f2: 2, f3: 3, strong: 3, elite: 4, legend: 5 };
+  PF.powerRank = (def) => (def.dex && PF.POKEDEX[def.dex] ? RANK[PF.tierOf(def.dex).id] || 1 : 2);
   const slug = (name) => name.toLowerCase().replace('♀', 'f').replace('♂', 'm').normalize('NFD').replace(/[^a-z0-9]/g, '');
   const idOfDex = {};
   for (const dex of Object.keys(PF.POKEDEX)) idOfDex[dex] = slug(PF.POKEDEX[dex].name);

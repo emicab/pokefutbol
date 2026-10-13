@@ -25,7 +25,8 @@ y abre <http://localhost:8123>.
 | `Espacio` / `I` | Presionar: correr solo hacia la pelota (máx. 2 s, cansa y se enfría) |
 | `Q` / `Shift` | Cambiar al compañero más cerca de la pelota |
 | `T` | Orden al equipo: Neutro → Ataque → Defensa |
-| `R` | Cambios (suplentes) |
+| `R` | Cambios (suplentes): pausa y eliges quién sale y quién entra |
+| `F` | Cambio rápido, sin pausar: el suplente más fresco entra por tu K.O. (o por el que manejas, si está muy golpeado o agotado) |
 | `Esc` / `P` | Pausa |
 | `M` | Silenciar |
 
@@ -33,7 +34,7 @@ Las teclas se pueden cambiar en **Opciones → Controles** (clic en la acción y
 pulsar la tecla nueva; "Restaurar teclas" vuelve a las de fábrica).
 
 Con mando: A pase/placaje · B tiro · Y o RB habilidad · X presionar · LB cambiar ·
-LT orden al equipo · Select cambios · Start pausa.
+LT orden al equipo · RT cambio rápido · Select cambios · Start pausa.
 
 - **Saque:** el que saca empieza con la pelota y nadie se mueve hasta que la
   juega. Sólo se puede pasar.
@@ -141,26 +142,43 @@ Pokémon, segundas habilidades y canchas en la selección (ver
 [Plantel](#plantel)). Los legendarios se ganan con retos. Todo
 se guarda en el navegador (`localStorage`); en Opciones se puede borrar.
 
-### Energía y cambios
+### Energía, vida y cambios
 
 Los stats del Pokémon mandan en la cancha:
 
 | Stat | En la cancha |
 |---|---|
-| PS | Energía máxima (aguante) |
-| Velocidad | Velocidad de carrera y agilidad (acelerar, frenar, girar) |
+| PS | Energía máxima (aguante) y vida máxima |
+| Velocidad | Velocidad de carrera y agilidad; además, cuánto rápido recupera energía |
 | Ataque | Fuerza de tiro |
 | PS + total de stats + tipo | Peso (choques, empujones) |
 
-Cada Pokémon tiene energía (la barrita bajo sus pies; su máximo sale de los
-PS y, en el modo historia, sube con el nivel). Se gasta corriendo,
-pateando, pasando, placando y con las habilidades (más las de recarga larga),
-y al recibir golpes: cuenta la **tabla de tipos**, así que un ataque súper
-eficaz cansa el doble (y uno poco eficaz, mucho menos). El gasto es igual
-para todos, así que a los de muchos PS (Snorlax, Lapras) les pesa menos que a
-los frágiles (Pikachu, Magikarp). Se recupera trotando o quieto, y en el
-banco. Cansado (menos de 40) corre más lento, patea más
-flojo y recarga la habilidad más despacio; agotado (0) no puede usarla.
+Cada Pokémon tiene **energía** (barra verde bajo sus pies) y **vida** (barra
+celeste, encima de la energía; en tu equipo siempre, en el rival cuando está
+golpeado). Son cosas distintas: la energía se gasta *haciendo cosas* y la vida
+*recibiendo golpes*. El máximo de las dos sale de los PS y, en el modo
+historia, sube con el nivel.
+
+**Energía.** Se gasta corriendo (los pesados más), pateando, pasando, placando y
+con las habilidades (más las de recarga larga). Se recupera siempre, aunque
+corras, y mucho más quieto o trotando; los **veloces recuperan antes** (hasta
+~60 % más rápido que los lentos) y en el banco o entre jugadas se repone rápido. Cansado (menos de 40) corre más lento, patea más flojo y recarga la
+habilidad más despacio; agotado (0) no puede placar ni usar la habilidad.
+
+**Vida y K.O.** Los choques y las habilidades desgastan la vida:
+- *Peso:* en un placaje cuenta la masa de los dos. Un Meowth contra un Raichu
+  (y más contra un Snorlax) apenas lo mueve, le saca poca vida y rebota (los
+  muy livianos hasta se tambalean); no siempre le quita la pelota al más
+  pesado. Un pesado desgasta mucho más.
+- *Tipos:* el placaje usa el mejor tipo del que pega contra el golpeado (suavizado;
+  las habilidades, la tabla entera: súper eficaz ≈ el doble). Un Squirtle le saca
+  un poco más a un Charizard por el tipo...
+- *Tier:* ...pero cada escalón de diferencia pesa ±10 % (hasta -25 %/+30 %), así que
+  la ventaja de tipo de un fase 1 no compensa tanto contra un fase 3.
+- Con vida 0 queda **K.O.** 7 s (translúcido, sin poder jugar ni ser tocado) y
+  se levanta con 1/3 de la vida. El que manejabas pasa solo al compañero más
+  cercano y aparece el aviso para el cambio rápido (`F`). La vida se recupera
+  muy despacio jugando.
 
 **Presionar** (`Espacio`) cansa mucho más que correr y dura como mucho 2
 segundos seguidos; después se enfría (hasta unos 3 s; la barrita naranja bajo
@@ -178,7 +196,10 @@ Si lo frenan, el fuego se apaga y la pelota pierde fuerza.
 
 En el partido rápido se pueden elegir hasta 2 suplentes; en el modo historia,
 todo el club que no es titular está en el banco. Hay 3 cambios por partido,
-con `R` (o desde la pausa). La CPU también cambia a sus cansados.
+con `R` (o desde la pausa) o, sin pausar, con `F`. En el banco el Pokémon
+recupera vida y energía mucho más rápido que en la cancha, y un K.O. sentado se
+levanta antes (con 1/3 de la vida); a un suplente K.O. no se lo puede meter. La
+CPU también cambia a sus K.O., cansados y maltrechos.
 
 ## Modo historia
 

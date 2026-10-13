@@ -20,6 +20,7 @@ PF.Input = (() => {
     swap: ['KeyQ', 'ShiftLeft', 'ShiftRight'],
     order: ['KeyT'],
     subs: ['KeyR'],
+    quick: ['KeyF'],
     pause: ['Escape', 'KeyP'],
     mute: ['KeyM'],
   };
@@ -28,11 +29,11 @@ PF.Input = (() => {
     ['up', 'Arriba'], ['down', 'Abajo'], ['left', 'Izquierda'], ['right', 'Derecha'],
     ['pass', 'Pase (mantén = más fuerte) · placaje'], ['shoot', 'Tiro (mantén para cargar)'],
     ['ability', 'Habilidad'], ['press', 'Presionar (máx. 2 s, se enfría)'], ['swap', 'Cambiar de Pokémon'],
-    ['order', 'Orden al equipo'], ['subs', 'Cambios'], ['pause', 'Pausa'], ['mute', 'Silencio'],
+    ['order', 'Orden al equipo'], ['subs', 'Cambios'], ['quick', 'Cambio rápido (K.O. o agotado)'], ['pause', 'Pausa'], ['mute', 'Silencio'],
   ];
   // Mando estándar: A pase/placaje · B tiro · Y o RB habilidad · X presionar · LB cambiar
-  //                 LT orden al compañero · Select cambios · Start pausa
-  const PAD = { pass: [0], shoot: [1], ability: [3, 5], press: [2], swap: [4], order: [6], subs: [8], pause: [9] };
+  //                 LT orden al compañero · RT cambio rápido · Select cambios · Start pausa
+  const PAD = { pass: [0], shoot: [1], ability: [3, 5], press: [2], swap: [4], order: [6], quick: [7], subs: [8], pause: [9] };
 
   let MAP = {};
   let GAME_KEYS = new Set();

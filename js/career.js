@@ -60,6 +60,7 @@ PF.Career = (() => {
       unlockedAbilities: abilities.length,
       role: PF.naturalRole(s),   // el puesto es de la especie, no depende del nivel
       stamina: Math.round(PF.staminaMax(s) * (0.85 + (0.3 * L) / 50)),   // aguante: PS de la especie y nivel
+      hpMax: Math.round(PF.hpMax(s) * (0.85 + (0.3 * L) / 50)),          // vida, igual
     });
   }
 

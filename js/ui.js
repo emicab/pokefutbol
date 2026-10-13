@@ -17,7 +17,7 @@ PF.UI = (() => {
 
   const K = PF.Input;
   /** Una línea con las teclas actuales, para ayudas. */
-  const hintLine = () => `${K.label('pass')} pase/placaje · ${K.label('shoot')} tiro · ${K.label('ability')} habilidad · ${K.label('press')} presionar · ${K.label('swap')} cambiar · ${K.label('order')} orden · ${K.label('subs')} cambios`;
+  const hintLine = () => `${K.label('pass')} pase/placaje · ${K.label('shoot')} tiro · ${K.label('ability')} habilidad · ${K.label('press')} presionar · ${K.label('swap')} cambiar · ${K.label('order')} orden · ${K.label('subs')} cambios · ${K.label('quick')} cambio rápido`;
   const BENCH_MAX = 2;   // suplentes en partido rápido
   const selFilter = { tier: 'all', type: '', q: '' };   // filtros de la selección (se recuerdan al volver)
   const KEEPER_HELP = {
@@ -335,6 +335,7 @@ PF.UI = (() => {
           ${statBar('Tiro', (r.power - 0.7) / 0.6)}
           ${statBar('Peso', r.mass / 2.8)}
           ${statBar('Energía', (PF.staminaMax(r) - 60) / 75)}
+          ${statBar('Vida', (PF.hpMax(r) - 60) / 80)}
         </div>
         <div class="abil">
           <div class="abs">
@@ -520,11 +521,16 @@ PF.UI = (() => {
         </div>
       </div>`);
     const color = (v) => (v > 60 ? '#5fd68a' : v > 40 ? '#ffd23f' : v > 15 ? '#ff8a3d' : '#ff5a5f');
-    const row = (def, stamina, extra) => {
-      const r = el(`<div class="subrow" tabindex="0" role="button">
+    // x = jugador o suplente (con vida y energía); los K.O. no pueden entrar
+    const row = (x, extra) => {
+      const def = x.def, e = Math.round(PF.Match.energyPct(x)), hp = Math.round(PF.Match.hpPct(x));
+      const r = el(`<div class="subrow ${x.fainted ? 'ko' : ''}" tabindex="0" role="button">
         <canvas width="52" height="44"></canvas>
-        <div>${def.name} <small>${extra}</small></div>
-        <div class="ebar"><b style="width:${stamina}%;background:${color(stamina)}"></b></div></div>`);
+        <div>${def.name} <small>${extra}${x.fainted ? ` · K.O. ${Math.ceil(x.ko)} s` : ''}</small></div>
+        <div class="bars">
+          <div class="ebar" title="Vida"><b style="width:${hp}%;background:${hp > 55 ? '#4fd1ff' : hp > 30 ? '#ffd23f' : '#ff5a5f'}"></b></div>
+          <div class="ebar" title="Energía"><b style="width:${e}%;background:${color(e)}"></b></div>
+        </div></div>`);
       portraits.push({ canvas: r.querySelector('canvas'), r: def, small: true });
       return r;
     };
@@ -535,15 +541,15 @@ PF.UI = (() => {
       f.querySelectorAll('.subrow').forEach((x) => x.remove());
       b.querySelectorAll('.subrow').forEach((x) => x.remove());
       for (const p of PF.Match.teamOf(m, team)) {
-        const r = row(p.def, Math.round(PF.Match.energyPct(p)), PF.ROLES[p.pos].short + (p === m.keeper[team] ? ' · arquero' : ''));
+        const r = row(p, PF.ROLES[p.pos].short + (p === m.keeper[team] ? ' · arquero' : ''));
         r.classList.toggle('on', p === out);
         r.onclick = () => { out = p; refresh(); };
         f.appendChild(r);
       }
       m.bench[team].forEach((seat, i) => {
-        const r = row(seat.def, Math.round(PF.Match.energyPct(seat)), PF.ROLES[PF.naturalRole(seat.def)].short);
+        const r = row(seat, PF.ROLES[PF.naturalRole(seat.def)].short);
         r.classList.toggle('on', i === inn);
-        r.onclick = () => { inn = i; refresh(); };
+        r.onclick = () => { if (!seat.fainted) { inn = i; refresh(); } };
         b.appendChild(r);
       });
       s.querySelector('[data-act=do]').disabled = !(out && inn !== null && m.subsLeft[team] > 0);

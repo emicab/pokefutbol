@@ -36,8 +36,18 @@ PF.Match = (() => {
    * cansado (más lento, patea más flojo, recarga más lento); en 0 está
    * agotado y no puede usar su habilidad.
    */
-  const STAMINA = { press: 3, run: 0.6, regen: 2.4, rest: 4, bench: 3, shot: 1.5, shotCharge: 2.5, pass: 0.5, tackle: 3, hit: 5, hitStun: 8, ability: 2, abilityCd: 0.35 };
+  const STAMINA = { press: 3, run: 0.9, regen: 4, rest: 7, bench: 6, shot: 1.5, shotCharge: 2.5, pass: 0.5, tackle: 3, hit: 5, hitStun: 8, ability: 2, abilityCd: 0.35 };
   const TIRED = 40;   // % de energía por debajo del cual está cansado
+  /**
+   * Vida (aparte de la energía): los golpes la gastan (HP.dmg × el desgaste de
+   * hurt()) y la energía sólo se resiente un poco (hitStamina). Con 0 queda K.O.
+   * koTime segundos y se levanta con 1/3. Recupera poquito jugando y rápido en el
+   * banco (ahí el K.O. también pasa más rápido).
+   */
+  const HP = { dmg: 0.45, regen: 0.2, bench: 2.5, koTime: 7, koBench: 2.5, revive: 1 / 3, hitStamina: 0.3 };
+  const hpPct = (x) => (100 * x.hp) / x.maxHp;
+  /** Recuperación de energía por velocidad: los rápidos (esprínteres) se reponen antes, 0,8 … 1,3. */
+  const recov = (p) => 0.8 + 0.5 * U.clamp((p.def.speed - 230) / 120, 0, 1);
   /** Energía en % del máximo (el máximo sale de los PS: PF.staminaMax). */
   const energyPct = (x) => (100 * x.stamina) / x.maxStamina;
   /** Multiplicador por cansancio: 1 descansado, 0,65 agotado. */
@@ -137,7 +147,7 @@ PF.Match = (() => {
   function catchSpeed(m, p) {
     return 1050 * p.bonus.reflex * m.mods[p.team].reflex * (p.human ? 1 : p.skill.keeper || 1);
   }
-  const untouchable = (p) => p.phase > 0 || p.dig > 0 || !!p.slam;
+  const untouchable = (p) => p.phase > 0 || p.dig > 0 || !!p.slam || p.fainted;
   const teamOf = (m, team) => m.players.filter((q) => q.team === team);
   const matesOf = (m, p) => m.players.filter((q) => q.team === p.team && q !== p);
   const mateOf = (m, p) => matesOf(m, p)[0];
@@ -210,6 +220,7 @@ PF.Match = (() => {
       def, team, side, slot, skill, spot, natural, pos, bonus: roleBonus(natural, pos),
       stats: { goals: 0, assists: 0, tackles: 0, saves: 0 },
       stamina: PF.staminaMax(def), maxStamina: PF.staminaMax(def), agility: PF.agility(def),
+      hp: PF.hpMax(def), maxHp: PF.hpMax(def), ko: 0, fainted: false, hurtT: -9, rank: PF.powerRank(def),
       types: PF.typesOf(def), tiredWarned: false,
       gkHold: false, gkT: 0, assistFrom: null, assistT: 0, ctrl: null,
       pressT: 0, pressCd: 0, pressCdMax: 1, pressLock: false, diveCd: 0, down: 0,
@@ -332,7 +343,7 @@ PF.Match = (() => {
       tactic: ['neutral', 'neutral'], coachT: 4, rotateT: 2,   // táctica de los equipos de la CPU
       keeperMode, keeper: [null, null],
       sides: opts.flip ? [1, 0] : [0, 1],   // lado de cada equipo
-      bench: [0, 1].map((t) => ((opts.bench && opts.bench[t]) || []).map((def) => ({ def, stamina: PF.staminaMax(def), maxStamina: PF.staminaMax(def) }))),
+      bench: [0, 1].map((t) => ((opts.bench && opts.bench[t]) || []).map((def) => ({ def, stamina: PF.staminaMax(def), maxStamina: PF.staminaMax(def), hp: PF.hpMax(def), maxHp: PF.hpMax(def), ko: 0, fainted: false }))),
       subsLeft: [SUBS_PER_MATCH, SUBS_PER_MATCH], subT: 0,
       retired: [],                          // los que salieron (para la experiencia)
       hit: null,
@@ -405,7 +416,7 @@ PF.Match = (() => {
       // fuera del círculo central
       if (U.dist(x, y, F.cx, F.cy) < 130) x = F.cx - dir * 130;
       Object.assign(p, {
-        x, y, z: 0, vx: 0, vy: 0, stun: 0, asleep: false, dash: 0, charge: -1, slam: null,
+        x, y, z: 0, vx: 0, vy: 0, stun: p.fainted ? p.stun : 0, asleep: false, dash: 0, charge: -1, slam: null,
         pickupCd: 0, holdT: 0, stealT: 0, phase: 0, wall: 0, embers: 0, slip: 0, dig: 0, ram: 0, spinT: 0,
         gkHold: false, gkT: 0, assistFrom: null,
       });
@@ -603,15 +614,18 @@ PF.Match = (() => {
    */
   function substitute(m, out, benchIdx) {
     const team = out.team, seat = m.bench[team][benchIdx];
-    if (!seat || m.subsLeft[team] <= 0) return false;
+    if (!seat || seat.fainted || m.subsLeft[team] <= 0) return false;   // al K.O. del banco no se lo puede meter
     const np = makePlayer(seat.def, team, out.slot, out.skill, out.spot, out.side);
-    Object.assign(np, { x: out.x, y: out.y, facing: out.facing, stamina: seat.stamina, cd: seat.cd ?? np.cd });
+    Object.assign(np, { x: out.x, y: out.y, facing: out.facing, stamina: seat.stamina, hp: seat.hp, cd: seat.cd ?? np.cd });
     if (m.keeper[team] === out) { m.keeper[team] = np; np.fixedKeeper = out.fixedKeeper; }
     if (m.ball.holder === out) { m.ball.holder = np; np.gkHold = out.gkHold; }
     if (m.ball.passTo === out) m.ball.passTo = np;
     if (m.kicker === out) m.kicker = np;
     if (out.human) { const h = out.ctrl; releaseControl(h); setControl(m, np, h); }
-    m.bench[team][benchIdx] = { def: out.def, stamina: out.stamina, maxStamina: out.maxStamina, cd: out.cd };
+    m.bench[team][benchIdx] = {
+      def: out.def, stamina: out.stamina, maxStamina: out.maxStamina, cd: out.cd,
+      hp: out.hp, maxHp: out.maxHp, ko: out.ko, fainted: out.fainted,
+    };
     m.retired.push(out);
     m.players[m.players.indexOf(out)] = np;
     m.subsLeft[team]--;
@@ -622,16 +636,45 @@ PF.Match = (() => {
     return true;
   }
 
-  /** La CPU cambia a sus cansados por el suplente más fresco. */
+  /** Qué tan fresco está un jugador o suplente: lo peor entre su energía y su vida. */
+  const fresh = (x) => Math.min(energyPct(x), hpPct(x));
+  /** El suplente más fresco que supere `need` (sin K.O. ni casi sin vida), o -1. */
+  function bestSeat(m, team, need) {
+    let best = -1;
+    m.bench[team].forEach((s, i) => {
+      if (s.fainted || hpPct(s) < 35) return;
+      if (fresh(s) > need && (best < 0 || fresh(s) > fresh(m.bench[team][best]))) best = i;
+    });
+    return best;
+  }
+
+  /** La CPU cambia a sus K.O., cansados o maltrechos por el suplente más fresco. */
   function aiSubs(m, team, below) {
-    const tired = teamOf(m, team).filter((p) => energyPct(p) < below).sort((a, b) => energyPct(a) - energyPct(b));
-    for (const p of tired) {
+    const out = teamOf(m, team).filter((p) => p.fainted || energyPct(p) < below || hpPct(p) < 15);
+    out.sort((a, b) => (b.fainted - a.fainted) || (fresh(a) - fresh(b)));
+    for (const p of out) {
       if (m.subsLeft[team] <= 0) return;
-      const bench = m.bench[team];
-      let best = -1;
-      bench.forEach((s, i) => { if (energyPct(s) > energyPct(p) + 25 && (best < 0 || energyPct(s) > energyPct(bench[best]))) best = i; });
+      const best = bestSeat(m, team, p.fainted ? 40 : fresh(p) + 25);
       if (best >= 0) substitute(m, p, best);
     }
+  }
+
+  /**
+   * Cambio rápido (tecla F) del equipo `team`, sin pausar: entra el suplente más
+   * fresco por un K.O. (primero el que manejabas) o, si nadie está K.O., por el
+   * que manejas si está muy golpeado o agotado. Devuelve null si se hizo, o el
+   * motivo por el que no.
+   */
+  function quickSub(m, team, hi = m.view) {
+    if (m.subsLeft[team] <= 0) return 'No quedan cambios.';
+    if (!m.bench[team].length) return 'No tienes suplentes en este partido.';
+    const mine = teamOf(m, team), c = m.humans[hi] && m.humans[hi].controlled;
+    let out = mine.find((p) => p.fainted);
+    if (!out && c && (hpPct(c) < 40 || energyPct(c) < 25)) out = c;
+    if (!out) return 'Nadie para cambiar (R: elegir el cambio).';
+    const best = bestSeat(m, team, 0);
+    if (best < 0) return 'Ningún suplente está en condiciones.';
+    return substitute(m, out, best) ? null : 'No se pudo hacer el cambio.';
   }
 
   // ---------------------------------------------------------------- repetición
@@ -706,13 +749,21 @@ PF.Match = (() => {
 
     const playing = m.state === 'play';
     const kicking = m.state === 'kickoff';
-    for (const bench of m.bench) for (const s of bench) s.stamina = Math.min(s.maxStamina, s.stamina + STAMINA.bench * dt * (s.maxStamina / 100));
+    for (const bench of m.bench) {
+      for (const s of bench) {
+        s.stamina = Math.min(s.maxStamina, s.stamina + STAMINA.bench * dt * (s.maxStamina / 100));
+        if (s.fainted) {
+          s.ko -= dt * HP.koBench;
+          if (s.ko <= 0) { s.fainted = false; s.ko = 0; s.hp = Math.ceil(s.maxHp * HP.revive); }
+        } else s.hp = Math.min(s.maxHp, s.hp + HP.bench * dt * (s.maxHp / 100));
+      }
+    }
     if (playing) { coach(m, dt); rotate(m, dt); }
     if (playing && (m.subT -= dt) <= 0) {
       m.subT = 4;
       for (const team of [0, 1]) {
         if (hasHuman(m, team) && !m.autoSubs) continue;
-        const far = teamOf(m, team).filter((p) => energyPct(p) < 15 && U.dist(p.x, p.y, m.ball.x, m.ball.y) > 450);
+        const far = teamOf(m, team).filter((p) => p.fainted || ((energyPct(p) < 15 || hpPct(p) < 15) && U.dist(p.x, p.y, m.ball.x, m.ball.y) > 450));
         if (far.length) aiSubs(m, team, 15);
       }
     }
@@ -724,7 +775,7 @@ PF.Match = (() => {
         // rotación, ni el que maneja otro jugador)
         let best = null, bd = Infinity;
         for (const q of matesOf(m, c)) {
-          if (q.fixedKeeper || q.human) continue;
+          if (q.fixedKeeper || q.human || q.fainted) continue;
           const d = U.dist(q.x, q.y, m.ball.x, m.ball.y);
           if (d < bd) { bd = d; best = q; }
         }
@@ -784,16 +835,20 @@ PF.Match = (() => {
     const b = m.ball, st = m.stadium;
     const digging = p.dig > 0;
     for (const k of ['stun', 'tackleCd', 'pickupCd', 'phase', 'turbo', 'giant', 'slow', 'fireShot', 'wall', 'embers',
-      'slip', 'burnCd', 'dig', 'ram', 'spinT', 'magnet', 'diving', 'pressCd', 'diveCd', 'down']) {
+      'slip', 'burnCd', 'dig', 'ram', 'spinT', 'magnet', 'diving', 'pressCd', 'diveCd', 'down', 'ko']) {
       p[k] = Math.max(0, p[k] - dt);
     }
+    if (p.fainted && p.ko <= 0) revive(m, p);
     // la habilidad sólo recarga con la pelota en juego (no en festejos ni saques)
     if (m.state === 'play') p.cd = Math.max(0, p.cd - dt * fatigue(p));
-    // energía: correr gasta, trotar o estar quieto recupera; fuera de juego se descansa
+    // energía: correr gasta (más los pesados) y se recupera siempre, menos cuanto más
+    // rápido va: quieto o trotando repone casi todo, y los veloces se reponen antes;
+    // fuera de juego se descansa
     if (m.state === 'play') {
       const frac = Math.hypot(p.vx, p.vy) / p.def.speed;
-      if (frac > 0.55 && p.stun <= 0) spend(p, STAMINA.run * frac * dt * (m.keeper[p.team] === p ? 0.5 : 1));
-      else spend(p, -STAMINA.regen * dt * (p.maxStamina / 100));
+      if (frac > 0.55 && p.stun <= 0) spend(p, STAMINA.run * frac * Math.sqrt(p.def.mass) * dt * (m.keeper[p.team] === p ? 0.5 : 1));
+      spend(p, -STAMINA.regen * recov(p) * (1 - 0.75 * Math.min(1, frac)) * dt * (p.maxStamina / 100));
+      if (!p.fainted) p.hp = Math.min(p.maxHp, p.hp + HP.regen * dt * (p.maxHp / 100));
       if (p.stamina <= 0 && hasHuman(m, p.team) && !p.tiredWarned) {
         p.tiredWarned = true;
         PF.FX.text(m.fx, p.x, p.y - 70, '¡AGOTADO!', '#ff8a8a', 0.9, 1.4);
@@ -1132,37 +1187,107 @@ PF.Match = (() => {
     PF.Audio.sfx.swoosh();
   }
 
-  function tackleHit(m, a, v, nx, ny) {
-    if (a.ram <= 0) { a.dash = 0; a.vx *= 0.2; a.vy *= 0.2; }
-    const ratio = Math.min(2.2, mass(a) / mass(v));
-    if (!knock(m, v, nx, ny, 340 * ratio + 140, 0.9)) return;
-    a.stats.tackles++;
-    PF.FX.text(m.fx, v.x, v.y - 50, U.pick(['¡ZAS!', '¡PAF!', '¡TOMA!', '¡CATAPLÁN!']), '#ffd23f');
-    PF.FX.burst(m.fx, v.x, v.y - 12, 12, '#fff', 200);
-    PF.Audio.sfx.tackle();
-    if (Math.random() < 0.35) PF.Audio.crowd('oh', 0.5);
-    m.freeze = 0.07;
-    m.shake = Math.max(m.shake, 5);
+  /** El mejor de los tipos de `a` contra `v` (para los choques, que no son de ninguna habilidad). */
+  function bestType(a, v) {
+    let best = a.types[0], eff = -1;
+    for (const t of a.types) { const e = PF.typeEffect(t, v.types); if (e > eff) { eff = e; best = t; } }
+    return best;
   }
 
   /**
-   * Cansancio por un golpe. Si viene de una habilidad (m.hit = { from, type }),
-   * cuenta la tabla de tipos: súper eficaz cansa el doble y aturde más.
+   * Placaje. El peso manda: r = masa del que pega / masa del golpeado.
+   *   - el empuje y el aturdimiento escalan con r (un Meowth contra un Snorlax
+   *     apenas lo mueve, y rebota él);
+   *   - el desgaste (vida) también, más la tabla de tipos y la diferencia de tier (ver hurt);
+   *   - si el golpeado lleva la pelota y es más pesado, a veces la conserva.
+   */
+  function tackleHit(m, a, v, nx, ny) {
+    if (a.ram <= 0) { a.dash = 0; a.vx *= 0.2; a.vy *= 0.2; }
+    const r = U.clamp(mass(a) / mass(v), 0.25, 3);
+    const keepBall = m.ball.holder === v && Math.random() > U.clamp(0.9 * r, 0.25, 1);
+    const hit = withHit(m, a, bestType(a, v),
+      () => knock(m, v, nx, ny, 340 * Math.min(2.2, r) + 140, 0.9 * U.clamp(Math.pow(r, 1.3), 0.2, 1.6)), { phys: true, ratio: r, keepBall });
+    if (!hit) return;
+    a.stats.tackles++;
+    if (r < 0.8) {
+      // rebota contra el más pesado y se tambalea un instante
+      a.vx -= nx * 300 * (1 - r); a.vy -= ny * 300 * (1 - r);
+      if (r < 0.6) { a.stun = Math.max(a.stun, 0.9 * (0.8 - r)); setAnim(a, 'Hurt'); }
+    }
+    const word = r < 0.6 ? ['¡Ni le hizo cosquillas!', '¡Pesa demasiado!', '¡Duro como roca!'] : ['¡ZAS!', '¡PAF!', '¡TOMA!', '¡CATAPLÁN!'];
+    PF.FX.text(m.fx, v.x, v.y - 50, U.pick(word), '#ffd23f');
+    PF.FX.burst(m.fx, v.x, v.y - 12, 12, '#fff', 200);
+    PF.Audio.sfx.tackle();
+    if (Math.random() < 0.35) PF.Audio.crowd('oh', 0.5);
+    m.freeze = 0.07 * Math.min(1, r + 0.3);
+    m.shake = Math.max(m.shake, 5 * Math.min(1.2, r + 0.2));
+  }
+
+  /**
+   * Desgaste por un golpe: le baja la VIDA (y un poco la energía). Si viene de
+   * una habilidad o un choque (m.hit = { from, type, phys?, ratio? }), cuenta:
+   *   - la tabla de tipos (súper eficaz casi el doble; en los choques, suavizada);
+   *   - la diferencia de tier entre los dos (±10 % por escalón, hasta -25 %/+30 %):
+   *     un Squirtle le saca más a un Charizard por el tipo, pero no se le sube a la parra;
+   *   - en los choques, el peso (ratio): el pesado desgasta más.
    * Devuelve el multiplicador de aturdimiento.
    */
   function hurt(m, v, stun) {
-    const h = m.hit;
-    const eff = h && h.type ? PF.typeEffect(h.type, v.types) : 1;
-    spend(v, (STAMINA.hit + stun * STAMINA.hitStun) * eff);
-    if (eff >= 2) PF.FX.text(m.fx, v.x, v.y - 78, '¡Súper eficaz!', '#ffd23f', 0.7, 1);
-    else if (eff < 1) PF.FX.text(m.fx, v.x, v.y - 78, 'No es muy eficaz...', '#a9b6d3', 0.6, 1);
-    return eff >= 2 ? 1.25 : eff < 1 ? 0.8 : 1;
+    const h = m.hit, from = h && h.from;
+    const raw = h && h.type ? PF.typeEffect(h.type, v.types) : 1;
+    const eff = h && h.phys ? U.clamp(Math.sqrt(raw), 0.6, 1.5) : raw;
+    const tier = from && from.rank ? U.clamp(1 + 0.1 * (from.rank - v.rank), 0.75, 1.3) : 1;
+    const heft = h && h.ratio ? U.clamp(Math.pow(h.ratio, 0.6), 0.3, 1.8) : 1;
+    const base = STAMINA.hit + stun * STAMINA.hitStun;
+    v.hp = Math.max(0, v.hp - base * eff * tier * heft * HP.dmg);
+    v.hurtT = m.clock;
+    spend(v, base * HP.hitStamina * eff);
+    if (raw >= 2) PF.FX.text(m.fx, v.x, v.y - 78, '¡Súper eficaz!', '#ffd23f', 0.7, 1);
+    else if (raw < 1) PF.FX.text(m.fx, v.x, v.y - 78, 'No es muy eficaz...', '#a9b6d3', 0.6, 1);
+    return raw >= 2 ? 1.25 : raw < 1 ? 0.8 : 1;
+  }
+
+  /** Sin vida: queda K.O. unos segundos (no se lo puede tocar) y se levanta con 1/3. */
+  function faint(m, v) {
+    if (v.fainted) return;
+    v.fainted = true;
+    v.ko = HP.koTime;
+    v.stun = v.ko; v.asleep = false;
+    v.vx *= 0.3; v.vy *= 0.3;
+    v.charge = -1; v.dash = 0; v.pressT = 0;
+    if (m.ball.holder === v) loseBall(m, v, Math.cos(v.facing), Math.sin(v.facing));
+    setAnim(v, 'Hurt');
+    PF.FX.text(m.fx, v.x, v.y - 90, '¡K.O.!', '#ff5a5f', 1.2, 1.6);
+    PF.FX.burst(m.fx, v.x, v.y - 20, 16, '#ffffff', 220);
+    PF.Audio.sfx.fail();
+    // quien lo manejaba pasa al compañero más cercano, y se avisa del cambio rápido
+    const h = v.ctrl;
+    if (h) {
+      let best = null, bd = Infinity;
+      for (const q of matesOf(m, v)) {
+        if (q.fainted || q.human || q.fixedKeeper) continue;
+        const d = U.dist(q.x, q.y, v.x, v.y);
+        if (d < bd) { bd = d; best = q; }
+      }
+      if (best) setControl(m, best, h);
+    }
+    if (hasHuman(m, v.team) && !m.online && m.bench[v.team].length && m.subsLeft[v.team] > 0) {
+      PF.FX.text(m.fx, v.x, v.y - 112, `[${PF.Input.label('quick')}] cambio rápido`, '#ffd23f', 0.9, 2.2);
+    }
+  }
+
+  function revive(m, p) {
+    p.fainted = false;
+    p.ko = 0; p.stun = 0;
+    p.hp = Math.ceil(p.maxHp * HP.revive);
+    PF.FX.text(m.fx, p.x, p.y - 80, '¡De pie!', '#9cff6b', 0.9, 1.2);
+    PF.FX.burst(m.fx, p.x, p.y - 20, 10, '#9cff6b', 140);
   }
 
   /** Ejecuta fn con el contexto de golpe (quién y de qué tipo) para hurt(). */
-  function withHit(m, from, type, fn) {
+  function withHit(m, from, type, fn, extra) {
     const prev = m.hit;
-    m.hit = { from, type };
+    m.hit = Object.assign({ from, type }, extra);
     try { return fn(); } finally { m.hit = prev; }
   }
 
@@ -1197,7 +1322,7 @@ PF.Match = (() => {
    */
   function resists(m, v) {
     const h = m.hit;
-    if (!h || !h.type) return false;
+    if (!h || !h.type || h.phys) return false;   // un choque es físico: no hay inmunidad de tipo
     const immune = PF.typeImmune(h.type, v.types);
     const eff = PF.typeEffect(h.type, v.types);
     if (!immune && eff >= 1) return false;
@@ -1213,11 +1338,13 @@ PF.Match = (() => {
   function knock(m, v, nx, ny, force, stun) {
     if (untouchable(v) || v.wall > 0 || v.gkHold) return false;   // al arquero con la pelota en las manos no se le toca
     if (resists(m, v)) return false;
-    if (m.ball.holder === v) loseBall(m, v, nx, ny);
+    if (m.ball.holder === v && !(m.hit && m.hit.keepBall)) loseBall(m, v, nx, ny);
     v.vx = nx * force; v.vy = ny * force;
-    v.stun = Math.max(v.stun, stun * hurt(m, v, stun));
+    const k = hurt(m, v, stun);
+    v.stun = Math.max(v.stun, stun * k);
     v.charge = -1; v.dash = 0;
     setAnim(v, 'Hurt');
+    if (v.hp <= 0) faint(m, v);
     return true;
   }
 
@@ -1226,9 +1353,11 @@ PF.Match = (() => {
     if (resists(m, v)) return false;
     if (m.ball.holder === v) loseBall(m, v, Math.cos(v.facing), Math.sin(v.facing));
     v.vx *= 0.15; v.vy *= 0.15;
-    v.stun = Math.max(v.stun, stun * hurt(m, v, stun));
+    const k = hurt(m, v, stun);
+    v.stun = Math.max(v.stun, stun * k);
     v.charge = -1; v.dash = 0;
     setAnim(v, 'Hurt');
+    if (v.hp <= 0) faint(m, v);
     return true;
   }
 
@@ -1696,7 +1825,7 @@ PF.Match = (() => {
 
   return {
     create, step, CHARGE_MAX, PASS_HOLD_MIN, PASS_HOLD_MAX, ORDERS, orderOf, PRESETS, KEEPER_DEPTH, autoFormation,
-    substitute, fatigue, energyPct, TIRED, SUBS_PER_MATCH,
+    substitute, quickSub, fatigue, energyPct, hpPct, TIRED, SUBS_PER_MATCH,
     inBox, isActiveKeeper, keeperOf, ownGoalX, dirOf,
     // usados por abilities.js, ai.js y render.js
     radius, mass, untouchable, mateOf, matesOf, teamOf, setAnim, knock, stunInPlace, loseBall, shoot,

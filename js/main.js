@@ -567,12 +567,17 @@
     if (net) {
       // online no hay pausa: Esc abre un menú y el partido sigue
       if (PF.Input.was('pause') && screen === 'match') toggleNetMenu();
-      if (PF.Input.was('subs') && screen === 'match') PF.UI.toast('Online los cambios son automáticos.');
+      if ((PF.Input.was('subs') || PF.Input.was('quick')) && screen === 'match') PF.UI.toast('Online los cambios son automáticos.');
     } else {
       if (PF.Input.was('pause') && (screen === 'match' || screen === 'pause')) togglePause();
       // R: cambios directos (pausa el partido y abre la pantalla; al cerrarla se sigue jugando)
       if (PF.Input.was('subs') && screen === 'match' && match.state !== 'end') openSubs();
       else if (PF.Input.was('subs') && screen === 'pause' && document.querySelector('.subs')) resume();
+      // F: cambio rápido, sin pausar (el K.O. o el más golpeado por el suplente más fresco)
+      if (PF.Input.was('quick') && screen === 'match' && match.state !== 'end' && match.humanTeam >= 0) {
+        const why = PF.Match.quickSub(match, match.humanTeam);
+        if (why) PF.UI.toast(why);
+      }
     }
     if (PF.Input.was('mute')) PF.Audio.toggleMute();
 

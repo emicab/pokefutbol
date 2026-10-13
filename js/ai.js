@@ -538,7 +538,9 @@ PF.AI = (() => {
     if (ai.chasing) {
       if (holder) {
         moveTo(it, p, b.x, b.y);
-        if (decide && c.dHolder < 95 && p.tackleCd <= 0 && holder.phase <= 0 && Math.random() < s.aggro) {
+        // contra uno mucho más pesado un placaje rebota: la IA lo intenta menos
+        const sense = Math.min(1, Math.max(0.35, Math.pow(M.mass(p) / M.mass(holder), 0.8)));
+        if (decide && c.dHolder < 95 && p.tackleCd <= 0 && holder.phase <= 0 && Math.random() < s.aggro * sense) {
           it.aim = c.aimHolder;
           it.pass = true;
         }

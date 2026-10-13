@@ -226,14 +226,27 @@ PF.Render = (() => {
 
   const staminaColor = (v) => (v > 60 ? '#5fd68a' : v > PF.Match.TIRED ? '#ffd23f' : v > 15 ? '#ff8a3d' : '#ff5a5f');
 
-  /** Barra de energía bajo los pies (siempre en tu equipo; en el rival, si está cansado). */
+  const hpColor = (v) => (v > 55 ? '#4fd1ff' : v > 30 ? '#ffd23f' : '#ff5a5f');
+
+  /**
+   * Barras bajo los pies: vida (celeste→rojo) y energía (verde→rojo). En tu equipo
+   * siempre; en el rival, la vida si está golpeado y la energía si está cansado.
+   */
   function drawStamina(ctx, m, p, r) {
     const mine = p.team === m.humanTeam;
-    const e = PF.Match.energyPct(p);
-    if (!mine && e >= PF.Match.TIRED) return;
+    const e = PF.Match.energyPct(p), hp = PF.Match.hpPct(p);
+    const showHp = mine || hp < 99 || m.clock - p.hurtT < 2, showE = mine || e < PF.Match.TIRED;
+    if (!showHp && !showE) return;
     const w = 30, x = p.x - w / 2, y = p.y + r * 0.6 + 5;
-    ctx.fillStyle = '#141018'; ctx.fillRect(x - 1, y - 1, w + 2, 5);
-    ctx.fillStyle = staminaColor(e); ctx.fillRect(x, y, (w * e) / 100, 3);
+    if (showHp) {
+      ctx.fillStyle = '#141018'; ctx.fillRect(x - 1, y - 1, w + 2, 5);
+      ctx.fillStyle = hpColor(hp); ctx.fillRect(x, y, (w * hp) / 100, 3);
+    }
+    if (showE) {
+      const ey = y + (showHp ? 5 : 0);
+      ctx.fillStyle = '#141018'; ctx.fillRect(x - 1, ey - 1, w + 2, 5);
+      ctx.fillStyle = staminaColor(e); ctx.fillRect(x, ey, (w * e) / 100, 3);
+    }
     // cansado: gotas de sudor
     if (e < PF.Match.TIRED && p.stun <= 0) {
       const k = (m.clock * 1.5 + p.slot * 0.3) % 1;
@@ -304,13 +317,19 @@ PF.Render = (() => {
     }
 
     if (p.phase > 0) ctx.globalAlpha = 0.4 + 0.15 * Math.sin(m.clock * 20);
+    if (p.fainted) ctx.globalAlpha = 0.5;
     const loop = p.anim === 'Idle' || p.anim === 'Walk' || p.anim === 'Charge';
     PF.Sprites.draw(ctx, p.def.dex, p.anim, p.animT, loop, p.facing, p.x, p.y - z, sc);
     ctx.globalAlpha = 1;
 
     const head = p.y - z - PF.Sprites.headHeight(p.def.dex) * sc;
     if (m.keeper && m.keeper[p.team] === p) drawGloves(ctx, m, p, head, r);
-    if (p.stun > 0) (p.asleep ? drawZzz : drawStars)(ctx, p.x, head, m.clock);
+    if (p.fainted) {
+      // K.O.: translúcido, con la cuenta para levantarse
+      ctx.font = '16px Pixelify, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = '#141018'; ctx.fillText('K.O. ' + Math.ceil(p.ko), p.x + 1, head - 5);
+      ctx.fillStyle = '#ff8a8a'; ctx.fillText('K.O. ' + Math.ceil(p.ko), p.x, head - 6);
+    } else if (p.stun > 0) (p.asleep ? drawZzz : drawStars)(ctx, p.x, head, m.clock);
     if (p.slow > 0 && p.stun <= 0) {
       ctx.font = '14px Pixelify, monospace'; ctx.textAlign = 'center';
       ctx.fillStyle = '#c77dff'; ctx.fillText('lento', p.x, head - 4 + Math.sin(m.clock * 5) * 2);
@@ -489,20 +508,21 @@ PF.Render = (() => {
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.font = '15px Pixelify, monospace';
     ctx.fillStyle = p.human ? '#ffd23f' : '#a9b6d3';
-    ctx.fillText((p.human ? '▶ ' : '  ') + p.def.name, x + 6, y + 15);
+    ctx.fillText((p.human ? '▶ ' : '  ') + p.def.name, x + 6, y + 11);
     const bx = x + 118, bw = 106;
     const k = 1 - p.cd / p.def.ability.cd;
-    ctx.fillStyle = '#0b1222'; ctx.fillRect(bx, y + 8, bw, 14);
+    ctx.fillStyle = '#0b1222'; ctx.fillRect(bx, y + 3, bw, 15);
     ctx.fillStyle = p.cd <= 0 ? p.def.color : '#4a5878';
-    ctx.fillRect(bx + 2, y + 10, (bw - 4) * k, 10);
+    ctx.fillRect(bx + 2, y + 5, (bw - 4) * k, 11);
     ctx.font = '11px Pixelify, monospace';
     ctx.fillStyle = p.cd <= 0 ? '#141018' : '#d6def0';
     ctx.textAlign = 'center';
-    ctx.fillText(p.cd <= 0 ? p.def.ability.name.toUpperCase() : p.def.ability.name, bx + bw / 2, y + 15);
-    // energía
-    ctx.fillStyle = '#0b1222'; ctx.fillRect(x + 4, y + 25, 224, 4);
-    const e = PF.Match.energyPct(p);
-    ctx.fillStyle = staminaColor(e); ctx.fillRect(x + 4, y + 25, 2.24 * e, 4);
+    ctx.fillText(p.fainted ? 'K.O. ' + Math.ceil(p.ko) : p.cd <= 0 ? p.def.ability.name.toUpperCase() : p.def.ability.name, bx + bw / 2, y + 11);
+    // vida y energía
+    const hp = PF.Match.hpPct(p), e = PF.Match.energyPct(p);
+    ctx.fillStyle = '#0b1222'; ctx.fillRect(x + 4, y + 22, 224, 3); ctx.fillRect(x + 4, y + 26, 224, 3);
+    ctx.fillStyle = hpColor(hp); ctx.fillRect(x + 4, y + 22, 2.24 * hp, 3);
+    ctx.fillStyle = staminaColor(e); ctx.fillRect(x + 4, y + 26, 2.24 * e, 3);
   }
 
   /** Minimapa (sólo si la cancha no entra en pantalla). */
