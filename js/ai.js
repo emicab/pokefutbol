@@ -285,7 +285,8 @@ PF.AI = (() => {
     if (dHuman < Infinity) chase = chase && dMe < dHuman * 0.7;
 
     const ownX = p.side === 0 ? F.x0 : F.x1;
-    const ownThird = Math.abs(b.x - ownX) < (F.x1 - F.x0) / 3;
+    // (con pocos jugadores el "tercio" es toda la mitad: si no, se quedan dos pegados al arco mirando)
+    const ownThird = Math.abs(b.x - ownX) < (F.x1 - F.x0) / (PF.Match.teamOf(m, p.team).length <= 3 ? 2 : 3);
     // defensa: sólo sale a la pelota en nuestro tercio; ataque: presiona arriba como siempre
     if (order === 'def') chase = (chase && ownThird) || dMe < 110;
     return chase;
@@ -440,13 +441,18 @@ PF.AI = (() => {
 
     const isKeeper = M.keeperOf(m, p.team) === p;
     if (isKeeper) {
-      const ownHalf = (b.x - ownX) * dirX < (F.x1 - F.x0) * 0.5;
-      if (p.fixedKeeper || ownHalf) { ai.pushUp = false; return keeperThink(p, m, it, c); }
-      // dinámico con la pelota en campo rival: a veces se suma al ataque (y
-      // otro pasa a ser el arquero por estar más cerca del arco); si no, líbero.
-      // Apenas se pierde la pelota, vuelve.
-      if (!(holder && holder.team === p.team)) ai.pushUp = false;
-      else if (decide) ai.pushUp = Math.random() < (order === 'atk' ? 0.3 : order === 'def' ? 0.03 : 0.12);
+      // (con histéresis: una vez que sube, no vuelve al arco por cruzar la mitad de ida y vuelta)
+      const ownHalf = (b.x - ownX) * dirX < (F.x1 - F.x0) * (ai.pushUp ? 0.3 : holder && holder.team === p.team ? 0.4 : 0.5);
+      if (p.fixedKeeper || ownHalf) { ai.pushUp = false; ai.pushRolled = false; return keeperThink(p, m, it, c); }
+      // dinámico con la pelota en campo rival: se suma al ataque (casi siempre con
+      // la orden de ataque) y otro pasa a ser el arquero por estar más cerca del
+      // arco; si no, líbero. Se sortea una vez por posesión (si se re-sorteaba a
+      // cada paso, iba y venía y se quedaba atrás). Apenas se pierde la pelota, vuelve.
+      if (!(holder && holder.team === p.team)) { ai.pushUp = false; ai.pushRolled = false; }
+      else if (!ai.pushRolled) {
+        ai.pushRolled = true;
+        ai.pushUp = Math.random() < (order === 'atk' ? 0.9 : order === 'def' ? 0.05 : 0.45);
+      }
       if (!ai.pushUp) {
         ai.chasing = false;
         const [tx, ty] = M.homeSpot(m, p, -0.25);
@@ -560,9 +566,11 @@ PF.AI = (() => {
       // cubrir: entre la pelota y el arco propio (más pegado al arco si defiende;
       // con ataque, un poco más adelante, pero cubriendo igual)
       const k = order === 'def' ? 0.22 : order === 'atk' ? 0.45 : 0.35;
-      const tx = ownX + (b.x - ownX) * k;
+      // nunca pegado al arco: ahí ya está el arquero (si no, se amontonaban los dos en el mismo punto)
+      const minOut = (F.x1 - F.x0) * 0.2;
+      const dx = Math.max(minOut, Math.abs(b.x - ownX) * k);
       const ty = F.cy + (b.y - F.cy) * 0.55;
-      moveTo(it, p, dirX > 0 ? Math.max(tx, F.x0 + 70) : Math.min(tx, F.x1 - 70), ty);
+      moveTo(it, p, ownX + dirX * Math.min(dx, (F.x1 - F.x0) - 70), ty);
     }
     return it;
   }
