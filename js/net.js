@@ -268,7 +268,7 @@ PF.Net = (() => {
    * anfitrión lo usa en un paso, así no se pierde ningún toque.
    */
   function makeInputBuffer() {
-    const EDGES = ['pass', 'ability', 'swap', 'order', 'skip'];
+    const EDGES = ['pass', 'ability', 'swap', 'order', 'skip', 'shoot', 'feint'];
     let cur = { mx: 0, my: 0, passHold: false, shootHold: false, press: false };
     let edges = {}, held = {};
     return {

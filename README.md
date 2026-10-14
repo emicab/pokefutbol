@@ -26,9 +26,9 @@ y abre <http://localhost:8123>.
 | `J` / `Z` | Pase (toque = pase justo; mantén = más fuerte) · sin pelota: placaje |
 | `K` / `X` | Tiro: un toque ya sale fuerte; mantén para cargar más |
 | `L` / `C` | Habilidad del Pokémon |
-| `Espacio` / `I` | Presionar: correr solo hacia la pelota (máx. 2 s, cansa y se enfría) |
+| `Espacio` / `I` | Presionar: correr solo hacia la pelota (máx. 2 s, cansa y se enfría) · con la pelota: amago |
 | `Q` / `Shift` | Cambiar al compañero más cerca de la pelota |
-| `T` | Orden al equipo: Neutro → Ataque → Defensa |
+| `T` | Orden al equipo: Neutro → Ataque → Defensa → Presión → Contra |
 | `R` | Cambios (suplentes): pausa y eliges quién sale y quién entra |
 | `F` | Cambio rápido, sin pausar: el suplente más fresco entra por tu K.O. (o por el que manejas, si está muy golpeado o agotado) |
 | `Esc` / `P` | Pausa |
@@ -37,7 +37,7 @@ y abre <http://localhost:8123>.
 Las teclas se pueden cambiar en **Opciones → Controles** (clic en la acción y
 pulsar la tecla nueva; "Restaurar teclas" vuelve a las de fábrica).
 
-Con mando: A pase/placaje · B tiro · Y o RB habilidad · X presionar · LB cambiar ·
+Con mando: A pase/placaje · B tiro · Y o RB habilidad · X presionar/amago · LB cambiar ·
 LT orden al equipo · RT cambio rápido · Select cambios · Start pausa.
 
 - **Saque:** el que saca empieza con la pelota y nadie se mueve hasta que la
@@ -52,21 +52,40 @@ LT orden al equipo · RT cambio rápido · Select cambios · Start pausa.
 - **Tiro:** un toque ya sale rápido y fuerte (más que un pase); manteniendo
   la tecla se carga la barra y sale todavía más fuerte. Si apuntas al arco
   aparece una mira en la boca; `↑`/`↓` al soltar eligen palo.
+- **De primera:** si apretás pase (con un pase viniendo hacia vos) o tiro
+  (con la pelota suelta cerca) hasta 0,4 s antes de recibirla, sale apenas la
+  tocás, hacia donde apuntás con la dirección («¡DE PRIMERA!»); sin dirección,
+  el tiro va al arco y el pase suele volver al que te la dio (una pared). Si
+  todavía mantenés la tecla al recibir, en cambio, se carga como siempre.
+- **Amago:** con la pelota, `Espacio` hace un quiebre corto y rápido hacia
+  donde apuntás (sin dirección, hacia el costado del rival más cercano). El
+  rival que venía a quitártela y no va hacia donde saliste queda pasado
+  («¿?»): casi medio segundo sin poder placar ni robar, y más lento. Cuesta
+  algo de energía y se enfría en poco más de 1 s.
 - **Sin energía** para lo que cuesta, no se puede placar ni usar la habilidad
   («sin energía…»).
 - **Habilidad:** el anillo de tus Pokémon se va llenando mientras recarga y
   brilla cuando está lista. Sólo recarga con la pelota en juego.
 - **Órdenes al equipo** (panel de abajo y etiqueta sobre cada uno):
-  - *Neutro*: va a por la pelota el que esté más cerca; el resto cubre.
-  - *Ataque*: con la pelota el equipo sube mucho; al perderla baja igual
-    (un poco menos) y presiona arriba.
-  - *Defensa*: el equipo se queda atrás y sólo sale a presionar en tu tercio.
+  - *Neutro*: va a por la pelota el que llega primero; el resto cubre.
+  - *Ataque*: con la pelota el equipo sube mucho (el arquero dinámico casi
+    siempre se suma) y se arriesga más: pases al espacio y gambetas aunque se
+    pueda perder. Al perderla baja igual (un poco menos) y presiona arriba.
+    Partidos más abiertos: se meten más goles y se reciben más.
+  - *Defensa*: cuida el arco. Con la pelota suben sólo los de arriba (salida
+    de contragolpe), el resto queda atrás y se juegan pases más seguros; sin
+    ella se presiona a la pelota como en *Neutro* (esperar en el área le
+    regala al rival el remate de media distancia). Se reciben menos goles.
+  - *Presión*: presión alta en toda la cancha: además del que va a la pelota,
+    cada compañero se pega a un rival del lado de la pelota para cortar el
+    pase o robarla al recibir. Más robos arriba; partido abierto.
+  - *Contra*: contragolpe: los de arriba quedan de salida y, al recuperarla,
+    juego directo (pases al espacio, nada de tocar para atrás).
 
   En todas las órdenes el equipo sube cuando tiene la pelota y baja cuando la
   pierde; la orden cambia cuánto. Sin la pelota, si nadie quedó cerca del arco,
   el compañero más cercano baja a cubrirlo, y los delanteros se quedan de
-  salida para el contragolpe (salvo en *Defensa*). Los compañeros se separan
-  si quedan pegados.
+  salida para el contragolpe. Los compañeros se separan si quedan pegados.
 - **Repetición:** cada gol se repite en cámara lenta (se salta con J, K o
   Espacio; se puede quitar en Opciones).
 
@@ -104,20 +123,65 @@ en los pies y ya lo pueden marcar y quitársela como a cualquiera. `Q` nunca te 
 
 ### La CPU
 
-El entrenador rival cambia de táctica según el partido (se ve en el
-marcador): si va perdiendo se va al ataque, si gana sobre el final se cierra
-atrás, y si no, varía para no ser previsible. Sus jugadores rotan de puesto:
-si un defensa sube con la pelota, el compañero que quedó atrás baja a cubrir.
-Cuando defienden en su mitad, los que no van a la pelota marcan a un rival
-cada uno (al más peligroso primero), parados entre él y el arco. En 5 vs 5 la
-marca es más floja: sólo en el último tercio, dos marcadores como mucho y más
-separados.
+La IA (la de la CPU y la de tus compañeros) lee el partido con la misma
+física del juego: predice por dónde va a ir la pelota (cómo frena en cada
+cancha y cómo rebota) y cuánto tarda cada Pokémon en llegar a cada punto
+(según su velocidad, su cansancio, el agarre de la cancha y si tiene que darse
+vuelta).
 
-En ataque, la CPU tira al palo que tenga la línea más libre (y si está
-tapada, busca al compañero mejor ubicado), evita pases con un rival en el
-medio, se abre a la banda cuando el centro está cargado, y sus medios y
-delanteros se desmarcan buscando huecos con la línea de pase limpia. Lo
-mismo hacen tus compañeros.
+- **Con la pelota** compara tirar, pasar y conducir, y elige la jugada que más
+  vale. Para el tiro estima la probabilidad de gol a cada punto del arco y con
+  cada carga (tiempo de vuelo, reflejos y estirada del arquero, rivales que
+  pueden tapar la línea, su puntería); para el pase, si algún rival llega a
+  cortarlo a tiempo, y puede pasar al pie o al espacio, por delante del
+  compañero; para conducir, nueve direcciones y si se la pueden quitar en el
+  camino, llevando la pelota del lado contrario al rival que se acerca.
+  Perderla cerca de su arco le cuesta más que perderla arriba.
+- **Sin la pelota** va a buscarla el que llega primero (no el más cercano: el
+  que corta la trayectoria antes). Al que la lleva lo encara del lado del arco
+  y placa adelantándose a su movimiento. Si el rival la alcanza antes, se
+  planta entre él y el arco. Los demás marcan al rival más peligroso (por
+  dónde está y si le pueden pasar) cerrando la línea de pase, o se desmarcan
+  buscando el punto donde el pase llega, hay aire para recibir y es peligroso.
+- **El arquero** se para en la bisectriz del ángulo de tiro, a la profundidad
+  que deja el peor «mejor tiro» posible para el rival (cuenta a sus
+  defensores: si uno tapa el primer palo, él cubre el segundo). Ante un tiro
+  va al primer punto de la trayectoria al que llega a tiempo, y si no llega
+  caminando se estira justo a tiempo. Sale a la pelota suelta si llega antes
+  que los rivales y achica en el mano a mano.
+
+La **dificultad** cambia velocidad, reflejos, puntería, recarga del placaje y
+la *lectura del juego*: en Fácil la CPU tiene «despistes» (a veces conduce
+derecho al arco o corre a donde está la pelota en vez de a donde va a estar),
+elige peor y su arquero se ubica a la antigua; en Difícil nunca se despista.
+
+El entrenador rival cambia de táctica según el partido (se ve en el
+marcador): si va perdiendo se va al ataque o presiona arriba, si gana sobre
+el final defiende o espera de contragolpe, y si no, varía para no ser
+previsible (usa las mismas cinco órdenes que tus compañeros). Sus jugadores rotan de puesto:
+si un defensa sube con la pelota, el compañero que quedó atrás baja a cubrir.
+En 5 vs 5 la marca es más floja: sólo en el último tercio, dos marcadores
+como mucho y más separados. Los Pokémon de la IA también esquivan la lava y
+los charcos del rival, y van a buscar las cajas `?` cercanas si no hay nada
+urgente.
+
+Para medir cambios en la IA hay un simulador sin pantalla que juega partidos
+CPU contra CPU con el motor real (ver [Código](#código)):
+
+```bash
+node tools/sim.js --b=otra/ai.js --n=40 --size=3 --diff=hard
+```
+
+### Consejos al final del partido
+
+En la pantalla de resultado (partido rápido, torneo, modo historia) aparecen
+hasta tres consejos sacados de **tu** partido, con sus números. Para eso el
+juego anota lo que hacés: cada tiro con la probabilidad de gol que tenía (el
+mismo cálculo que usa la IA para decidir), tus pases y cuántos te cortaron,
+las pelotas que perdiste y dónde, tus placajes, cuánto jugaste agotado o
+presionando y qué orden tuvo tu equipo. Por ejemplo: «De tus 9 tiros, 6 tenían
+menos de 5 % de chance de gol…», «Perdiste 3 pelotas cerca de tu arco…» o
+«Probá jugar de primera…». Online sólo los ve el anfitrión.
 
 ### Puestos y pizarra
 
@@ -565,6 +629,7 @@ js/stadiums.js    canchas
 js/abilities.js   una función por habilidad
 js/match.js       reglas, física, arquero, pelota, goles, cajas, proyectiles, cámara, repetición
 js/ai.js          IA de compañeros, rivales y arqueros
+js/tips.js        consejos al final del partido (con lo que hizo cada humano)
 js/field.js       paredes de la cancha y choques
 js/render.js      dibujo de cancha, jugadores, pelota, HUD y minimapa
 js/fx.js          partículas, onomatopeyas, ondas, rayos
@@ -586,6 +651,7 @@ js/ranking.js     ranking online por modo: inscripción, envío de resultados y 
 js/main.js        bucle a 60 Hz fijo, flujo de pantallas, online y premios
 tools/import_pokemon.py   copia sprites desde PokéSurvivor y regenera metadatos, Pokédex y créditos
 tools/serve.py            servidor local sin caché
+tools/sim.js              partidos CPU contra CPU sin pantalla (Node) para comparar dos versiones de ai.js
 ```
 
 Para añadir un Pokémon, con una copia de

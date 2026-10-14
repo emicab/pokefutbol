@@ -86,7 +86,25 @@ PF.Match = (() => {
    * DIVE_DOWN en el piso, y no puede volver a estirarse hasta DIVE_CD.
    */
   const DIVE_TIME = 0.26, DIVE_SPEED = 580, DIVE_DOWN = 0.35, DIVE_CD = 1.1;
+  /**
+   * Pase y tiro de primera: si apretás pase (con el pase viniendo hacia vos)
+   * o tiro (con la pelota suelta cerca) hasta BUFFER_T segundos antes de
+   * recibirla, sale apenas la tocás, hacia donde apuntás con la dirección.
+   */
+  const BUFFER_T = 0.4;
+  /**
+   * Amago (presionar con la pelota): un quiebre corto y rápido (CUT_TIME a
+   * CUT_SPEED × la velocidad) hacia donde apuntás, o hacia el costado del
+   * rival más cercano. Al rival que venía a placarla y queda pasado lo deja
+   * FOOL_TIME sin poder placar ni robar, y más lento. Cuesta CUT_STAMINA y se
+   * enfría CUT_CD.
+   */
+  const CUT_TIME = 0.2, CUT_SPEED = 1.7, CUT_CD = 1.3, CUT_STAMINA = 4, FOOL_TIME = 0.45;
   const pressCooldown = (t) => 0.8 + 1.1 * t;
+  /** Anota algo que hizo un humano, para los consejos del final (tips.js). */
+  const note = (m, p, key, v) => { if (PF.Tips) PF.Tips.note(m, p, key, v); };
+  /** ¿(x) está en el tercio de la cancha de su propio arco? */
+  const ownThird = (p, x) => Math.abs(x - ownGoalX(p.side)) < (F.x1 - F.x0) / 3;
   const NO_INTENT = { mx: 0, my: 0, pass: false, shootHold: false, ability: false, press: false };
 
   /**
@@ -139,6 +157,8 @@ PF.Match = (() => {
     { id: 'neutral', label: 'NEUTRO', short: '', color: '#e8f0ff' },
     { id: 'atk', label: 'ATAQUE', short: 'ATQ', color: '#ff8a3d' },
     { id: 'def', label: 'DEFENSA', short: 'DEF', color: '#59d0ff' },
+    { id: 'press', label: 'PRESIÓN', short: 'PRE', color: '#ff5ab0' },
+    { id: 'counter', label: 'CONTRA', short: 'CTR', color: '#9cff6b' },
   ];
 
   const ITEMS = [
@@ -246,6 +266,7 @@ PF.Match = (() => {
       types: PF.typesOf(def), tiredWarned: false,
       gkHold: false, gkT: 0, assistFrom: null, assistT: 0, ctrl: null,
       pressT: 0, pressCd: 0, pressCdMax: 1, pressLock: false, diveCd: 0, down: 0,
+      buf: null, stick: [0, 0], cut: 0, cutCd: 0, cutDx: 0, cutDy: 0, fooled: 0,
       x: 0, y: 0, z: 0, vx: 0, vy: 0, facing: 0, r: def.radius,
       stun: 0, asleep: false, cd: def.ability.cd * 0.75, tackleCd: 0, dash: 0, dashDx: 0, dashDy: 0, dashSpeed: DASH_SPEED,
       pickupCd: 0, holdT: 0, stealT: 0, charge: -1, passCharge: -1, aimMy: 0,
@@ -349,7 +370,7 @@ PF.Match = (() => {
       players: [],
       ball: {
         x: F.cx, y: F.cy, vx: 0, vy: 0, r: BALL_R, holder: null, last: null, fire: 0,
-        vine: null, vineT: 0, vineColor: '#7dff9e', passTo: null, passT: 0, passFrom: null, spin: 0, big: 0, crazy: 0, curve: 1,
+        vine: null, vineT: 0, vineColor: '#7dff9e', passTo: null, passT: 0, passFrom: null, passLog: null, spin: 0, big: 0, crazy: 0, curve: 1,
       },
       score: opts.score ? opts.score.slice() : [0, 0], time: opts.time ?? PF.MATCH_TIME, totalTime: opts.time ?? PF.MATCH_TIME, golden: false,
       state: 'kickoff', stateT: 0, clock: 0, kickoffTeam: Math.random() < 0.5 ? 0 : 1, kicker: null,
@@ -435,7 +456,7 @@ PF.Match = (() => {
 
   function kickoff(m) {
     const k = m.kickoffTeam, b = m.ball;
-    Object.assign(b, { x: F.cx, y: F.cy, vx: 0, vy: 0, holder: null, last: null, fire: 0, vine: null, passTo: null, big: 0, crazy: 0 });
+    Object.assign(b, { x: F.cx, y: F.cy, vx: 0, vy: 0, holder: null, last: null, fire: 0, vine: null, passTo: null, passLog: null, big: 0, crazy: 0 });
     const len = F.x1 - F.x0, H = (F.y1 - F.y0) / 2;
     for (const p of m.players) {
       const [d, f] = p.spot;
@@ -448,7 +469,7 @@ PF.Match = (() => {
         x, y, z: 0, vx: 0, vy: 0, stun: p.fainted ? p.stun : 0, asleep: false, dash: 0, charge: -1, slam: null,
         status: null, statusT: 0, statusLvl: 0, chan: null, slow: 0,
         pickupCd: 0, holdT: 0, stealT: 0, phase: 0, wall: 0, embers: 0, slip: 0, dig: 0, ram: 0, spinT: 0,
-        gkHold: false, gkT: 0, assistFrom: null,
+        gkHold: false, gkT: 0, assistFrom: null, buf: null, cut: 0, fooled: 0,
       });
       p.facing = p.side === 0 ? 0 : Math.PI;
       p.ai.chasing = false; p.ai.shotT = 0;
@@ -563,12 +584,13 @@ PF.Match = (() => {
   }
 
   // ---------------------------------------------------------------- entrenador de la CPU
-  const TACTIC_TEXT = { atk: '¡AL ATAQUE!', def: '¡A DEFENDER!', neutral: '¡EQUILIBRIO!' };
+  const TACTIC_TEXT = { atk: '¡AL ATAQUE!', def: '¡A DEFENDER!', neutral: '¡EQUILIBRIO!', press: '¡PRESIÓN ALTA!', counter: '¡AL CONTRAGOLPE!' };
 
   /**
    * Cada pocos segundos, los equipos de la CPU revisan su táctica: si van
-   * perdiendo se van al ataque (más cuanto menos tiempo queda), si ganan
-   * sobre el final se cierran atrás, y si no, varían para no ser previsibles.
+   * perdiendo se van al ataque o presionan arriba (más cuanto menos tiempo
+   * queda), si ganan sobre el final defienden o esperan de contragolpe, y si
+   * no, varían para no ser previsibles.
    */
   function coach(m, dt) {
     if ((m.coachT -= dt) > 0) return;
@@ -578,11 +600,12 @@ PF.Match = (() => {
       if (hasHuman(m, team)) continue;
       const diff = m.score[team] - m.score[1 - team];
       let t;
-      if (m.golden) t = 'atk';
-      else if (diff < 0) t = left < 0.6 || Math.random() < 0.5 ? 'atk' : 'neutral';
-      else if (diff > 0 && left < 0.35) t = 'def';
-      else if (diff >= 2) t = Math.random() < 0.5 ? 'def' : 'neutral';
-      else { const r = Math.random(); t = r < 0.55 ? 'neutral' : r < 0.8 ? 'atk' : 'def'; }
+      const r = Math.random(), push = Math.random() < 0.65 ? 'atk' : 'press', hold = Math.random() < 0.65 ? 'def' : 'counter';
+      if (m.golden) t = push;
+      else if (diff < 0) t = left < 0.6 || r < 0.5 ? push : 'neutral';
+      else if (diff > 0 && left < 0.35) t = hold;
+      else if (diff >= 2) t = r < 0.5 ? hold : 'neutral';
+      else t = r < 0.45 ? 'neutral' : r < 0.62 ? 'atk' : r < 0.76 ? 'def' : r < 0.88 ? 'press' : 'counter';
       if (t !== m.tactic[team]) {
         m.tactic[team] = t;
         if (!m.demo) {
@@ -788,7 +811,7 @@ PF.Match = (() => {
         } else s.hp = Math.min(s.maxHp, s.hp + HP.bench * dt * (s.maxHp / 100));
       }
     }
-    if (playing) { coach(m, dt); rotate(m, dt); }
+    if (playing) { coach(m, dt); rotate(m, dt); if (PF.Tips) PF.Tips.tick(m, dt); }
     if (playing && (m.subT -= dt) <= 0) {
       m.subT = 4;
       for (const team of [0, 1]) {
@@ -831,14 +854,14 @@ PF.Match = (() => {
           it = p.human ? input[hi2] || NO_INTENT : PF.AI.kickoff(p, m);
           if (m.stateT > KICKOFF_MAX) it = Object.assign({}, NO_INTENT, { pass: true });
           // en el saque sólo se puede pasar: nada de tiros ni habilidades
-          it = Object.assign({}, it, { ability: false, press: false, shootHold: false });
+          it = Object.assign({}, it, { ability: false, press: false, shootHold: false, shoot: false, feint: false });
         }
       } else if (playing && p.stun <= 0 && !p.slam) {
         it = p.human ? input[hi2] || NO_INTENT : PF.AI.think(p, m, dt);
       }
       applyIntent(m, p, it, dt, active);
       if (kicking) { p.vx = 0; p.vy = 0; }
-      if (wasHuman && input[hi2]) input[hi2] = Object.assign({}, input[hi2], { pass: false, passHold: false, ability: false });
+      if (wasHuman && input[hi2]) input[hi2] = Object.assign({}, input[hi2], { pass: false, passHold: false, ability: false, shoot: false, feint: false });
     }
     movePlayers(m, dt);
     collidePlayers(m);
@@ -865,7 +888,7 @@ PF.Match = (() => {
     const b = m.ball, st = m.stadium;
     const digging = p.dig > 0;
     for (const k of ['stun', 'tackleCd', 'pickupCd', 'phase', 'turbo', 'giant', 'slow', 'fireShot', 'wall', 'embers',
-      'slip', 'burnCd', 'dig', 'ram', 'spinT', 'magnet', 'diving', 'pressCd', 'diveCd', 'down', 'ko', 'jk', 'mire', 'buff']) {
+      'slip', 'burnCd', 'dig', 'ram', 'spinT', 'magnet', 'diving', 'pressCd', 'diveCd', 'down', 'ko', 'jk', 'mire', 'buff', 'cut', 'cutCd', 'fooled']) {
       p[k] = Math.max(0, p[k] - dt);
     }
     // Patada Salto que no tocó a nadie: se tropieza
@@ -913,7 +936,7 @@ PF.Match = (() => {
       const ca = Math.cos(p.confAng), sa = Math.sin(p.confAng);
       [mx, my] = [mx * ca - my * sa, mx * sa + my * ca];
     }
-    if (p.human) p.aimMy = Math.abs(my) > 0.3 ? Math.sign(my) : 0;
+    if (p.human) { p.aimMy = Math.abs(my) > 0.3 ? Math.sign(my) : 0; p.stick = [mx || 0, my || 0]; }
 
     // presionar: limitado en tiempo y con enfriamiento (ver PRESS_MAX)
     // (si se mantiene apretado, al terminar el enfriamiento hay que soltar y volver a apretar)
@@ -944,7 +967,8 @@ PF.Match = (() => {
     if (ml > 1) { mx /= ml; my /= ml; }
     if (p.spinT > 0) p.facing += dt * 16;
     else if (p.dash <= 0 && !p.slam && p.stun <= 0) {
-      if (it.aim !== undefined) p.facing = it.aim;
+      if (p.cut > 0) p.facing = Math.atan2(p.cutDy, p.cutDx);
+      else if (it.aim !== undefined) p.facing = it.aim;
       else if (ml > 0.2) p.facing = Math.atan2(my, mx);
       if (p.status === 'conf') p.facing += p.confAng * 0.35;   // los pases y tiros le salen torcidos
     }
@@ -961,6 +985,7 @@ PF.Match = (() => {
     if (p.mire > 0) sp *= 0.6;   // enredado en la telaraña (además del lento)
     if (p.chan && p.chan.speed !== undefined) sp *= p.chan.speed;
     if (p.wall > 0) sp *= 0.3;
+    if (p.fooled > 0) sp *= 0.6;   // se comió el amago
 
     if (p.slam) {
       // la trayectoria del salto la lleva movePlayers
@@ -971,6 +996,9 @@ PF.Match = (() => {
       // la estirada del arquero termina en seco (si no, se seguía deslizando más allá de la pelota)
       if (p.dash <= 0 && p.diving > 0) { const k = Math.max(0, p.dash + dt) / dt; p.vx *= k; p.vy *= k; }
       if (Math.random() < 0.6) PF.FX.particle(m.fx, p.x, p.y, -p.vx * 0.1, -p.vy * 0.1, '#e9e2c8', 0.3, 4);
+    } else if (p.cut > 0) {
+      p.vx = p.cutDx * sp * CUT_SPEED;   // amago: quiebre en seco, con la pelota
+      p.vy = p.cutDy * sp * CUT_SPEED;
     } else if (p.down > 0) {
       p.vx = 0; p.vy = 0;   // en el piso tras estirarse
     } else if (p.stun > 0) {
@@ -1030,6 +1058,13 @@ PF.Match = (() => {
     }
     if (b.holder === p) {
       if (it.clear !== undefined) { clearance(m, p, it.clear); return; }
+      if (p.human && p.buf) {
+        const buf = p.buf;
+        p.buf = null;
+        // (si todavía mantiene la tecla, sigue el pase o tiro cargado de siempre)
+        if (m.clock - buf.t <= BUFFER_T && !(buf.kind === 'pass' ? it.passHold : it.shootHold)) { firstTime(m, p, buf.kind); return; }
+      }
+      if (p.human && it.feint && p.cutCd <= 0 && !p.gkHold) feint(m, p);
       // pase: el humano lo carga manteniendo la tecla (toque = pase justo; más = más fuerte)
       if (p.human && it.passHold !== undefined) {
         if (it.passHold) { p.passCharge = Math.min(PASS_HOLD_MAX, Math.max(0, p.passCharge) + dt); p.charge = -1; return; }
@@ -1039,14 +1074,19 @@ PF.Match = (() => {
           pass(m, p, k);
           return;
         }
-      } else if (it.pass) { pass(m, p, 0); return; }
+      } else if (it.pass) { pass(m, p, 0, it.passTo, it.passPt); return; }
       if (it.shootHold) p.charge = Math.min(CHARGE_MAX, Math.max(0, p.charge) + dt);
       else if (p.charge >= 0) shoot(m, p, p.charge / CHARGE_MAX);
     } else {
       p.charge = -1;
       p.passCharge = -1;
       // si me están pasando la pelota, J no es placaje
-      if (it.pass && p.tackleCd <= 0 && p.dash <= 0 && b.passTo !== p) {
+      if (p.human) {
+        if (it.pass && b.passTo === p) p.buf = { kind: 'pass', t: m.clock };
+        else if (it.shoot && !b.holder && (b.passTo === p || U.dist(p.x, p.y, b.x, b.y) < 170)) p.buf = { kind: 'shoot', t: m.clock };
+      }
+      // (el que se comió un amago no puede placar)
+      if (it.pass && p.tackleCd <= 0 && p.dash <= 0 && b.passTo !== p && p.fooled <= 0) {
         if (p.stamina < STAMINA.tackle) noEnergy(m, p);
         else tackle(m, p);
       }
@@ -1172,18 +1212,21 @@ PF.Match = (() => {
    * Pase. k (0..1) = cuánto se cargó: 0 es el pase justo (llega al compañero
    * a velocidad cómoda); 1 sale 1,6 veces más fuerte (tenso, para pasar entre
    * rivales) y, al hueco, llega mucho más lejos.
+   * La IA puede elegir el receptor (`to`) y el punto (`at`: al espacio, por delante de él).
    */
-  function pass(m, p, k = 0) {
+  function pass(m, p, k = 0, to = null, at = null) {
     const b = m.ball;
-    const mate = passTarget(m, p);
+    const ok = to && to.team === p.team && to !== p && !to.fainted && !to.slam && to.dig <= 0;
+    const mate = ok ? to : passTarget(m, p);
     if (mate) {
-      const tx = mate.x + mate.vx * 0.35, ty = mate.y + mate.vy * 0.35;
+      const [tx, ty] = ok && at ? at : [mate.x + mate.vx * 0.35, mate.y + mate.vy * 0.35];
       const dx = tx - b.x, dy = ty - b.y, d = Math.hypot(dx, dy) || 1;
       const sp = Math.min(2200, passSpeed(m, d) * (1 + 0.6 * k));
       p.facing = Math.atan2(dy, dx);
       release(m, p, (dx / d) * sp, (dy / d) * sp);
       // el control pasa al que recibe, que va solo a buscarla
       b.passTo = mate; b.passT = 2; b.passFrom = p;
+      if (p.human && m.state === 'play') { note(m, p, 'pass', PF.AI.passChance ? PF.AI.passChance(m, p, tx, ty, mate) : 1); b.passLog = p.ctrl.idx; }
       // (si el que recibe es el compañero humano, cada uno sigue con el suyo)
       if (p.human) setControl(m, mate, p.ctrl);
     } else {
@@ -1221,6 +1264,7 @@ PF.Match = (() => {
     const fire = p.fireShot > 0;
     if (fire) sp = FIRE_SPEED * p.def.power;
     p.facing = aim.a;
+    if (p.human) note(m, p, 'shot', PF.AI.shotChance ? PF.AI.shotChance(m, p, sp, aim.a) : 0);
     release(m, p, Math.cos(aim.a) * sp, Math.sin(aim.a) * sp);
     setAnim(p, 'Attack', true);
     PF.Audio.sfx.kick(power);
@@ -1238,6 +1282,54 @@ PF.Match = (() => {
     }
   }
 
+  /** Pase o tiro de primera: hacia donde apunta la dirección (sin dirección, el tiro va al arco). */
+  function firstTime(m, p, kind) {
+    const [sx, sy] = p.stick;
+    if (Math.hypot(sx, sy) > 0.3) p.facing = Math.atan2(sy, sx);
+    else if (kind === 'shoot') p.facing = Math.atan2(F.cy - p.y, (p.side === 0 ? F.x1 : F.x0) - p.x);
+    note(m, p, 'oneTouch');
+    PF.FX.text(m.fx, p.x, p.y - 64, '¡DE PRIMERA!', '#9cf0ff', 0.7, 0.7);
+    if (kind === 'pass') pass(m, p, 0); else shoot(m, p, 0.25);
+  }
+
+  /** Amago: quiebre rápido; el rival que venía encima queda pasado (ver CUT_TIME). */
+  function feint(m, p) {
+    if (p.stamina < CUT_STAMINA) { noEnergy(m, p); return; }
+    let [dx, dy] = p.stick;
+    let near = null, nd = Infinity;
+    for (const q of m.players) {
+      if (q.team === p.team || q.fainted) continue;
+      const d = U.dist(p.x, p.y, q.x, q.y);
+      if (d < nd) { nd = d; near = q; }
+    }
+    if (Math.hypot(dx, dy) < 0.3) {
+      // sin dirección: al costado del rival más cercano (o hacia adelante si no hay nadie)
+      if (near) { const a = Math.atan2(p.y - near.y, p.x - near.x); [dx, dy] = [-Math.sin(a), Math.cos(a)]; if (dy * (F.cy - p.y) < 0) { dx = -dx; dy = -dy; } }
+      else [dx, dy] = [dirOf(p.side), 0];
+    }
+    const l = Math.hypot(dx, dy) || 1;
+    p.cutDx = dx / l; p.cutDy = dy / l;
+    p.cut = CUT_TIME; p.cutCd = CUT_CD;
+    spend(p, CUT_STAMINA);
+    // los que venían a quitársela y no van hacia donde sale el quiebre quedan pasados
+    let fooled = 0;
+    for (const q of m.players) {
+      if (q.team === p.team || q.fainted || q.stun > 0) continue;
+      const d = U.dist(p.x, p.y, q.x, q.y);
+      if (d > 140 || d < 1) continue;
+      const ux = (p.x - q.x) / d, uy = (p.y - q.y) / d;            // del rival hacia mí
+      const coming = q.dash > 0 || q.vx * ux + q.vy * uy > 60;      // viene hacia mí (o ya está placando)
+      if (!coming || p.cutDx * -ux + p.cutDy * -uy > 0.5) continue; // si el quiebre va derecho hacia él, no lo engaña
+      q.fooled = FOOL_TIME;
+      q.stealT = 0;
+      fooled++;
+      PF.FX.text(m.fx, q.x, q.y - 54, '¿?', '#ffffff', 0.8, 0.6);
+    }
+    PF.FX.text(m.fx, p.x, p.y - 64, fooled ? '¡AMAGO!' : '¡QUIEBRE!', '#ffd23f', fooled ? 0.9 : 0.6, 0.7);
+    PF.Audio.sfx.swoosh();
+    note(m, p, fooled ? 'feintOk' : 'feint');
+  }
+
   function tackle(m, p) {
     p.dash = DASH_TIME;
     p.dashSpeed = DASH_SPEED;
@@ -1245,6 +1337,7 @@ PF.Match = (() => {
     p.dashDy = Math.sin(p.facing);
     p.tackleCd = p.human ? TACKLE_CD : p.skill.tackleCd;
     spend(p, STAMINA.tackle);
+    if (p.human) note(m, p, 'tackleTry');
     setAnim(p, 'Attack', true);
     PF.Audio.sfx.swoosh();
   }
@@ -1273,6 +1366,7 @@ PF.Match = (() => {
       () => knock(m, v, nx, ny, 340 * Math.min(2.2, r) + 140, 0.9 * U.clamp(Math.pow(r, 1.3), 0.2, 1.6)), { phys: true, ratio: r, keepBall });
     if (!hit) return;
     a.stats.tackles++;
+    if (a.human) note(m, a, 'tackleHit');
     if (r < 0.8) {
       // rebota contra el más pesado y se tambalea un instante
       a.vx -= nx * 300 * (1 - r); a.vy -= ny * 300 * (1 - r);
@@ -1520,6 +1614,7 @@ PF.Match = (() => {
 
   function loseBall(m, p, nx, ny) {
     const b = m.ball;
+    if (p.human && b.holder === p) note(m, p, 'lostHit', ownThird(p, p.x));
     b.holder = null; b.last = p; b.passTo = null; b.passFrom = null;
     p.gkHold = false;
     const a = Math.atan2(ny, nx) + U.rand(-0.7, 0.7);
@@ -1531,7 +1626,16 @@ PF.Match = (() => {
 
   function take(m, p) {
     const b = m.ball;
-    if (b.holder && b.holder !== p) { b.holder.charge = -1; b.holder.gkHold = false; }
+    if (b.holder && b.holder !== p) {
+      if (b.holder.human && b.holder.team !== p.team) note(m, b.holder, 'lostSteal', ownThird(b.holder, b.holder.x));
+      b.holder.charge = -1; b.holder.gkHold = false;
+    }
+    // ¿llegó el pase de un humano o se lo cortaron?
+    if (b.passLog !== null && b.passLog !== undefined) {
+      if (PF.Tips) PF.Tips.passEnd(m, b.passLog, p);
+      b.passLog = null;
+    }
+    if (p.human && b.passFrom && b.passFrom.team === p.team && b.passFrom !== p) note(m, p, 'received');
     // asistencia: si me la pasó un compañero, el gol que haga cuenta para él
     p.assistFrom = b.passFrom && b.passFrom.team === p.team && b.passFrom !== p ? b.passFrom : null;
     p.assistT = m.clock;
@@ -1798,7 +1902,7 @@ PF.Match = (() => {
       if (playing && p.phase <= 0 && p.dig <= 0 && !p.gkHold) {
         for (const q of m.players) {
           if (q.team === p.team) continue;
-          const touching = q.stun <= 0 && !untouchable(q) && q.pickupCd <= 0 &&
+          const touching = q.stun <= 0 && q.fooled <= 0 && !untouchable(q) && q.pickupCd <= 0 &&
             U.dist(q.x, q.y, b.x, b.y) < radius(q) + b.r + 2;
           if (!touching) { q.stealT = 0; continue; }
           q.stealT += dt;

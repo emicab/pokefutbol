@@ -267,6 +267,7 @@ PF.CareerUI = (() => {
           ${res.abilityUnlocks.map((mb) => `<div class="new">¡${PF.species(mb.dex).name} aprendió una segunda habilidad!</div>`).join('')}
           ${res.reply ? `<div class="quote"><b>${res.reply.who}</b> “${res.reply.text}”</div>` : ''}
           <div class="reward"><div class="total"><span>Monedas</span>${coinHTML('+' + res.coins)}</div></div>
+          ${PF.Tips ? PF.Tips.html(m) : ''}
           <button class="btn big" data-act="go">Continuar</button>
         </div>
       </div>`);

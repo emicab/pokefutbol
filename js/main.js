@@ -1074,6 +1074,8 @@
       pass: I.was('pass'),
       passHold: I.is('pass') || I.was('pass'),
       shootHold: I.is('shoot') || I.was('shoot'),
+      shoot: I.was('shoot'),              // (para el tiro de primera)
+      feint: I.was('press'),              // presionar con la pelota: amago
       ability: I.was('ability'),
       press: I.is('press'),
       swap: I.was('swap'),

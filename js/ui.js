@@ -57,10 +57,10 @@ PF.UI = (() => {
           <div><kbd>${K.label('pass')}</kbd> pase (mantén: más fuerte) · sin pelota: placaje</div>
           <div><kbd>${K.label('shoot')}</kbd> tiro (mantén para cargar)</div>
           <div><kbd>${K.label('ability')}</kbd> habilidad del Pokémon</div>
-          <div><kbd>${K.label('press')}</kbd> presionar (ir a la pelota; máx. 2 s)</div>
+          <div><kbd>${K.label('press')}</kbd> presionar (ir a la pelota; máx. 2 s) · con pelota: amago</div>
           <div><kbd>${K.label('swap')}</kbd> cambiar de Pokémon</div>
-          <div>al tirar, <kbd>${K.label('up')}</kbd>/<kbd>${K.label('down')}</kbd> eligen palo</div>
-          <div><kbd>${K.label('order')}</kbd> orden al equipo: neutro, ataque o defensa</div>
+          <div>al tirar, <kbd>${K.label('up')}</kbd>/<kbd>${K.label('down')}</kbd> eligen palo · <kbd>${K.label('pass')}</kbd>/<kbd>${K.label('shoot')}</kbd> antes de recibir: de primera</div>
+          <div><kbd>${K.label('order')}</kbd> orden al equipo: neutro, ataque, defensa, presión o contra</div>
           <div><kbd>${K.label('subs')}</kbd> cambios (suplentes) · <kbd>${K.label('quick')}</kbd> cambio rápido</div>
           <div><kbd>${K.label('pause')}</kbd> pausa · <kbd>${K.label('mute')}</kbd> silencio</div>
         </div>
@@ -700,6 +700,7 @@ PF.UI = (() => {
           ${reward.unlocked.map((n) => `<div class="new">¡Nuevo Pokémon desbloqueado: <b>${n}</b>!</div>`).join('')}
           ${extra.note ? `<div class="hint">${extra.note}</div>` : ''}
           ${extra.onRanking && PF.Ranking ? PF.Ranking.resultHtml(extra.rank) : ''}
+          ${PF.Tips ? PF.Tips.html(m) : ''}
           ${onRematch ? `<button class="btn big" data-act="rematch">${extra.rematch || 'Revancha'}</button>` : ''}
           ${onTeam ? `<button class="btn" data-act="team">${extra.team || 'Cambiar equipo'}</button>` : ''}
           <button class="btn" data-act="menu">${extra.menu || 'Menú'}</button>

@@ -772,7 +772,7 @@ PF.Render = (() => {
       ctx.font = '14px Pixelify, monospace';
       ctx.fillStyle = '#a9b6d3';
       const L = PF.Input.label;
-      ctx.fillText(`${L('pass')} pase/placaje · ${L('shoot')} tiro · ${L('ability')} habilidad · ${L('press')} presionar · ${L('swap')} cambiar · ${L('subs')} cambios · ${L('pause')} pausa`, PF.W - 18, PF.H - 25);
+      ctx.fillText(`${L('pass')} pase/placaje · ${L('shoot')} tiro · ${L('ability')} habilidad · ${L('press')} presionar/amago · ${L('swap')} cambiar · ${L('subs')} cambios · ${L('pause')} pausa`, PF.W - 18, PF.H - 25);
     }
     if (PF.WORLD.w > PF.W || PF.WORLD.h > PF.H) drawRadar(ctx, m);
   }
