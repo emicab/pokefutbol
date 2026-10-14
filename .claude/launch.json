@@ -4,8 +4,20 @@
     {
       "name": "pokefutbol",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["tools/serve.py", "8123"],
+      "runtimeArgs": [
+        "tools/serve.py",
+        "8123"
+      ],
       "port": 8123
+    },
+    {
+      "name": "pokefutbol-8124",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "tools/serve.py",
+        "8124"
+      ],
+      "port": 8124
     }
   ]
 }
