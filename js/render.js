@@ -711,7 +711,8 @@ PF.Render = (() => {
    * ("Ana + Luis"); sin ninguno, "CPU". Fuera de línea: los de names (TÚ / CPU).
    */
   function teamLabel(m, team, names) {
-    if (!m.online) return (m.teamNames && m.teamNames[team]) || names[team];
+    if (m.teamNames && m.teamNames[team]) return m.teamNames[team];   // historia y torneos
+    if (!m.online) return names[team];
     const who = m.humans.filter((h) => h.team === team && !h.gone && h.name).map((h) => h.name);
     return who.length ? who.join(' + ') : names[1];
   }

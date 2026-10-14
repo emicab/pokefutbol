@@ -582,3 +582,34 @@ input.code {
 /* torneo cooperativo */
 .modechips { margin-top: 6px; flex-wrap: wrap; }
 .tcoop { font-size: 12px; color: var(--muted); max-width: 200px; }
+
+/* título: modos en tarjetas */
+.modegrid { display: grid; grid-template-columns: repeat(4, 250px); gap: 16px; margin: 6px 0 2px; }
+.modecard {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px 12px 14px; font: inherit; color: var(--text);
+  border: 3px solid var(--edge); border-radius: 12px; cursor: pointer; text-align: center;
+  box-shadow: 0 5px 0 var(--ink); transition: transform 0.08s, filter 0.08s;
+}
+.modecard i { font-style: normal; font-size: 44px; line-height: 1.1; filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.35)); }
+.modecard b { font-weight: normal; font-size: 27px; text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4); }
+.modecard small { font-size: 14px; line-height: 1.25; color: rgba(255, 255, 255, 0.82); min-height: 36px; }
+.modecard:hover, .modecard:focus-visible { transform: translateY(-3px); filter: brightness(1.12); }
+.modecard:active { transform: translateY(2px); box-shadow: 0 2px 0 var(--ink); }
+.modecard.play { background: linear-gradient(#e0484d, #a8262b); }
+.modecard.story { background: linear-gradient(#2f8f5a, #1d6a3f); }
+.modecard.tour { background: linear-gradient(#d19a1c, #8f6a0e); }
+.modecard.online { background: linear-gradient(#7a4fc9, #55339a); }
+.subrow { gap: 12px; }
+.controls.hidden { display: none; }
+@media (max-width: 1100px) { .modegrid { grid-template-columns: repeat(2, 250px); } }
+
+/* cuadros de 4 y 16 equipos */
+.bracket.n4 { min-height: 250px; }
+.bracket.n16 { min-height: 480px; gap: 16px; padding: 6px 12px; }
+.bracket.n16 .bt { padding: 1px 8px; font-size: 13px; }
+.bracket.n16 .bl { font-size: 10px; padding: 0; }
+.bracket.n16 .bcol h3 { font-size: 14px; margin-bottom: 2px; }
+.bracket.n16 .bcards { gap: 3px; }
+.bt.hum span { color: #8fd8ff; }
+.subrow .btn { min-width: 150px; white-space: nowrap; }
+.row.subrow { display: flex; flex-direction: row; justify-content: center; align-items: center; width: auto; }

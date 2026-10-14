@@ -41,14 +41,17 @@ PF.UI = (() => {
         <div class="topbar">${coinHTML(PF.Save.data.coins)}</div>
         <div class="logo">Poké<span>Fútbol</span></div>
         <div class="tagline">fútbol de dibujos animados · sin reglas, con rayos</div>
-        <div class="row">
-          <button class="btn big" data-act="play">Partido rápido</button>
-          <button class="btn big story" data-act="career">Modo Historia</button>
-          <button class="btn big tour" data-act="tour">Torneo</button>
-          <button class="btn big online" data-act="online">Online</button>
-          <button class="btn" data-act="opts">Opciones</button>
+        <div class="modegrid">
+          <button class="modecard play" data-act="play"><i>⚽</i><b>Partido rápido</b><small>2, 3 o 5 contra 5 contra la CPU, con reglas especiales</small></button>
+          <button class="modecard story" data-act="career"><i>🗺️</i><b>Modo Historia</b><small>Tu club, los gimnasios, tu rival y la Liga</small></button>
+          <button class="modecard tour" data-act="tour"><i>🏆</i><b>Torneo</b><small>Cuadros de 4 a 16 equipos, series y premios</small></button>
+          <button class="modecard online" data-act="online"><i>🌐</i><b>Online</b><small>Con amigos: partido o torneo, juntos o cada uno con su equipo</small></button>
         </div>
-        <div class="box controls">
+        <div class="row subrow">
+          <button class="btn small" data-act="opts">⚙ Opciones</button>
+          <button class="btn small" data-act="ctrls">⌨ Controles</button>
+        </div>
+        <div class="box controls ${PF.Save.data.stats.played ? 'hidden' : ''}">
           <div><kbd>${K.moveLabel()}</kbd> mover</div>
           <div><kbd>${K.label('pass')}</kbd> pase (mantén: más fuerte) · sin pelota: placaje</div>
           <div><kbd>${K.label('shoot')}</kbd> tiro (mantén para cargar)</div>
@@ -67,6 +70,7 @@ PF.UI = (() => {
     s.querySelector('[data-act=opts]').onclick = onOptions;
     s.querySelector('[data-act=online]').onclick = onOnline;
     s.querySelector('[data-act=tour]').onclick = onTournament;
+    s.querySelector('[data-act=ctrls]').onclick = () => { s.querySelector('.controls').classList.toggle('hidden'); PF.Audio.sfx.click(); };
     root().appendChild(s);
     s.querySelector('button').focus();
   }
@@ -179,8 +183,9 @@ PF.UI = (() => {
             <span class="sp">Final</span>${[[0, 'Normal'], [1, 'Gol de oro'], [3, 'Primero a 3']].map(([v, l]) => btn(r.goal === v, l, 'goal', v, v ? 'Termina cuando alguien llega a ese número de goles' : 'Tiempo reglamentario (y gol de oro si empatan)')).join('')}</div>
           ${tourney ? `<div class="chips"><span>Torneo</span>
             ${mode === 'tournament' ? btn(r.norepeat, 'Sin repetir Pokémon', 'norepeat', 1, 'Cada Pokémon juega una sola vez en todo el torneo: eliges un equipo nuevo en cada cruce') : ''}
-            ${btn(r.legs === 2, 'Ida y vuelta', 'legs', 1, 'Cuartos y semis a dos partidos (resultado global); la final es única')}
-            ${btn(r.rotate, 'Canchas rotativas', 'rotate', 1, 'Una cancha distinta en cada ronda (entre las que tengas)')}</div>` : ''}
+            ${btn(r.rotate, 'Canchas rotativas', 'rotate', 1, 'Una cancha distinta en cada ronda (entre las que tengas)')}</div>
+          <div class="chips"><span>Cuadro</span>${[[4, '4 equipos'], [8, '8 equipos'], [16, '16 equipos']].map(([v, l]) => btn(r.teams === v, l, 'teams', v, 'Cantidad de equipos del torneo (2, 3 o 4 rondas)')).join('')}
+            <span class="sp">Cada cruce</span>${[[1, 'Partido único'], [2, 'Ida y vuelta'], [3, 'Mejor de 3'], [5, 'Mejor de 5']].map(([v, l]) => btn(r.legs === v, l, 'legs', v, v === 2 ? 'Dos partidos con resultado global (la final es única)' : v > 2 ? 'El primero en ganar la mayoría de los partidos pasa' : 'Un solo partido')).join('')}</div>` : ''}
           <div class="rinfo2">${r.goal && tourney && r.legs === 2 ? 'El final "primero a N" no vale en los partidos de ida y vuelta. ' : ''}Con estas reglas puedes usar <b>${avail}</b> Pokémon de los que tienes.</div>
           ${warn}
         </div>
@@ -197,7 +202,8 @@ PF.UI = (() => {
           else if (a === 'pure') set({ pure: !rr.pure });
           else if (a === 'goal') set({ goal: +v });
           else if (a === 'norepeat') set({ norepeat: !rr.norepeat });
-          else if (a === 'legs') set({ legs: rr.legs === 2 ? 1 : 2 });
+          else if (a === 'legs') set({ legs: +v });
+          else if (a === 'teams') set({ teams: +v });
           else if (a === 'rotate') set({ rotate: !rr.rotate });
           else if (a === 'reset') set(Object.assign({}, RU.DEFAULTS));
           else if (a === 'done') onDone();

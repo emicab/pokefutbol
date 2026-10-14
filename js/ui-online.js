@@ -72,12 +72,12 @@ PF.OnlineUI = (() => {
     } else if (st.phase === 'creating' || st.phase === 'joining' || !room) {
       body = `<div class="box netcard wide"><p class="wait">Conectando…</p></div>`;
     } else {
-      const tour = room.mode === 'tour';
+      const tour = room.mode === 'tour' || room.mode === 'cup', cup = room.mode === 'cup';
       const cols = PLACES.filter((pl) => !(tour && pl.id === 'B')).map((pl) => {
         const who = room.members.filter((x) => x.place === pl.id);
         const mine = who.some((x) => x.id === st.me);
-        const cap = pl.id === 'spec' ? '' : ` <small>${who.length}/${room.setup.size}</small>`;
-        const label = tour && pl.id === 'A' ? 'Equipo (todos juntos)' : pl.label;
+        const cap = pl.id === 'spec' ? '' : ` <small>${who.length}/${cup ? 4 : room.setup.size}</small>`;
+        const label = tour && pl.id === 'A' ? (cup ? 'Participantes' : 'Equipo (todos juntos)') : pl.label;
         return `
           <div class="place" style="--pc:${pl.color}">
             <div class="ph">${label}${cap}</div>
@@ -103,9 +103,9 @@ PF.OnlineUI = (() => {
             <div class="codebig ${isHost ? '' : 'small'}">${st.code}</div>
             <div>
               <p class="setupline">${setupLine(room.setup)}</p>
-              <p class="matchline">${tour ? `🏆 Torneo cooperativo: ${room.members.filter((x) => x.place === 'A').length || '—'} jugador(es) contra 7 equipos de la CPU (${DIFF[room.setup.diff] || room.setup.diff})` : matchLine(room)}</p>
+              <p class="matchline">${cup ? `🏆 Torneo: ${room.members.filter((x) => x.place === 'A').length || '—'} participante(s), cada uno con su equipo, contra la CPU (${DIFF[room.setup.diff] || room.setup.diff}). Se juega de a un partido y los demás miran.` : tour ? `🏆 Torneo cooperativo: ${room.members.filter((x) => x.place === 'A').length || '—'} jugador(es) contra la CPU (${DIFF[room.setup.diff] || room.setup.diff})` : matchLine(room)}</p>
               ${tour && room.rules && room.rules.length ? `<p class="tiny">Reglas: ${esc(room.rules.join(' · '))}</p>` : ''}
-              ${isHost ? `<div class="chips modechips"><span>Modo</span><button data-mode="match" class="${tour ? '' : 'on'}">Partido</button><button data-mode="tour" class="${tour ? 'on' : ''}">🏆 Torneo cooperativo</button>${tour ? '<button data-act="rules">⚙ Reglas</button>' : ''}</div>` : ''}
+              ${isHost ? `<div class="chips modechips"><span>Modo</span><button data-mode="match" class="${tour ? '' : 'on'}">Partido</button><button data-mode="tour" class="${room.mode === 'tour' ? 'on' : ''}">🏆 Cooperativo</button><button data-mode="cup" class="${cup ? 'on' : ''}">🏆 Cada uno su equipo</button>${tour ? '<button data-act="rules">⚙ Reglas</button>' : ''}</div>` : ''}
               ${isHost ? '<p class="tiny">Pásales el código. El formato se cambia en «Armar equipo».</p>' : '<p class="tiny">Elige tu lugar, arma tu equipo y márcate listo. El anfitrión empieza el partido.</p>'}
             </div>
           </div>

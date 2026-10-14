@@ -8,6 +8,10 @@ ni build; la música y los sonidos se generan en el navegador.
 
 ## Jugar
 
+El menú inicial tiene cuatro modos (Partido rápido, Modo Historia, Torneo y
+Online) y, debajo, Opciones y Controles (se muestran al empezar y después se
+abren con el botón).
+
 Doble clic en `index.html`, o sirve la carpeta (sin caché, para desarrollar):
 
 ```bash
@@ -334,10 +338,11 @@ súbita, Maratón) y estas opciones, que valen también para los rivales de la C
 - **Fútbol puro:** sin habilidades, sólo pases, tiros y placajes.
 - **Final:** normal, **gol de oro** (el primero que marca gana) o **primero a
   3 goles**.
-- Sólo en el torneo: **sin repetir** (cada Pokémon juega una sola vez en todo el
-  torneo y eliges un equipo nuevo en cada cruce), **ida y vuelta** (cuartos y
-  semis a dos partidos con resultado global; la final es única) y **canchas
-  rotativas** (una distinta por ronda).
+- Sólo en los torneos: **cuadro** de 4, 8 o 16 equipos; **cada cruce** a partido
+  único, ida y vuelta (resultado global; la final es única) o mejor de 3 o 5;
+  **canchas rotativas** (una distinta por ronda) y, en el torneo local, **sin
+  repetir** (cada Pokémon juega una sola vez en todo el torneo y eliges un
+  equipo nuevo en cada cruce).
 
 Los Pokémon que no cumplen quedan apagados en la grilla; si tu equipo no cumple,
 un aviso te dice por qué y puedes quitar los que sobran con un botón.
@@ -346,16 +351,20 @@ un aviso te dice por qué y puedes quitar los que sobran con un botón.
 
 Un torneo local de eliminación directa, con tu equipo del partido rápido:
 
-- **8 equipos:** el tuyo y 7 de la CPU, cada uno de un tipo (Llamas de Canela,
-  Marea Celeste, Sombras de Lavanda…). En Difícil los equipos de la CPU traen
-  Pokémon más evolucionados, como en el partido rápido.
-- **Cuartos, semis y final:** tus partidos se juegan en la cancha, con el
-  formato, el tiempo, la dificultad, el arquero y la cancha que hayas elegido
-  (si empatan, gol de oro). Los demás se resuelven solos según la fuerza de
-  cada equipo, con algo de azar. Ves el cuadro y el rival antes de cada ronda.
+- **4, 8 o 16 equipos:** el tuyo y los de la CPU, cada uno de un tipo (Llamas de
+  Canela, Marea Celeste, Sombras de Lavanda…). Se elige en ⚙ Reglas → **Cuadro**
+  (2, 3 o 4 rondas: octavos, cuartos, semis y final). En Difícil los equipos de
+  la CPU traen Pokémon más evolucionados, como en el partido rápido.
+- **Cada cruce:** también en ⚙ Reglas → **Cada cruce**: partido único, **ida y
+  vuelta** (resultado global; la final es única) o **mejor de 3 / mejor de 5**
+  (pasa el primero en ganar la mayoría de los partidos).
+- **Tus partidos** se juegan en la cancha, con el formato, el tiempo, la
+  dificultad, el arquero y la cancha que hayas elegido (si empatan, gol de oro).
+  Los demás se resuelven solos según la fuerza de cada equipo, con algo de
+  azar. Ves el cuadro y el rival antes de cada ronda.
 - **Premios:** cada partido da sus monedas como siempre, y además se paga la
-  etapa alcanzada: semifinales 50, final 120 y campeón 300 (por la dificultad
-  y el tiempo). Ser campeón se cuenta en tus estadísticas.
+  etapa alcanzada: semifinales 50, final 120 y campeón 300 (por la dificultad,
+  el tiempo y la cantidad de rondas: un cuadro de 16 paga un tercio más). Ser campeón se cuenta en tus estadísticas.
 - **Se guarda:** puedes salir entre partido y partido y seguir después; si
   sales a mitad de un partido, ese partido no cuenta. Si quedas eliminado, el
   torneo se termina solo y ves quién fue el campeón.
@@ -387,12 +396,15 @@ nombre se pone en la sala, y en el marcador cada equipo muestra el nombre de
 sus entrenadores («Ana + Luis»), o «CPU» si no tiene ninguno. Los que miran ven
 el partido en vivo.
 
-### Torneo cooperativo
+### Torneos online
 
-En la sala, el anfitrión puede cambiar el **Modo** de «Partido» a **🏆 Torneo
-cooperativo**: todos los que juegan van **en el mismo equipo** (cada uno maneja
-un Pokémon, el resto lo cubre la CPU) y enfrentan a los 7 equipos de la CPU del
-cuadro del torneo (cuartos, semis y final).
+En la sala, el anfitrión cambia el **Modo** de «Partido» a uno de los dos
+torneos (con el mismo cuadro de 4, 8 o 16 equipos y las mismas series que el
+torneo local). Con ⚙ Reglas elige las reglas especiales, el cuadro y la serie.
+
+**🏆 Cooperativo:** todos los que juegan van **en el mismo equipo** (cada uno
+maneja un Pokémon, el resto lo cubre la CPU) y enfrentan a los equipos de la
+CPU del cuadro.
 
 - El anfitrión lleva el cuadro y manda una copia a todos: cada uno ve el
   cuadro, el rival de la ronda y los resultados. Sólo el anfitrión toca «Jugar»;
@@ -406,6 +418,19 @@ cuadro del torneo (cuartos, semis y final).
   suma la copa si ganan. Quien entra con el torneo en marcha lo ve desde afuera.
 - El cuadro vive en el anfitrión: no se guarda. Si él cierra o termina el
   torneo, todos vuelven a la sala.
+
+**🏆 Cada uno su equipo:** hasta 4 participantes, cada uno con **su propio
+equipo** (el de su «Armar equipo», con las reglas aplicadas), en el mismo
+cuadro con equipos de la CPU.
+
+- El motor online hace **un partido a la vez**: los cruces con humanos se juegan
+  en cola (las idas antes que las vueltas, y las series partido a partido) y
+  los demás **miran** ese partido. El cuadro muestra quién juega ahora.
+- Si dos participantes se cruzan, juegan entre sí; los cruces de CPU contra CPU
+  se resuelven al terminar los de humanos de la ronda.
+- Cada uno cobra los premios de su equipo según hasta dónde llegó (el campeón
+  300, el finalista 120, el que cae en semis 50) cuando termina el torneo.
+- Si un participante se va, su equipo pasa a la CPU.
 
 Cómo funciona: el anfitrión corre el partido y los demás le mandan sus teclas
 y reciben el estado en cada paso, así que **los invitados juegan con un poco

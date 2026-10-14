@@ -98,20 +98,20 @@
   }
 
   /** Monedas por el partido y retos cumplidos. Devuelve el detalle para la pantalla. */
-  function reward(m, setup = PF.Save.data.setup) {
+  function reward(m, setup = PF.Save.data.setup, team = 0) {
     const save = PF.Save.data;
     const mult = { easy: 0.6, normal: 1, hard: 1.6 }[setup.diff] * (setup.time / 120) ** 0.5;
     const lines = [];
     lines.push(['Partido jugado', 30]);
-    if (m.winner === 0) lines.push(['Victoria', 70]);
+    if (m.winner === team) lines.push(['Victoria', 70]);
     else if (m.winner === -1) lines.push(['Empate', 30]);
-    if (m.score[0]) lines.push([`Goles (${m.score[0]})`, 10 * m.score[0]]);
-    if (m.winner === 0 && m.score[1] === 0) lines.push(['Valla invicta', 25]);
+    if (m.score[team]) lines.push([`Goles (${m.score[team]})`, 10 * m.score[team]]);
+    if (m.winner === team && m.score[1 - team] === 0) lines.push(['Valla invicta', 25]);
     for (const l of lines) l[1] = Math.round(l[1] * mult);
     const coins = lines.reduce((s, l) => s + l[1], 0);
     save.coins += coins;
-    countPlays(m, 0);
-    countStats(m, setup.diff);
+    countPlays(m, team);
+    countStats(m, setup.diff, team);
     const unlocked = checkChallenges();
     PF.Save.save();
     if (coins) PF.Audio.sfx.coin();
@@ -130,13 +130,13 @@
     if (now.length) setTimeout(() => PF.UI.toast(`¡Ya puedes comprar a ${now.map((r) => r.name).join(', ')}!`), 600);
   }
 
-  function countStats(m, diff) {
+  function countStats(m, diff, team = 0) {
     const stats = PF.Save.data.stats;
     stats.played++;
-    stats.goals += m.score[0];
-    if (m.winner === 0) stats.won++;
-    if (m.winner === 0 && diff === 'hard') stats.hardWins++;
-    if (m.winner === 0 && m.score[0] - m.score[1] >= 3) stats.bigWins++;
+    stats.goals += m.score[team];
+    if (m.winner === team) stats.won++;
+    if (m.winner === team && diff === 'hard') stats.hardWins++;
+    if (m.winner === team && m.score[team] - m.score[1 - team] >= 3) stats.bigWins++;
   }
 
   function checkChallenges() {
@@ -211,6 +211,7 @@
 
   function tournamentPlay(match) {
     const t = PF.Save.data.tournament;
+    if (!t) return toTitle();   // el torneo ya no existe (pantalla vieja)
     if (TR.needsPick(t, match)) return tournamentPick(t, match);
     tournamentLaunch(match);
   }
@@ -233,13 +234,13 @@
   function tournamentResult(m, match) {
     screen = 'result';
     const t = PF.Save.data.tournament;
-    const leg1 = TR.report(t, match, m) === 'leg1';
-    if (leg1) {
+    const h = TR.humanIdx(t);
+    if (TR.report(t, match, m) === 'next') {
       const rw = reward(m, t);
       PF.Save.save();
       PF.UI.result(m, rw, tournamentHub, null, toTitle, {
-        title: 'Partido de ida',
-        note: `Ida: ${m.score[0]}–${m.score[1]}. Falta la vuelta.`, rematch: 'Ver el cuadro', menu: 'Salir (se guarda)',
+        title: match.bo ? `Partido ${TR.played(match)} de la serie` : 'Partido de ida',
+        note: TR.seriesNote(match, m.score, h), rematch: 'Ver el cuadro', menu: 'Salir (se guarda)',
       });
       return;
     }
@@ -253,10 +254,11 @@
     }
     PF.Save.save();
     const won = m.winner === 0;
-    const global = match.legs === 2 ? ` (global ${m.score[0]}–${m.score[1]})` : '';
+    const sf = TR.winsFor(match, h);
+    const global = match.bo ? ` (serie ${sf[0]}–${sf[1]})` : match.legs === 2 ? ` (global ${m.score[0]}–${m.score[1]})` : '';
     const note = t.champion != null
       ? (TR.standing(t) === 'Campeón' ? '¡Ganaste el torneo!' : `Quedas eliminado en ${String(t.out).toLowerCase()}${global}.`)
-      : won ? `Pasas a ${TR.roundName(t.round).toLowerCase()}${global}.` : '';
+      : won ? `Pasas a ${TR.roundName(t, t.round).toLowerCase()}${global}.` : '';
     PF.UI.result(m, rw, tournamentHub, null, toTitle, {
       title: t.champion != null && TR.standing(t) === 'Campeón' ? '🏆 ¡Campeón!' : undefined,
       note, rematch: 'Ver el cuadro', menu: 'Salir (se guarda)',
@@ -484,6 +486,7 @@
   /** Manda a todos cómo está la sala (y la redibuja acá). */
   function startFromLobby() {
     if (online.room.mode === 'tour') startCoop();
+    else if (online.room.mode === 'cup') startCup();
     else startOnlineHost(false);
   }
   function pushRoom() {
@@ -515,11 +518,11 @@
   function tryPlace(id, place) {
     const room = online.room, mb = room.members.find((x) => x.id === id);
     if (!mb || !['A', 'B', 'spec'].includes(place) || mb.place === place) return;
-    if (room.mode === 'tour' && place === 'B') return;   // en el torneo cooperativo todos van juntos
+    if (room.mode !== 'match' && place === 'B') return;   // en los torneos no hay equipo B
     if (place !== 'spec') {
       const playing = room.members.filter((x) => x !== mb && x.place !== 'spec').length;
       const there = room.members.filter((x) => x !== mb && x.place === place).length;
-      if (playing >= MAX_PLAYERS || there >= room.setup.size) {
+      if (playing >= MAX_PLAYERS || there >= (room.mode === 'cup' ? MAX_PLAYERS : room.setup.size)) {
         if (id === 'host') PF.UI.toast('No hay lugar ahí.'); else N.sendTo(id, { t: 'nope', text: 'No hay lugar ahí.' });
         return;
       }
@@ -688,7 +691,7 @@
       for (const id of online.humanIds) if (id !== 'host') online.inbufs[id] = N.makeInputBuffer();
       online.pack = N.makeSync();
     }
-    current = { cfg, onEnd: cfg.tour ? coopResult : onlineResult, quit: { label: 'Abandonar', fn: leaveOnline } };
+    current = { cfg, onEnd: cfg.cup ? cupResult : cfg.tour ? coopResult : onlineResult, quit: { label: 'Abandonar', fn: leaveOnline } };
     screen = 'match';
     PF.UI.clear();
     PF.Audio.music('match');
@@ -706,11 +709,11 @@
     if (N.role !== 'host' || !online || !online.room) return;
     const room = online.room;
     room.mode = mode;
-    if (mode === 'tour') {
-      // todos juntos: los del B pasan al A si hay lugar, y si no, a mirar
+    if (mode !== 'match') {
+      // en los torneos todos van en el A (juntos, o cada uno con su equipo); si no hay lugar, a mirar
       for (const mb of room.members) if (mb.place === 'B') mb.place = 'A';
       const a = room.members.filter((x) => x.place === 'A');
-      a.slice(room.setup.size).forEach((x) => { x.place = 'spec'; });
+      a.slice(mode === 'cup' ? MAX_PLAYERS : room.setup.size).forEach((x) => { x.place = 'spec'; });
     }
     room.members.forEach((x) => { x.ready = false; });
     PF.Audio.sfx.click();
@@ -746,7 +749,7 @@
     screen = 'menu';
     online.view = 'bracket';
     const host = N.role === 'host';
-    PF.TournamentUI.bracket(t, { coop: true, guest: !host, onPlay: coopPlay, onMenu: host ? coopBack : leaveOnline, onNew: coopBack, onAbandon: coopBack });
+    PF.TournamentUI.bracket(t, { coop: true, cup: !!t.cup, owner: online.me, guest: !host, onPlay: t.cup ? cupPlay : coopPlay, onMenu: host ? coopBack : leaveOnline, onNew: coopBack, onAbandon: coopBack });
   }
 
   /** Anfitrión: terminar el torneo y volver a la sala (todos vuelven con él). */
@@ -814,10 +817,100 @@
     startOnline(cfg, humanIds.indexOf('host'));
   }
 
+  // ---- torneo online: cada uno con su equipo
+  // Cada jugador lleva su propio equipo (el de su «Armar equipo») en el mismo cuadro con equipos de la CPU. Se
+  // juega de a un partido (el siguiente de la cola) y los demás miran; si dos humanos se cruzan, juegan entre sí.
+  function startCup() {
+    const room = online.room, s = PF.Save.data.setup;
+    room.members[0].picks = myPicks();
+    const players = room.members.filter((x) => x.place === 'A');
+    if (!players.length) { PF.UI.toast('Alguien tiene que estar en el torneo.'); return; }
+    const waiting = players.filter((x) => x.id !== 'host' && !x.ready);
+    if (waiting.length) { PF.UI.toast('Falta que estén listos: ' + waiting.map((x) => x.name).join(', ')); return; }
+    if (PF.Rules.available(coopRules()) < s.size) { PF.UI.toast('Con esas reglas no te alcanzan los Pokémon.'); return; }
+    online.tour = TR.createCup(Object.assign({}, s, { rules: coopRules() }), players.map((x) => ({ id: x.id, name: x.name, picks: x.picks })));
+    online.tourPaid = false;
+    N.send({ t: 'tour', tour: online.tour });
+    showCoopBracket();
+  }
+
+  /** Anfitrión: arma el siguiente partido de la cola. */
+  function cupPlay() {
+    const t = online.tour, room = online.room, s = PF.Save.data.setup, size = t.size, rules = t.rules;
+    const entry = TR.cupNext(t);
+    if (!entry) return;
+    const ms = TR.cupSetup(t, entry), idxs = [ms.e0, ms.e1];
+    const here = (i) => t.teams[i].human && room.members.some((x) => x.id === t.teams[i].owner);   // ¿sigue en la sala?
+    const hum = idxs.map(here);
+    if (!hum[0] && !hum[1]) {   // nadie conectado en ese cruce: se resuelve solo
+      TR.cupSim(t, entry);
+      if (TR.cupAdvance(t)) TR.cupPrizes(t);
+      N.send({ t: 'tour', tour: t });
+      showCoopBracket();
+      return;
+    }
+    const key = (x) => x.id + ':' + x.a;
+    const mem = idxs.map((i) => t.teams[i].members);
+    const formations = [null, null], humans = [], humanIds = [];
+    idxs.forEach((i, team) => {
+      if (!hum[team]) return;
+      humans.push({ team, name: t.teams[i].name });
+      humanIds.push(t.teams[i].owner);
+      if (t.teams[i].owner === 'host') formations[team] = PF.Board.spotsFor(s.spots[size + '-' + s.keeper] || {}, mem[team].slice(0, size).map((p) => N.defOf(key(p))), s.keeper);
+    });
+    const cfg = {
+      size, time: t.time, stadium: TR.stadiumFor(t), keeperMode: t.keeper, flip: Math.random() < 0.5,
+      replays: PF.Save.data.settings.replays,
+      teams: mem.map((m) => m.slice(0, size).map(key)), bench: mem.map((m) => m.slice(size).map(key)),
+      formations, humans, skills: idxs.map((i, team) => (hum[team] ? 'mate' : t.diff)),
+      tour: true, cup: true, pure: rules.pure, goalLimit: ms.leg ? 0 : rules.goal, startScore: ms.startScore, allowDraw: ms.allowDraw,
+      teamNames: idxs.map((i) => t.teams[i].name),
+    };
+    online.cur = { entry, e0: ms.e0 };
+    online.humanIds = humanIds;
+    for (const mb of room.members) if (mb.id !== 'host') N.sendTo(mb.id, { t: 'start', cfg, view: humanIds.indexOf(mb.id) });
+    startOnline(cfg, humanIds.indexOf('host'));
+  }
+
+  /** Fin de un partido del torneo de cada uno con su equipo (anfitrión, jugadores y los que miran). */
+  function cupResult(m) {
+    screen = 'result';
+    online.view = 'result';
+    const host = m.online === 'host', t = online.tour, played = m.humanTeam >= 0;
+    let note = host ? '' : 'Esperando al anfitrión…';
+    let title = played ? undefined : 'Final';
+    if (host) {
+      const { entry, e0 } = online.cur, mm = entry.match;
+      if (TR.cupReport(t, entry, e0, m) === 'next') {
+        title = mm.bo ? `Partido ${TR.played(mm)} de la serie` : 'Partido de ida';
+        note = TR.seriesNote(mm, m.score, e0);
+      } else {
+        const done = TR.cupAdvance(t);
+        if (done) TR.cupPrizes(t);
+        note = done ? `El campeón es ${t.teams[t.champion].name}.` : `${t.teams[mm.w].name} pasa de ronda.`;
+      }
+      N.send({ t: 'tour', tour: t });
+    }
+    const pvp = m.netCfg && m.netCfg.humans.length === 2;
+    const rw = played ? reward(m, pvp ? { diff: 'normal', time: t.time } : t, m.humanTeam) : { coins: 0, lines: [], unlocked: [] };
+    coopPay();
+    PF.UI.result(m, rw, showCoopBracket, null, leaveOnline, { rematch: 'Ver el cuadro', menu: 'Salir', title, note });
+  }
+
   /** Cobra el premio del torneo una sola vez (los que jugaron). */
   function coopPay() {
     const t = online && online.tour;
-    if (!t || online.tourPaid || !online.tourPlayed || t.champion == null) return;
+    if (t && t.cup && !online.tourPaid && t.champion != null) {   // cada uno cobra por su equipo
+      const i = t.teams.findIndex((x) => x.owner === online.me);
+      if (i < 0) return;
+      online.tourPaid = true;
+      const prize = (t.prizes || {})[i] || 0;
+      if (prize) { PF.Save.data.coins += prize; PF.UI.toast(`Premio del torneo: +${prize} monedas.`); PF.Audio.sfx.coin(); }
+      if (t.champion === i) PF.Save.data.stats.cups++;
+      PF.Save.save();
+      return;
+    }
+    if (!t || t.cup || online.tourPaid || !online.tourPlayed || t.champion == null) return;
     online.tourPaid = true;
     if (t.prize) { PF.Save.data.coins += t.prize; PF.UI.toast(`Premio del torneo: +${t.prize} monedas.`); PF.Audio.sfx.coin(); }
     if (TR.standing(t) === 'Campeón') PF.Save.data.stats.cups++;
@@ -841,17 +934,18 @@
     let title;
     if (host) {
       const match = TR.myMatch(t);
-      if (TR.report(t, match, m) === 'leg1') {
-        title = 'Partido de ida';
-        note = `Ida: ${m.score[0]}–${m.score[1]}. Falta la vuelta.`;
+      if (TR.report(t, match, m) === 'next') {
+        title = match.bo ? `Partido ${TR.played(match)} de la serie` : 'Partido de ida';
+        note = TR.seriesNote(match, m.score, TR.humanIdx(t));
       } else {
         const finished = TR.advance(t) || !!t.out;
         if (t.out) TR.finishAll(t);
         if (finished || t.champion != null) t.prize = TR.prizeOf(t);
-        const global = match.legs === 2 ? ` (global ${m.score[0]}–${m.score[1]})` : '';
+        const sf = TR.winsFor(match, TR.humanIdx(t));
+        const global = match.bo ? ` (serie ${sf[0]}–${sf[1]})` : match.legs === 2 ? ` (global ${m.score[0]}–${m.score[1]})` : '';
         note = t.champion != null
           ? (TR.standing(t) === 'Campeón' ? '¡Ganaron el torneo!' : `Quedan eliminados en ${String(t.out).toLowerCase()}${global}.`)
-          : m.winner === 0 ? `Pasan a ${TR.roundName(t.round).toLowerCase()}${global}.` : '';
+          : m.winner === 0 ? `Pasan a ${TR.roundName(t, t.round).toLowerCase()}${global}.` : '';
         if (t.champion != null && TR.standing(t) === 'Campeón') title = '🏆 ¡Campeones!';
       }
       N.send({ t: 'tour', tour: t });

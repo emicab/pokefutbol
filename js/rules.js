@@ -8,12 +8,13 @@
  *   pure       fútbol puro: sin habilidades
  *   goal       0 normal · 1 gol de oro (el primero que marca gana) · 3 primero a 3 goles
  *   norepeat   (torneo) cada Pokémon juega una sola vez en todo el torneo
- *   legs       (torneo) 2: cuartos y semis a ida y vuelta
+ *   teams      (torneo) equipos del cuadro: 4, 8 o 16
+ *   legs       (torneo) serie de cada cruce: 1 único · 2 ida y vuelta (menos la final) · 3 o 5: al mejor de 3 o 5
  *   rotate     (torneo) una cancha distinta en cada ronda
  */
 PF.Rules = (() => {
   const U = PF.U;
-  const DEFAULTS = { types: [], tiers: [], distinct: false, cap: 0, pure: false, goal: 0, norepeat: false, legs: 1, rotate: false };
+  const DEFAULTS = { types: [], tiers: [], distinct: false, cap: 0, pure: false, goal: 0, norepeat: false, teams: 8, legs: 1, rotate: false };
   const COST = { f1: 1, f2: 2, f3: 3, strong: 4, elite: 5, legend: 6 };
   const CAP_PER_SLOT = [Infinity, 1.5, 2.5];
   const GOAL_LABEL = { 1: 'Gol de oro', 3: 'Primero a 3' };
@@ -30,7 +31,7 @@ PF.Rules = (() => {
   /** ¿Hay alguna regla puesta? (en el partido rápido; norepeat/legs/rotate son del torneo) */
   const restricts = (r) => r.types.length > 0 || r.tiers.length > 0 || r.distinct || r.cap > 0;
   const isDefault = (r, tournament = true) =>
-    !restricts(r) && !r.pure && !r.goal && !(tournament && (r.norepeat || r.legs === 2 || r.rotate));
+    !restricts(r) && !r.pure && !r.goal && !(tournament && (r.norepeat || r.legs > 1 || r.teams !== 8 || r.rotate));
 
   /** ¿Este Pokémon del plantel cumple los filtros de tipo y fase? */
   function allows(r, rules) {
@@ -100,6 +101,33 @@ PF.Rules = (() => {
     return out;
   }
 
+  /**
+   * Arma el equipo de un jugador con sus elecciones (picks: [{ id, a }]) respetando las reglas: los titulares
+   * (size) que cumplan, el resto al azar si faltan, y hasta benchMax suplentes. Devuelve [{ id, a }] (titulares primero).
+   */
+  function build(picks, size, diff, rules, benchMax = 2) {
+    const out = [], types = new Set(), cap = capOf(rules, size);
+    let spent = 0;
+    for (const p of picks) {
+      const r = PF.rosterById(p.id);
+      if (out.length >= size) break;
+      if (!r || out.some((q) => q.id === p.id) || !allows(r, rules)) continue;
+      if (rules.distinct && PF.typesOf(r).some((t) => types.has(t))) continue;
+      if (spent + cost(r) > cap) continue;
+      PF.typesOf(r).forEach((t) => types.add(t));
+      spent += cost(r);
+      out.push({ id: p.id, a: p.a || 0 });
+    }
+    for (const r of fill(size, size, diff, rules, out.map((q) => PF.rosterById(q.id)))) out.push({ id: r.id, a: 0 });
+    let bench = 0;
+    for (const p of picks) {
+      const r = PF.rosterById(p.id);
+      if (bench >= benchMax) break;
+      if (r && !out.some((q) => q.id === p.id) && allows(r, rules)) { out.push({ id: p.id, a: p.a || 0 }); bench++; }
+    }
+    return out;
+  }
+
   /** Cuántos Pokémon (de los que tienes) pueden jugar con estas reglas. */
   const available = (rules) => PF.ROSTER.filter((r) => PF.isUnlocked(r) && allows(r, rules)).length;
 
@@ -114,7 +142,9 @@ PF.Rules = (() => {
     if (rules.goal) out.push(GOAL_LABEL[rules.goal]);
     if (tournament) {
       if (rules.norepeat) out.push('Sin repetir');
+      if (rules.teams !== 8) out.push(`${rules.teams} equipos`);
       if (rules.legs === 2) out.push('Ida y vuelta');
+      if (rules.legs === 3 || rules.legs === 5) out.push(`Mejor de ${rules.legs}`);
       if (rules.rotate) out.push('Canchas rotativas');
     }
     return out;
@@ -132,5 +162,5 @@ PF.Rules = (() => {
     { name: 'Maratón', desc: 'Sin repetir + ida y vuelta', rules: { norepeat: true, legs: 2 } },
   ];
 
-  return { DEFAULTS, COST, GOAL_LABEL, PRESETS, get, restricts, isDefault, allows, whyNot, cost, capOf, teamError, fill, available, summary };
+  return { DEFAULTS, COST, GOAL_LABEL, PRESETS, get, restricts, isDefault, allows, whyNot, cost, capOf, teamError, fill, build, available, summary };
 })();
