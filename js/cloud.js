@@ -12,8 +12,8 @@
  * (sonido, teclas) no viajan. Lo local (código, versión sincronizada) vive en 'pokefutbol.cloud'.
  */
 PF.Cloud = (() => {
-  const URL = 'https://rqnxbulzkvedumhqxogv.supabase.co';
-  const KEY = 'sb_publishable_ykynhlhMJ3oWXGjyge102w_Hm72wBDC';
+  const URL = 'https://vmotmiapscyldrlxuukl.supabase.co';
+  const KEY = 'sb_publishable_mpcvqnZDGVdw0wO0_zR-Lg_w6V4Jvb5';
   const STORE = 'pokefutbol.cloud';
   const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const CODE_LEN = 16;
