@@ -44,11 +44,11 @@
   }
 
   /**
-   * cfg: { size, teams, bench?, formations?, keeperMode, stadium, time, diff, mods? }
-   * onEnd(match) al terminar; quit = { label, fn } para la pausa.
+   * cfg: { size, teams, bench?, formations?, keeperMode, stadium, time, diff, mods?, ranked? }
+   * onEnd(match) al terminar; quit = { label, fn } para la pausa. ranked: el partido cuenta para el ranking.
    */
   function playMatch(cfg, onEnd, quit) {
-    current = { cfg, onEnd, quit };
+    current = { cfg, onEnd, quit, reported: false };
     const st = PF.Save.data.settings;
     PF.configureField(cfg.size);
     match = PF.Match.create({
@@ -64,7 +64,28 @@
     PF.Audio.setAmbience(1);
   }
 
-  function restartMatch() { playMatch(current.cfg, current.onEnd, current.quit); }
+  function restartMatch() { abandonRanked(); playMatch(current.cfg, current.onEnd, current.quit); }
+
+  // ---------------------------------------------------------------- ranking
+  /** Manda el partido al ranking (una vez). Devuelve lo que sumó, o null si no cuenta. */
+  function rankReport(m, abandon = false) {
+    const cfg = current && current.cfg;
+    if (!cfg || !cfg.ranked || current.reported || !PF.Ranking) return null;
+    current.reported = true;
+    const start = cfg.startScore || [0, 0];   // vuelta de un cruce: sólo los goles de este partido
+    return PF.Ranking.report({
+      size: cfg.size, diff: cfg.diff, lineup: cfg.teams[0].map((d) => d.id),
+      gf: m.score[0] - start[0], ga: m.score[1] - start[1], abandon,
+    });
+  }
+  /** Salir o reiniciar un partido ya empezado (30 s o más) cuenta como derrota. */
+  function abandonRanked() {
+    if (match && !match.demo && match.state !== 'end' && match.totalTime - match.time >= 30) rankReport(match, true);
+  }
+  function toRanking() {
+    toMenu();
+    PF.Ranking.screen(toTitle);
+  }
 
   // ---------------------------------------------------------------- partido rápido
   /**
@@ -93,7 +114,7 @@
       teams: [mine, rival.slice(0, setup.size)],
       bench: [bench, rival.slice(setup.size)],
       formations: [PF.Board.spotsFor(setup.spots[key], mine, setup.keeper), null],
-      pure: rules.pure, goalLimit: rules.goal,
+      pure: rules.pure, goalLimit: rules.goal, ranked: true,
     }, quickResult, { label: 'Salir al menú', fn: toTitle });
   }
 
@@ -152,7 +173,8 @@
 
   function quickResult(m) {
     screen = 'result';
-    PF.UI.result(m, reward(m), restartMatch, toSelect, toTitle);
+    const rank = rankReport(m);
+    PF.UI.result(m, reward(m), restartMatch, toSelect, toTitle, { rank, onRanking: toRanking });
   }
 
   // ---------------------------------------------------------------- torneo local
@@ -227,7 +249,7 @@
       formations: [PF.Board.spotsFor(setup.spots[key], s.mine, t.keeper), null],
       teamNames: ['TÚ', s.rival.name],
       pure: t.rules.pure, goalLimit: s.leg ? 0 : t.rules.goal,
-      startScore: s.startScore, allowDraw: s.allowDraw,
+      startScore: s.startScore, allowDraw: s.allowDraw, ranked: true,
     }, (m) => tournamentResult(m, match), { label: 'Volver al torneo (el partido no cuenta)', fn: tournamentHub });
   }
 
@@ -235,12 +257,13 @@
     screen = 'result';
     const t = PF.Save.data.tournament;
     const h = TR.humanIdx(t);
+    const rank = rankReport(m);
     if (TR.report(t, match, m) === 'next') {
       const rw = reward(m, t);
       PF.Save.save();
       PF.UI.result(m, rw, tournamentHub, null, toTitle, {
         title: match.bo ? `Partido ${TR.played(match)} de la serie` : 'Partido de ida',
-        note: TR.seriesNote(match, m.score, h), rematch: 'Ver el cuadro', menu: 'Salir (se guarda)',
+        note: TR.seriesNote(match, m.score, h), rematch: 'Ver el cuadro', menu: 'Salir (se guarda)', rank, onRanking: toRanking,
       });
       return;
     }
@@ -261,7 +284,7 @@
       : won ? `Pasas a ${TR.roundName(t, t.round).toLowerCase()}${global}.` : '';
     PF.UI.result(m, rw, tournamentHub, null, toTitle, {
       title: t.champion != null && TR.standing(t) === 'Campeón' ? '🏆 ¡Campeón!' : undefined,
-      note, rematch: 'Ver el cuadro', menu: 'Salir (se guarda)',
+      note, rematch: 'Ver el cuadro', menu: 'Salir (se guarda)', rank, onRanking: toRanking,
     });
   }
 
@@ -1012,7 +1035,7 @@
   function toTitle() {
     toMenu();
     screen = 'title';
-    PF.UI.title(toSelect, toCareer, toOptions, toOnline, toTournament);
+    PF.UI.title(toSelect, toCareer, toOptions, toOnline, toTournament, toRanking);
   }
 
   function toOptions() {
@@ -1028,7 +1051,7 @@
   function togglePause() {
     if (screen === 'match') {
       screen = 'pause';
-      PF.UI.pause(resume, restartMatch, current.quit.fn, current.quit.label, {
+      PF.UI.pause(resume, restartMatch, () => { abandonRanked(); current.quit.fn(); }, current.quit.label, {
         left: match.subsLeft[0], bench: match.bench[0].length,
         open: () => PF.UI.subs(match, () => { screen = 'match'; togglePause(); }),
       });

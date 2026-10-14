@@ -34,7 +34,7 @@ PF.UI = (() => {
   }
 
   // ---------------------------------------------------------------- título
-  function title(onPlay, onCareer, onOptions, onOnline, onTournament) {
+  function title(onPlay, onCareer, onOptions, onOnline, onTournament, onRanking) {
     clear();
     const s = el(`
       <div class="screen title">
@@ -48,6 +48,7 @@ PF.UI = (() => {
           <button class="modecard online" data-act="online"><i>🌐</i><b>Online</b><small>Con amigos: partido o torneo, juntos o cada uno con su equipo</small></button>
         </div>
         <div class="row subrow">
+          <button class="btn small" data-act="rank">🏅 Ranking</button>
           <button class="btn small" data-act="opts">⚙ Opciones</button>
           <button class="btn small" data-act="ctrls">⌨ Controles</button>
         </div>
@@ -68,6 +69,7 @@ PF.UI = (() => {
     s.querySelector('[data-act=play]').onclick = onPlay;
     s.querySelector('[data-act=career]').onclick = onCareer;
     s.querySelector('[data-act=opts]').onclick = onOptions;
+    s.querySelector('[data-act=rank]').onclick = onRanking;
     s.querySelector('[data-act=online]').onclick = onOnline;
     const badge = s.querySelector('.cloudbadge');
     const showBadge = () => { badge.textContent = PF.Cloud ? PF.Cloud.badge() : ''; };
@@ -678,7 +680,8 @@ PF.UI = (() => {
 
   /** reward: { coins, lines: [[texto, monedas]], unlocked: [nombres] } */
   /**
-   * Botones con callback null no se muestran. extra: { rematch, team, menu } (textos), note.
+   * Botones con callback null no se muestran. extra: { rematch, team, menu } (textos), note,
+   * rank (lo que sumó en el ranking, de PF.Ranking.report) y onRanking (abrir el ranking).
    * Ganar o perder se cuenta desde el equipo de quien mira (m.humanTeam).
    */
   function result(m, reward, onRematch, onTeam, onMenu, extra = {}) {
@@ -696,6 +699,7 @@ PF.UI = (() => {
           </div>` : ''}
           ${reward.unlocked.map((n) => `<div class="new">¡Nuevo Pokémon desbloqueado: <b>${n}</b>!</div>`).join('')}
           ${extra.note ? `<div class="hint">${extra.note}</div>` : ''}
+          ${extra.onRanking && PF.Ranking ? PF.Ranking.resultHtml(extra.rank) : ''}
           ${onRematch ? `<button class="btn big" data-act="rematch">${extra.rematch || 'Revancha'}</button>` : ''}
           ${onTeam ? `<button class="btn" data-act="team">${extra.team || 'Cambiar equipo'}</button>` : ''}
           <button class="btn" data-act="menu">${extra.menu || 'Menú'}</button>
@@ -704,8 +708,10 @@ PF.UI = (() => {
     if (onRematch) s.querySelector('[data-act=rematch]').onclick = onRematch;
     if (onTeam) s.querySelector('[data-act=team]').onclick = onTeam;
     s.querySelector('[data-act=menu]').onclick = onMenu;
+    const rk = s.querySelector('[data-act=ranking]');
+    if (rk) rk.onclick = extra.onRanking;
     root().appendChild(s);
-    s.querySelector('button').focus();
+    (s.querySelector('[data-act=rematch]') || s.querySelector('[data-act=menu]')).focus();
   }
 
   return { clear, title, options, select, rulesScreen, tickPortraits, addPortrait, clearPortraits, addEvolution, pause, subs, result, toast };

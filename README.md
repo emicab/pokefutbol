@@ -169,11 +169,39 @@ Cómo está hecho: la nube es un proyecto de [Supabase](https://supabase.com) co
 una tabla y dos funciones (`tools/supabase.sql`). El servidor guarda sólo el
 SHA-256 del código (nunca el código) y la tabla no se puede leer directamente,
 sólo con `save_get` y `save_put`. La llave que está en `js/cloud.js` es la
-«publishable»: es pública por diseño y sólo permite llamar a esas dos funciones.
-Para usar otro proyecto, aplica `tools/supabase.sql` y cambia `URL` y `KEY`
+«publishable»: es pública por diseño y sólo permite llamar a esas dos funciones (y a las del ranking).
+Para usar otro proyecto, aplica `tools/supabase.sql` (y `tools/supabase-ranking.sql`) y cambia `URL` y `KEY`
 en `js/cloud.js`. Si el plan gratuito del proyecto se pausa por falta de uso o
 se pasa de cuota, la nube deja de responder (el juego sigue funcionando y la
 partida local queda a salvo).
+
+### Ranking
+
+**🏅 Ranking** (en el menú inicial) es una tabla online por modo: **2 vs 2,
+3 vs 3 y 5 vs 5**. Para aparecer hay que **inscribir un nombre de equipo**
+(de 3 a 20 letras, único; se puede cambiar cuando quieras). Desde ahí cuentan
+los partidos contra la CPU del **partido rápido** y del **torneo** (no el modo
+historia ni el online):
+
+| Resultado | Puntos | × dificultad |
+|---|---|---|
+| Victoria | 3 | Fácil ×1 · Normal ×2 · Difícil ×3 |
+| Empate (torneo) | 1 | |
+| Derrota | 0 | |
+
+Salir o reiniciar un partido que ya lleva 30 s o más cuenta como derrota. Cada
+fila muestra los puntos, partidos jugados, ganados, perdidos y goles del modo,
+y **el equipo (los titulares) con el que más puntos sumaste**, con sus propios
+puntos y G-P. Al terminar un partido, el resultado dice cuánto sumaste; sin
+conexión, los partidos esperan en el dispositivo y se mandan después.
+
+La inscripción queda guardada en tu partida (viaja con la nube y con los
+archivos) y no se pierde al borrar el progreso. Cómo está hecho: dos tablas y
+tres funciones más en el mismo proyecto de Supabase (`tools/supabase-ranking.sql`):
+`rank_register`, `rank_report` (calcula los puntos en el servidor, ignora
+reportes repetidos y deja mandar ~1 partido cada 45 s) y `rank_top` (los 50
+primeros y tu puesto). Como el juego corre en el navegador, el ranking no es a
+prueba de trampas: es para jugar entre amigos.
 
 ### Energía, vida y cambios
 
@@ -554,6 +582,7 @@ js/net.js         online: conexión (PeerJS), sincronización del estado, teclas
 js/ui-online.js   sala online (equipos A/B y espectadores) y menú durante el partido
 js/cloud.js       guardado en la nube (código secreto, sincronización y conflictos)
 js/ui-cloud.js    pantalla «Partida en la nube» y exportar / importar archivo
+js/ranking.js     ranking online por modo: inscripción, envío de resultados y pantalla
 js/main.js        bucle a 60 Hz fijo, flujo de pantallas, online y premios
 tools/import_pokemon.py   copia sprites desde PokéSurvivor y regenera metadatos, Pokédex y créditos
 tools/serve.py            servidor local sin caché

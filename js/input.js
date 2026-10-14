@@ -28,7 +28,7 @@ PF.Input = (() => {
   const ACTIONS = [
     ['up', 'Arriba'], ['down', 'Abajo'], ['left', 'Izquierda'], ['right', 'Derecha'],
     ['pass', 'Pase (mantén = más fuerte) · placaje'], ['shoot', 'Tiro (mantén para cargar)'],
-    ['ability', 'Habilidad'], ['press', 'Presionar (máx. 2 s, se enfría)'], ['swap', 'Cambiar de Pokémon'],
+    ['ability', 'Habilidad'], ['press', 'Presionar (máx. 2 s, se enfría) · con pelota: amago'], ['swap', 'Cambiar de Pokémon'],
     ['order', 'Orden al equipo'], ['subs', 'Cambios'], ['quick', 'Cambio rápido (K.O. o agotado)'], ['pause', 'Pausa'], ['mute', 'Silencio'],
   ];
   // Mando estándar: A pase/placaje · B tiro · Y o RB habilidad · X presionar · LB cambiar
@@ -106,7 +106,8 @@ PF.Input = (() => {
       fn(e.code);
       return;
     }
-    if (GAME_KEYS.has(e.code) && !(e.target instanceof HTMLInputElement)) e.preventDefault();
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;   // escribiendo (nombre, código): no son teclas del juego
+    if (GAME_KEYS.has(e.code)) e.preventDefault();
     if (!down.has(e.code)) pressed.add(e.code);
     down.add(e.code);
   });

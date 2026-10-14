@@ -20,6 +20,7 @@ PF.Save = (() => {
     setup: { size: 2, time: 120, diff: 'normal', stadium: 'estadio', picks: [], abil: {}, keeper: 'dynamic', spots: {}, rules: {} },
     career: null,                 // modo historia (career.js)
     tournament: null,             // torneo local en curso (tournament.js)
+    rank: null,                   // { id, name }: inscripción en el ranking (ranking.js); el id es secreto
   });
 
   /** Un guardado cualquiera (de localStorage, de un archivo o de la nube) → uno válido, con lo que falte por defecto. */
@@ -38,6 +39,7 @@ PF.Save = (() => {
       setup: Object.assign(d.setup, s.setup),
       career: s.career && Array.isArray(s.career.club) ? s.career : null,
       tournament: s.tournament && Array.isArray(s.tournament.teams) && Array.isArray(s.tournament.rounds) ? s.tournament : null,
+      rank: s.rank && typeof s.rank.id === 'string' && typeof s.rank.name === 'string' ? { id: s.rank.id, name: s.rank.name } : null,
     };
   }
 
@@ -89,7 +91,9 @@ PF.Save = (() => {
 
   function reset() {
     if (PF.Cloud) PF.Cloud.pause();   // borrar el progreso no pisa la copia de la nube
+    const rank = data.rank;           // la inscripción en el ranking queda (el nombre del equipo es tuyo)
     data = defaults();
+    data.rank = rank;
     save();
   }
 
@@ -109,6 +113,7 @@ PF.Save = (() => {
     try {
       const next = fromRaw(JSON.parse(JSON.stringify(obj)));
       next.settings = data.settings;
+      if (!next.rank) next.rank = data.rank;   // una partida sin ranking no te borra la inscripción
       data = next;
       save();
       return { ok: true };

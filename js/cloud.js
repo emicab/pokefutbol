@@ -251,5 +251,5 @@ PF.Cloud = (() => {
     else check();
   });
 
-  return { URL, normalize, format, touch, push, check, start, enable, lookup, adopt, resolve, disconnect, pause, info, badge, onChange };
+  return { URL, rpc, nice, normalize, format, touch, push, check, start, enable, lookup, adopt, resolve, disconnect, pause, info, badge, onChange };
 })();
