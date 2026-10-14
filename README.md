@@ -387,6 +387,26 @@ nombre se pone en la sala, y en el marcador cada equipo muestra el nombre de
 sus entrenadores («Ana + Luis»), o «CPU» si no tiene ninguno. Los que miran ven
 el partido en vivo.
 
+### Torneo cooperativo
+
+En la sala, el anfitrión puede cambiar el **Modo** de «Partido» a **🏆 Torneo
+cooperativo**: todos los que juegan van **en el mismo equipo** (cada uno maneja
+un Pokémon, el resto lo cubre la CPU) y enfrentan a los 7 equipos de la CPU del
+cuadro del torneo (cuartos, semis y final).
+
+- El anfitrión lleva el cuadro y manda una copia a todos: cada uno ve el
+  cuadro, el rival de la ronda y los resultados. Sólo el anfitrión toca «Jugar»;
+  los invitados arrancan solos el partido, como siempre.
+- El equipo de cada ronda se arma con la parte de Pokémon de cada jugador.
+- Las **reglas especiales** (botón ⚙ Reglas del modo; tipos, fases, tipos
+  distintos, presupuesto, fútbol puro, gol de oro, ida y vuelta, canchas
+  rotativas) valen para todos; «sin repetir» no está en este modo.
+- Cada jugador cobra por su cuenta las monedas de cada partido y el premio del
+  torneo (semifinales 50, final 120, campeón 300, según dificultad y tiempo), y
+  suma la copa si ganan. Quien entra con el torneo en marcha lo ve desde afuera.
+- El cuadro vive en el anfitrión: no se guarda. Si él cierra o termina el
+  torneo, todos vuelven a la sala.
+
 Cómo funciona: el anfitrión corre el partido y los demás le mandan sus teclas
 y reciben el estado en cada paso, así que **los invitados juegan con un poco
 de retraso** según la conexión. El anfitrión tiene que dejar la ventana del

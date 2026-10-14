@@ -15,7 +15,10 @@ PF.TournamentUI = (() => {
     return `<span class="tmini" style="--tc:${r.color}"><canvas width="56" height="48" data-dex="${r.dex}" data-sc="0.7"></canvas><small>${r.name}</small></span>`;
   }).join('');
 
-  /** h = { onPlay(match), onMenu(), onAbandon(), onNew() } */
+  /**
+   * h = { onPlay(match), onMenu(), onAbandon(), onNew() }
+   * Cooperativo online: h.coop = true; h.guest = true si no eres el anfitrión (sólo mira el cuadro).
+   */
   function bracket(t, h) {
     const mine = T().humanIdx(t), next = T().myMatch(t), stand = T().standing(t);
     const done = t.champion != null;
@@ -34,14 +37,14 @@ PF.TournamentUI = (() => {
     let banner = '';
     if (done) {
       banner = stand === 'Campeón'
-        ? `<div class="tbanner win">🏆 ¡Eres el campeón del torneo! <b>+${t.prize}</b> monedas</div>`
-        : `<div class="tbanner">Quedaste eliminado en ${String(stand).toLowerCase()}. El campeón fue <b>${t.teams[t.champion].name}</b>.${t.prize ? ` Premio: <b>+${t.prize}</b> monedas.` : ''}</div>`;
+        ? `<div class="tbanner win">🏆 ${h.coop ? '¡Son los campeones del torneo!' : '¡Eres el campeón del torneo!'} <b>+${t.prize}</b> monedas</div>`
+        : `<div class="tbanner">${h.coop ? 'Quedaron eliminados' : 'Quedaste eliminado'} en ${String(stand).toLowerCase()}. El campeón fue <b>${t.teams[t.champion].name}</b>.${t.prize ? ` Premio: <b>+${t.prize}</b> monedas.` : ''}</div>`;
     }
     let rival = '';
     if (next) {
       const s = T().matchSetup(t, next);
       rival = `<div class="trival box">
-        <div><b>Tu equipo</b><div class="tminis">${minis(t.teams[mine].members.slice(0, t.size))}</div></div>
+        <div><b>${h.coop ? (t.coop ? t.coop.names.join(' + ') : 'Equipo') : 'Tu equipo'}</b><div class="tminis">${h.coop ? '<span class="tcoop">el equipo se arma con los Pokémon de cada uno</span>' : minis(t.teams[mine].members.slice(0, t.size))}</div></div>
         <div class="tvs">VS</div>
         <div><b>${s.rival.name}</b><div class="tminis">${minis(s.rival.members.slice(0, t.size))}</div></div>
       </div>`;
@@ -51,7 +54,7 @@ PF.TournamentUI = (() => {
     const s = el(`
       <div class="screen tour">
         <div class="selhead">
-          <h2>🏆 Torneo</h2>
+          <h2>🏆 Torneo${h.coop ? ' cooperativo' : ''}</h2>
           <div class="rsub">${t.size} vs ${t.size} · ${t.time / 60 >= 1 ? t.time / 60 + ' min' : t.time + ' s'} · ${diffES}${rulesTxt ? ' · ' + rulesTxt : ''}</div>
           <span class="coins"><i class="coin"></i>${PF.Save.data.coins}</span>
         </div>
@@ -59,7 +62,13 @@ PF.TournamentUI = (() => {
         ${banner}
         ${rival}
         <div class="row">
-          ${done
+          ${h.coop
+            ? (h.guest
+              ? `<button class="btn" data-act="menu">Salir de la sala</button><span class="wait">${done ? 'Terminó el torneo.' : 'Esperando al anfitrión…'}</span>`
+              : done
+                ? '<button class="btn big" data-act="menu">Volver a la sala</button>'
+                : `<button class="btn" data-act="menu">Terminar y volver a la sala</button><button class="btn big" data-act="play">${next && next.l1 ? '¡Jugar la vuelta!' : `¡Jugar ${T().ROUNDS[t.round].toLowerCase()}!`}</button>`)
+            : done
             ? '<button class="btn" data-act="menu">Menú</button><button class="btn big" data-act="new">Nuevo torneo</button>'
             : `<button class="btn danger" data-act="quit">Abandonar torneo</button><button class="btn" data-act="menu">Salir (se guarda)</button><button class="btn big" data-act="play">${next && t.rules.norepeat && !next.l1 ? 'Elegir equipo' : next && next.l1 ? '¡Jugar la vuelta!' : `¡Jugar ${T().ROUNDS[t.round].toLowerCase()}!`}</button>`}
         </div>

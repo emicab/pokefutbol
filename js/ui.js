@@ -149,7 +149,7 @@ PF.UI = (() => {
   /** Pantalla de reglas especiales (mode: 'quick' o 'tournament'); las cambia en setup.rules y llama a onDone. */
   function rulesScreen(mode, onDone) {
     clear();
-    const setup = PF.Save.data.setup, RU = PF.Rules, tourney = mode === 'tournament';
+    const setup = PF.Save.data.setup, RU = PF.Rules, tourney = mode === 'tournament' || mode === 'coop';
     if (!setup.rules) setup.rules = {};
     const cur = () => RU.get(setup);
     const flip = (list, v) => (list.includes(v) ? list.filter((x) => x !== v) : list.concat(v));
@@ -161,10 +161,11 @@ PF.UI = (() => {
     function draw() {
       const r = cur();
       const avail = RU.available(r);
-      const need = tourney && r.norepeat ? setup.size * 3 : setup.size;
-      const warn = avail < need ? `<div class="rwarn">Con estas reglas tienes ${avail} Pokémon y hacen falta ${need}${tourney && r.norepeat ? ' (3 equipos distintos)' : ''}.</div>` : '';
+      const norep = mode === 'tournament' && r.norepeat;
+      const need = norep ? setup.size * 3 : setup.size;
+      const warn = avail < need ? `<div class="rwarn">Con estas reglas tienes ${avail} Pokémon y hacen falta ${need}${norep ? ' (3 equipos distintos)' : ''}.</div>` : '';
       s.innerHTML = `
-        <div class="selhead"><h2>Reglas ${tourney ? 'del torneo' : 'del partido'}</h2></div>
+        <div class="selhead"><h2>Reglas ${mode === 'coop' ? 'del torneo cooperativo' : tourney ? 'del torneo' : 'del partido'}</h2></div>
         <div class="box rbox">
           <div class="rpresets">${RU.PRESETS.map((p, i) => `<button class="btn small" data-act="preset" data-v="${i}" title="${p.desc || 'Sin reglas especiales'}">${p.name}</button>`).join('')}</div>
           <div class="chips rtypes"><span>Tipos</span>${typeIds.map((t) => btn(r.types.includes(t), PF.TYPE_ES[t], 'type', t)).join('')}<em>${r.types.length ? '' : 'todos'}</em></div>
@@ -177,7 +178,7 @@ PF.UI = (() => {
             ${btn(r.pure, 'Fútbol puro (sin habilidades)', 'pure', 1)}
             <span class="sp">Final</span>${[[0, 'Normal'], [1, 'Gol de oro'], [3, 'Primero a 3']].map(([v, l]) => btn(r.goal === v, l, 'goal', v, v ? 'Termina cuando alguien llega a ese número de goles' : 'Tiempo reglamentario (y gol de oro si empatan)')).join('')}</div>
           ${tourney ? `<div class="chips"><span>Torneo</span>
-            ${btn(r.norepeat, 'Sin repetir Pokémon', 'norepeat', 1, 'Cada Pokémon juega una sola vez en todo el torneo: eliges un equipo nuevo en cada cruce')}
+            ${mode === 'tournament' ? btn(r.norepeat, 'Sin repetir Pokémon', 'norepeat', 1, 'Cada Pokémon juega una sola vez en todo el torneo: eliges un equipo nuevo en cada cruce') : ''}
             ${btn(r.legs === 2, 'Ida y vuelta', 'legs', 1, 'Cuartos y semis a dos partidos (resultado global); la final es única')}
             ${btn(r.rotate, 'Canchas rotativas', 'rotate', 1, 'Una cancha distinta en cada ronda (entre las que tengas)')}</div>` : ''}
           <div class="rinfo2">${r.goal && tourney && r.legs === 2 ? 'El final "primero a N" no vale en los partidos de ida y vuelta. ' : ''}Con estas reglas puedes usar <b>${avail}</b> Pokémon de los que tienes.</div>

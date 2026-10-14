@@ -17,6 +17,7 @@
  *   in     invitado → anfitrión  { i }                 intención de este frame
  *   s      anfitrión → todos     { p, m, b, h, e }     estado (sólo lo que cambió) y eventos
  *   lobby  anfitrión → todos                          volver a la sala
+ *   tour   anfitrión → todos     { tour }              copia del cuadro del torneo cooperativo
  */
 PF.Net = (() => {
   const VERSION = 'pf-net-2';

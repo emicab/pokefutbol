@@ -45,7 +45,7 @@ PF.OnlineUI = (() => {
 
   /**
    * st: { phase: idle|creating|joining|room, code, me, room }
-   * cb: { onHost, onJoin(code), onStart, onTeam, onBack, onPlace(place), onName(name) }
+   * cb: { onHost, onJoin(code), onStart, onTeam, onBack, onPlace(place), onName(name), onMode(mode), onRules }
    */
   function lobby(st, cb) {
     root().innerHTML = '';
@@ -72,13 +72,15 @@ PF.OnlineUI = (() => {
     } else if (st.phase === 'creating' || st.phase === 'joining' || !room) {
       body = `<div class="box netcard wide"><p class="wait">Conectando…</p></div>`;
     } else {
-      const cols = PLACES.map((pl) => {
+      const tour = room.mode === 'tour';
+      const cols = PLACES.filter((pl) => !(tour && pl.id === 'B')).map((pl) => {
         const who = room.members.filter((x) => x.place === pl.id);
         const mine = who.some((x) => x.id === st.me);
         const cap = pl.id === 'spec' ? '' : ` <small>${who.length}/${room.setup.size}</small>`;
+        const label = tour && pl.id === 'A' ? 'Equipo (todos juntos)' : pl.label;
         return `
           <div class="place" style="--pc:${pl.color}">
-            <div class="ph">${pl.label}${cap}</div>
+            <div class="ph">${label}${cap}</div>
             <div class="who">${who.map((x) => `<div class="${x.id === st.me ? 'me' : ''}">${esc(x.name)}${x.host ? ' 👑' : ''}${x.id === st.me ? ' (tú)' : ''}${pl.id !== 'spec' && !x.host ? (x.ready ? ' <span class="rdy">✔ listo</span>' : ' <span class="wt">…</span>') : ''}</div>`).join('') || '<div class="none">—</div>'}</div>
             ${mine ? '' : `<button class="btn small" data-place="${pl.id}">${pl.id === 'spec' ? 'Mirar' : 'Ir acá'}</button>`}
           </div>`;
@@ -89,7 +91,7 @@ PF.OnlineUI = (() => {
       const me = room.members.find((x) => x.id === st.me);
       const canStart = players.length > 0 && !waiting.length;
       const footer = isHost
-        ? `<button class="btn big" data-act="start" ${canStart ? '' : 'disabled'}>¡Empezar!</button>
+        ? `<button class="btn big" data-act="start" ${canStart ? '' : 'disabled'}>${tour ? '¡Empezar el torneo!' : '¡Empezar!'}</button>
            <p class="tiny readyline ${canStart ? 'ok' : ''}">${!players.length ? 'Elijan un equipo para jugar.' : waiting.length ? 'Esperando que estén listos: ' + waiting.map((x) => esc(x.name)).join(', ') : 'Todos listos.'}</p>`
         : me && me.place !== 'spec'
           ? `<button class="btn big ${me.ready ? 'on' : ''}" data-act="ready">${me.ready ? '✔ Listo (tocar para cancelar)' : '¡Estoy listo!'}</button>
@@ -101,7 +103,9 @@ PF.OnlineUI = (() => {
             <div class="codebig ${isHost ? '' : 'small'}">${st.code}</div>
             <div>
               <p class="setupline">${setupLine(room.setup)}</p>
-              <p class="matchline">${matchLine(room)}</p>
+              <p class="matchline">${tour ? `🏆 Torneo cooperativo: ${room.members.filter((x) => x.place === 'A').length || '—'} jugador(es) contra 7 equipos de la CPU (${DIFF[room.setup.diff] || room.setup.diff})` : matchLine(room)}</p>
+              ${tour && room.rules && room.rules.length ? `<p class="tiny">Reglas: ${esc(room.rules.join(' · '))}</p>` : ''}
+              ${isHost ? `<div class="chips modechips"><span>Modo</span><button data-mode="match" class="${tour ? '' : 'on'}">Partido</button><button data-mode="tour" class="${tour ? 'on' : ''}">🏆 Torneo cooperativo</button>${tour ? '<button data-act="rules">⚙ Reglas</button>' : ''}</div>` : ''}
               ${isHost ? '<p class="tiny">Pásales el código. El formato se cambia en «Armar equipo».</p>' : '<p class="tiny">Elige tu lugar, arma tu equipo y márcate listo. El anfitrión empieza el partido.</p>'}
             </div>
           </div>
@@ -138,6 +142,8 @@ PF.OnlineUI = (() => {
       inp.oninput = () => { inp.value = inp.value.toUpperCase(); };
     }
     if (q('[data-act=start]')) q('[data-act=start]').onclick = cb.onStart;
+    s.querySelectorAll('[data-mode]').forEach((b) => { b.onclick = () => cb.onMode(b.dataset.mode); });
+    if (q('[data-act=rules]')) q('[data-act=rules]').onclick = cb.onRules;
     if (q('[data-act=ready]')) q('[data-act=ready]').onclick = cb.onReady;
     s.querySelectorAll('[data-place]').forEach((b) => { b.onclick = () => cb.onPlace(b.dataset.place); });
     root().appendChild(s);

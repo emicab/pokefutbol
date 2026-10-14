@@ -474,16 +474,21 @@
     screen = 'menu';
     online.view = 'lobby';
     PF.OnlineUI.lobby(online, {
-      onHost: hostRoom, onJoin: joinRoom, onStart: () => startOnlineHost(false), onTeam: onlineTeam, onBack: leaveOnline,
-      onPlace: choosePlace, onName: setName, onReady: toggleReady,
+      onHost: hostRoom, onJoin: joinRoom, onStart: startFromLobby, onTeam: onlineTeam, onBack: leaveOnline,
+      onPlace: choosePlace, onName: setName, onReady: toggleReady, onMode: setRoomMode, onRules: coopRulesScreen,
     });
   }
   const redrawLobby = () => { if (online && online.view === 'lobby') drawLobby(); };
 
   // ---- anfitrión
   /** Manda a todos cómo está la sala (y la redibuja acá). */
+  function startFromLobby() {
+    if (online.room.mode === 'tour') startCoop();
+    else startOnlineHost(false);
+  }
   function pushRoom() {
     online.room.setup = roomSetup();
+    online.room.rules = PF.Rules.summary(coopRules(), true);
     N.send({ t: 'room', room: online.room });
     redrawLobby();
   }
@@ -493,12 +498,13 @@
     N.host(
       (code) => {
         Object.assign(online, { phase: 'room', code, me: 'host' });
-        online.room = { code, members: [{ id: 'host', name: myName(), place: 'A', picks: myPicks(), host: true }], setup: roomSetup() };
+        online.room = { code, mode: 'match', members: [{ id: 'host', name: myName(), place: 'A', picks: myPicks(), host: true }], setup: roomSetup() };
         redrawLobby();
       },
       (id) => {
         online.room.members.push({ id, name: 'Invitado', place: 'spec', picks: [], ready: false });
         N.sendTo(id, { t: 'welcome', id });
+        if (online.tour) N.sendTo(id, { t: 'tour', tour: online.tour });   // torneo en curso: lo ve desde afuera
         PF.Audio.sfx.coin();
         pushRoom();
       },
@@ -509,6 +515,7 @@
   function tryPlace(id, place) {
     const room = online.room, mb = room.members.find((x) => x.id === id);
     if (!mb || !['A', 'B', 'spec'].includes(place) || mb.place === place) return;
+    if (room.mode === 'tour' && place === 'B') return;   // en el torneo cooperativo todos van juntos
     if (place !== 'spec') {
       const playing = room.members.filter((x) => x !== mb && x.place !== 'spec').length;
       const there = room.members.filter((x) => x !== mb && x.place === place).length;
@@ -611,7 +618,7 @@
   N.on('start', (msg) => startOnline(msg.cfg, msg.view));
   N.on('in', (msg, from) => { if (online && online.inbufs && online.inbufs[from]) online.inbufs[from].push(msg.i); });
   N.on('s', (msg) => { if (match && match.online === 'guest') N.applySync(match, msg); });
-  N.on('lobby', () => { if (online) toOnline(); });
+  N.on('lobby', () => { if (online) { online.tour = null; toOnline(); } });
 
   /**
    * El anfitrión arma el partido según la sala: en cada equipo con jugadores,
@@ -670,6 +677,7 @@
       humanTeam: view >= 0 ? cfg.humans[view].team : -1,
       time: cfg.time, stadium: cfg.stadium, replays: cfg.replays, flip: cfg.flip,
       skills: cfg.skills.map((k) => PF.AI.SKILLS[k]),
+      score: cfg.startScore, pure: cfg.pure, goalLimit: cfg.goalLimit, allowDraw: cfg.allowDraw, teamNames: cfg.teamNames,
     });
     match.online = N.role === 'host' ? 'host' : 'guest';
     match.netCfg = cfg;
@@ -680,12 +688,177 @@
       for (const id of online.humanIds) if (id !== 'host') online.inbufs[id] = N.makeInputBuffer();
       online.pack = N.makeSync();
     }
-    current = { cfg, onEnd: onlineResult, quit: { label: 'Abandonar', fn: leaveOnline } };
+    current = { cfg, onEnd: cfg.tour ? coopResult : onlineResult, quit: { label: 'Abandonar', fn: leaveOnline } };
     screen = 'match';
     PF.UI.clear();
     PF.Audio.music('match');
     PF.Audio.setAmbience(1);
     if (view < 0) PF.UI.toast('Estás mirando el partido.');
+  }
+
+  // ---- torneo cooperativo
+  // Todos los que juegan van en el mismo equipo (cada uno maneja un Pokémon y lo que falta lo cubre
+  // la CPU) y enfrentan a los 7 equipos de la CPU de un cuadro. El anfitrión lleva el cuadro y manda
+  // una copia a todos ({ t: 'tour', tour }); cada partido es un partido online normal.
+  const coopRules = () => Object.assign({}, PF.Rules.get(PF.Save.data.setup), { norepeat: false });
+
+  function setRoomMode(mode) {
+    if (N.role !== 'host' || !online || !online.room) return;
+    const room = online.room;
+    room.mode = mode;
+    if (mode === 'tour') {
+      // todos juntos: los del B pasan al A si hay lugar, y si no, a mirar
+      for (const mb of room.members) if (mb.place === 'B') mb.place = 'A';
+      const a = room.members.filter((x) => x.place === 'A');
+      a.slice(room.setup.size).forEach((x) => { x.place = 'spec'; });
+    }
+    room.members.forEach((x) => { x.ready = false; });
+    PF.Audio.sfx.click();
+    pushRoom();
+  }
+
+  function coopRulesScreen() {
+    online.view = 'rules';
+    PF.UI.rulesScreen('coop', () => { online.view = 'lobby'; pushRoom(); });
+  }
+
+  /** El anfitrión arma el torneo con los que están en el equipo. */
+  function startCoop() {
+    const room = online.room, s = PF.Save.data.setup;
+    const players = room.members.filter((x) => x.place === 'A');
+    if (!players.length) { PF.UI.toast('Alguien tiene que estar en el equipo.'); return; }
+    const waiting = players.filter((x) => x.id !== 'host' && !x.ready);
+    if (waiting.length) { PF.UI.toast('Falta que estén listos: ' + waiting.map((x) => x.name).join(', ')); return; }
+    const rules = coopRules();
+    if (PF.Rules.available(rules) < s.size) { PF.UI.toast('Con esas reglas no te alcanzan los Pokémon.'); return; }
+    const t = TR.create(Object.assign({}, s, { picks: [], rules }));
+    t.coop = { names: players.map((x) => x.name) };
+    online.tour = t;
+    online.tourPaid = false;
+    online.tourPlayed = false;
+    N.send({ t: 'tour', tour: t });
+    showCoopBracket();
+  }
+
+  function showCoopBracket() {
+    const t = online && online.tour && TR.normalize(online.tour);
+    if (!t) return toOnline();
+    screen = 'menu';
+    online.view = 'bracket';
+    const host = N.role === 'host';
+    PF.TournamentUI.bracket(t, { coop: true, guest: !host, onPlay: coopPlay, onMenu: host ? coopBack : leaveOnline, onNew: coopBack, onAbandon: coopBack });
+  }
+
+  /** Anfitrión: terminar el torneo y volver a la sala (todos vuelven con él). */
+  function coopBack() {
+    online.tour = null;
+    online.room.members.forEach((x) => { x.ready = false; });
+    N.send({ t: 'lobby' });
+    toOnline();
+    pushRoom();
+  }
+
+  /** Anfitrión: arma el equipo con la parte de cada jugador (respetando las reglas) y arranca el partido. */
+  function coopPlay(match) {
+    const t = online.tour, room = online.room, s = PF.Save.data.setup, size = t.size, rules = t.rules;
+    const side = room.members.filter((x) => x.place === 'A');
+    if (!side.length) { PF.UI.toast('Alguien tiene que estar en el equipo.'); return; }
+    const RU = PF.Rules, rid = PF.rosterById;
+    const picks = [], types = new Set(), cap = RU.capOf(rules, size);
+    let spent = 0;
+    const ok = (p) => {
+      const r = rid(p.id);
+      if (!r || picks.some((q) => q.id === p.id) || !RU.allows(r, rules)) return false;
+      if (rules.distinct && PF.typesOf(r).some((x) => types.has(x))) return false;
+      return spent + RU.cost(r) <= cap;
+    };
+    side.forEach((mb, i) => {
+      const share = Math.floor(size / side.length) + (i < size % side.length ? 1 : 0);
+      let n = 0;
+      for (const p of mb.picks) {
+        if (n >= share) break;
+        if (!ok(p)) continue;
+        PF.typesOf(rid(p.id)).forEach((x) => types.add(x));
+        spent += RU.cost(rid(p.id));
+        picks.push(p);
+        n++;
+      }
+    });
+    for (const r of RU.fill(size, size, t.diff, rules, picks.map((p) => rid(p.id)))) picks.push({ id: r.id, a: 0 });
+    const bench = [];
+    for (const mb of side) for (const p of mb.picks) {
+      if (bench.length < 2 && !picks.some((q) => q.id === p.id) && !bench.some((q) => q.id === p.id) && rid(p.id) && RU.allows(rid(p.id), rules)) bench.push(p);
+    }
+    const h = TR.humanIdx(t);
+    t.teams[h].members = picks.concat(bench);
+    t.coop = { names: side.map((x) => x.name) };
+    t.teams[h].name = t.coop.names.join(' + ');
+    const ms = TR.matchSetup(t, match);
+    const key = (x) => x.id + ':' + x.a;
+    const rivalMembers = t.teams[ms.rivalIdx].members;
+    const formations = [null, null];
+    if (side.length === 1 && side[0].id === 'host') formations[0] = PF.Board.spotsFor(s.spots[size + '-' + s.keeper] || {}, picks.map((p) => N.defOf(key(p))), s.keeper);
+    const cfg = {
+      size, time: t.time, stadium: TR.stadiumFor(t), keeperMode: t.keeper, flip: Math.random() < 0.5,
+      replays: PF.Save.data.settings.replays,
+      teams: [picks.map(key), rivalMembers.slice(0, size).map(key)],
+      bench: [bench.map(key), rivalMembers.slice(size).map(key)],
+      formations, humans: side.map((x) => ({ team: 0, name: x.name })), skills: ['mate', t.diff],
+      tour: true, pure: rules.pure, goalLimit: ms.leg ? 0 : rules.goal, startScore: ms.startScore, allowDraw: ms.allowDraw,
+      teamNames: [t.teams[h].name, ms.rival.name],
+    };
+    const humanIds = side.map((x) => x.id);
+    online.humanIds = humanIds;
+    N.send({ t: 'tour', tour: t });
+    for (const mb of room.members) if (mb.id !== 'host') N.sendTo(mb.id, { t: 'start', cfg, view: humanIds.indexOf(mb.id) });
+    startOnline(cfg, humanIds.indexOf('host'));
+  }
+
+  /** Cobra el premio del torneo una sola vez (los que jugaron). */
+  function coopPay() {
+    const t = online && online.tour;
+    if (!t || online.tourPaid || !online.tourPlayed || t.champion == null) return;
+    online.tourPaid = true;
+    if (t.prize) { PF.Save.data.coins += t.prize; PF.UI.toast(`Premio del torneo: +${t.prize} monedas.`); PF.Audio.sfx.coin(); }
+    if (TR.standing(t) === 'Campeón') PF.Save.data.stats.cups++;
+    PF.Save.save();
+  }
+
+  N.on('tour', (msg) => {
+    if (!online || N.role === 'host') return;
+    online.tour = msg.tour;
+    coopPay();
+    if (online.view === 'bracket' || online.view === 'lobby') showCoopBracket();
+  });
+
+  /** Fin de un partido del torneo cooperativo (anfitrión y invitados). */
+  function coopResult(m) {
+    screen = 'result';
+    online.view = 'result';
+    const host = m.online === 'host', t = online.tour, played = m.humanTeam >= 0;
+    if (played) online.tourPlayed = true;
+    let note = host ? '' : 'Esperando al anfitrión…';
+    let title;
+    if (host) {
+      const match = TR.myMatch(t);
+      if (TR.report(t, match, m) === 'leg1') {
+        title = 'Partido de ida';
+        note = `Ida: ${m.score[0]}–${m.score[1]}. Falta la vuelta.`;
+      } else {
+        const finished = TR.advance(t) || !!t.out;
+        if (t.out) TR.finishAll(t);
+        if (finished || t.champion != null) t.prize = TR.prizeOf(t);
+        const global = match.legs === 2 ? ` (global ${m.score[0]}–${m.score[1]})` : '';
+        note = t.champion != null
+          ? (TR.standing(t) === 'Campeón' ? '¡Ganaron el torneo!' : `Quedan eliminados en ${String(t.out).toLowerCase()}${global}.`)
+          : m.winner === 0 ? `Pasan a ${TR.roundName(t.round).toLowerCase()}${global}.` : '';
+        if (t.champion != null && TR.standing(t) === 'Campeón') title = '🏆 ¡Campeones!';
+      }
+      N.send({ t: 'tour', tour: t });
+    }
+    const rw = played ? reward(m, t) : { coins: 0, lines: [], unlocked: [] };
+    coopPay();
+    PF.UI.result(m, rw, showCoopBracket, null, leaveOnline, { rematch: 'Ver el cuadro', menu: 'Salir', title, note });
   }
 
   function onlineReward(m) {
