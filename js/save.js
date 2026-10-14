@@ -2,7 +2,8 @@
  * Monedas, Pokémon y estadios desbloqueados, estadísticas, opciones, la
  * última configuración de partido y el club del modo historia. Si el navegador no deja guardar (modo
  * privado, archivo local con almacenamiento bloqueado...), el juego sigue
- * funcionando y sólo se pierde al cerrar.
+ * funcionando y sólo se pierde al cerrar. Se puede exportar a un archivo, importar de uno
+ * y sincronizar con la nube (cloud.js); las opciones (sonido, teclas) quedan en cada dispositivo.
  */
 PF.Save = (() => {
   const KEY = 'pokefutbol.v1';
@@ -21,28 +22,32 @@ PF.Save = (() => {
     tournament: null,             // torneo local en curso (tournament.js)
   });
 
-  function load() {
+  /** Un guardado cualquiera (de localStorage, de un archivo o de la nube) → uno válido, con lo que falte por defecto. */
+  function fromRaw(s) {
     const d = defaults();
+    migrate(s);
+    return {
+      v: 2,
+      coins: s.coins | 0,
+      unlocked: Array.isArray(s.unlocked) ? s.unlocked : [],
+      abil: s.abil && typeof s.abil === 'object' ? s.abil : {},
+      plays: s.plays && typeof s.plays === 'object' ? s.plays : {},
+      stadiums: Array.isArray(s.stadiums) ? s.stadiums : d.stadiums,
+      stats: Object.assign(d.stats, s.stats),
+      settings: Object.assign(d.settings, s.settings),
+      setup: Object.assign(d.setup, s.setup),
+      career: s.career && Array.isArray(s.career.club) ? s.career : null,
+      tournament: s.tournament && Array.isArray(s.tournament.teams) && Array.isArray(s.tournament.rounds) ? s.tournament : null,
+    };
+  }
+
+  function load() {
     try {
       const raw = localStorage.getItem(KEY);
-      if (!raw) return d;
-      const s = JSON.parse(raw);
-      migrate(s);
-      return {
-        v: 2,
-        coins: s.coins | 0,
-        unlocked: Array.isArray(s.unlocked) ? s.unlocked : [],
-        abil: s.abil && typeof s.abil === 'object' ? s.abil : {},
-        plays: s.plays && typeof s.plays === 'object' ? s.plays : {},
-        stadiums: Array.isArray(s.stadiums) ? s.stadiums : d.stadiums,
-        stats: Object.assign(d.stats, s.stats),
-        settings: Object.assign(d.settings, s.settings),
-        setup: Object.assign(d.setup, s.setup),
-        career: s.career && Array.isArray(s.career.club) ? s.career : null,
-        tournament: s.tournament && Array.isArray(s.tournament.teams) && Array.isArray(s.tournament.rounds) ? s.tournament : null,
-      };
+      if (!raw) return defaults();
+      return fromRaw(JSON.parse(raw));
     } catch (e) {
-      return d;
+      return defaults();
     }
   }
 
@@ -79,16 +84,48 @@ PF.Save = (() => {
 
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { /* sin almacenamiento: seguimos */ }
+    if (PF.Cloud) PF.Cloud.touch();   // hay cambios para subir a la nube
   }
 
   function reset() {
+    if (PF.Cloud) PF.Cloud.pause();   // borrar el progreso no pisa la copia de la nube
     data = defaults();
     save();
   }
+
+  /** Lo que viaja a la nube y a los archivos: todo menos las opciones del dispositivo. */
+  function snapshot() {
+    const o = JSON.parse(JSON.stringify(data));
+    delete o.settings;
+    return o;
+  }
+
+  /**
+   * Reemplaza el progreso por el de un guardado externo (conserva las opciones de este dispositivo).
+   * Devuelve { ok } o { ok: false, error }.
+   */
+  function replaceWith(obj) {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj) || typeof obj.coins === 'undefined' || !obj.stats) return { ok: false, error: 'No parece una partida de PokéFútbol.' };
+    try {
+      const next = fromRaw(JSON.parse(JSON.stringify(obj)));
+      next.settings = data.settings;
+      data = next;
+      save();
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: 'El archivo está dañado.' };
+    }
+  }
+
+  /** ¿Hay algo de progreso? (para no pisar una partida con una vacía) */
+  const hasProgress = () => data.stats.played > 0 || data.coins > 0 || data.unlocked.length > 0 || !!data.career;
 
   return {
     get data() { return data; },
     save,
     reset,
+    snapshot,
+    replaceWith,
+    hasProgress,
   };
 })();

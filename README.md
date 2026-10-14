@@ -144,7 +144,36 @@ Cada partido da monedas: por jugar, ganar o empatar, cada gol y la valla
 invicta, multiplicadas por la dificultad y la duración. Con ellas se compran
 Pokémon, segundas habilidades y canchas en la selección (ver
 [Plantel](#plantel)). Los legendarios se ganan con retos. Todo
-se guarda en el navegador (`localStorage`); en Opciones se puede borrar.
+se guarda en el navegador (`localStorage`); en Opciones se puede borrar, y
+también se puede llevar a otro dispositivo (ver [Partida en la nube](#partida-en-la-nube)).
+
+### Partida en la nube
+
+En **Opciones → ☁ Partida en la nube**:
+
+- **Activar la nube** crea un **código secreto** (`PF-XXXX-XXXX-XXXX-XXXX`, 80 bits)
+  y sube tu partida (monedas, Pokémon y habilidades, club del modo historia,
+  torneo en curso, estadísticas). Sin cuentas ni mails. Anota el código: es la
+  única forma de recuperarla, y quien lo tenga puede leerla y reemplazarla.
+- En otro dispositivo: **Ya tengo un código** → la partida baja (si ese
+  dispositivo ya tiene progreso, eliges cuál conservar).
+- **Se sincroniza sola**: unos segundos después de cada cambio, y al abrir el
+  juego baja la versión más nueva si jugaste en otro lado. Si hay cambios en los
+  dos lugares no se pisa nada: avisa y eliges cuál conservar. Borrar el progreso
+  **pausa** la sincronización para no vaciar la nube por accidente. Las opciones
+  de cada dispositivo (sonido, teclas) no viajan. Arriba a la derecha del menú
+  inicial se ve el estado (☁ sincronizada, sin conexión…).
+- **Exportar / importar** la partida a un archivo (`.json`), con o sin nube.
+
+Cómo está hecho: la nube es un proyecto de [Supabase](https://supabase.com) con
+una tabla y dos funciones (`tools/supabase.sql`). El servidor guarda sólo el
+SHA-256 del código (nunca el código) y la tabla no se puede leer directamente,
+sólo con `save_get` y `save_put`. La llave que está en `js/cloud.js` es la
+«publishable»: es pública por diseño y sólo permite llamar a esas dos funciones.
+Para usar otro proyecto, aplica `tools/supabase.sql` y cambia `URL` y `KEY`
+en `js/cloud.js`. Si el plan gratuito del proyecto se pausa por falta de uso o
+se pasa de cuota, la nube deja de responder (el juego sigue funcionando y la
+partida local queda a salvo).
 
 ### Energía, vida y cambios
 
@@ -523,6 +552,8 @@ js/tournament.js  torneo local: equipos de la CPU, cuadro y resultados
 js/ui-tournament.js  pantalla del cuadro del torneo
 js/net.js         online: conexión (PeerJS), sincronización del estado, teclas del invitado
 js/ui-online.js   sala online (equipos A/B y espectadores) y menú durante el partido
+js/cloud.js       guardado en la nube (código secreto, sincronización y conflictos)
+js/ui-cloud.js    pantalla «Partida en la nube» y exportar / importar archivo
 js/main.js        bucle a 60 Hz fijo, flujo de pantallas, online y premios
 tools/import_pokemon.py   copia sprites desde PokéSurvivor y regenera metadatos, Pokédex y créditos
 tools/serve.py            servidor local sin caché

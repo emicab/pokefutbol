@@ -1153,4 +1153,12 @@
     toTitle();
     requestAnimationFrame((t) => { last = t; frame(t); });
   });
+  // nube: si hay una partida más nueva en la nube, se baja al abrir el juego y se recarga una vez para verla
+  if (PF.Cloud) {
+    PF.Cloud.start().then((changed) => {
+      let again = false;
+      try { again = !!sessionStorage.getItem('pf-cloud-reload'); sessionStorage.setItem('pf-cloud-reload', '1'); setTimeout(() => sessionStorage.removeItem('pf-cloud-reload'), 15000); } catch (e) { /* sin sessionStorage */ }
+      if (changed && !again) { PF.UI.toast('Se cargó tu partida más reciente de la nube.'); setTimeout(() => location.reload(), 900); }
+    });
+  }
 })();

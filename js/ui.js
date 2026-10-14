@@ -38,7 +38,7 @@ PF.UI = (() => {
     clear();
     const s = el(`
       <div class="screen title">
-        <div class="topbar">${coinHTML(PF.Save.data.coins)}</div>
+        <div class="topbar"><span class="cloudbadge"></span>${coinHTML(PF.Save.data.coins)}</div>
         <div class="logo">Poké<span>Fútbol</span></div>
         <div class="tagline">fútbol de dibujos animados · sin reglas, con rayos</div>
         <div class="modegrid">
@@ -69,6 +69,10 @@ PF.UI = (() => {
     s.querySelector('[data-act=career]').onclick = onCareer;
     s.querySelector('[data-act=opts]').onclick = onOptions;
     s.querySelector('[data-act=online]').onclick = onOnline;
+    const badge = s.querySelector('.cloudbadge');
+    const showBadge = () => { badge.textContent = PF.Cloud ? PF.Cloud.badge() : ''; };
+    showBadge();
+    if (PF.Cloud) { const un = PF.Cloud.onChange(() => { if (s.isConnected) showBadge(); else un(); }); }
     s.querySelector('[data-act=tour]').onclick = onTournament;
     s.querySelector('[data-act=ctrls]').onclick = () => { s.querySelector('.controls').classList.toggle('hidden'); PF.Audio.sfx.click(); };
     root().appendChild(s);
@@ -91,6 +95,9 @@ PF.UI = (() => {
           <div class="keys"></div>
           <div class="row">
             <button class="btn small" data-act="keysreset">Restaurar teclas</button>
+          </div>
+          <div class="row">
+            <button class="btn small" data-act="cloud">☁ Partida en la nube</button>
           </div>
           <div class="row">
             <button class="btn" data-act="back">Volver</button>
@@ -128,6 +135,7 @@ PF.UI = (() => {
     s.querySelector('[data-act=keysreset]').onclick = () => { K.cancelCapture(); K.reset(); drawKeys(); toast('Teclas de fábrica restauradas.'); };
 
     s.querySelector('[data-act=back]').onclick = () => { K.cancelCapture(); onBack(); };
+    s.querySelector('[data-act=cloud]').onclick = () => { K.cancelCapture(); PF.CloudUI.screen(() => options(onBack, onChange)); };
     const reset = s.querySelector('[data-act=reset]');
     reset.onclick = () => {
       if (reset.dataset.sure) { PF.Save.reset(); onChange(); options(onBack, onChange); toast('Progreso borrado.'); }
