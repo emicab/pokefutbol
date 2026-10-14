@@ -14,10 +14,11 @@ PF.Save = (() => {
     abil: {},                     // id → [índices de habilidades compradas] (la 0 viene con él)
     plays: {},                    // id → partidos jugados con ese Pokémon (para comprar su evolución)
     stadiums: ['estadio'],
-    stats: { played: 0, won: 0, goals: 0, hardWins: 0, bigWins: 0 },
+    stats: { played: 0, won: 0, goals: 0, hardWins: 0, bigWins: 0, cups: 0 },
     settings: { music: 0.5, sfx: 0.8, aids: true, replays: true, keys: null },
     setup: { size: 2, time: 120, diff: 'normal', stadium: 'estadio', picks: [], abil: {}, keeper: 'dynamic', spots: {} },
     career: null,                 // modo historia (career.js)
+    tournament: null,             // torneo local en curso (tournament.js)
   });
 
   function load() {
@@ -38,6 +39,7 @@ PF.Save = (() => {
         settings: Object.assign(d.settings, s.settings),
         setup: Object.assign(d.setup, s.setup),
         career: s.career && Array.isArray(s.career.club) ? s.career : null,
+        tournament: s.tournament && Array.isArray(s.tournament.teams) && Array.isArray(s.tournament.rounds) ? s.tournament : null,
       };
     } catch (e) {
       return d;

@@ -543,7 +543,7 @@ PF.Career = (() => {
       teams: [defs, opp.members.map(defOf)],
       bench: [bench, []],
       formations: [spots, null],
-      diff: opp.diff,
+      diff: opp.diff, teamNames: [c.name, opp.who || opp.title],
       mods: [mulMods(runMods(run), rule.me), mulMods(opp.leader ? { speed: 1.04 } : opp.elite ? { speed: 1.02 } : opp.mods, rule.foe)],
     };
   }

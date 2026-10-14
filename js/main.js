@@ -53,7 +53,7 @@
     PF.configureField(cfg.size);
     match = PF.Match.create({
       teams: cfg.teams, formations: cfg.formations, keeperMode: cfg.keeperMode, mods: cfg.mods, bench: cfg.bench,
-      humanTeam: 0, time: cfg.time, stadium: cfg.stadium, replays: st.replays, score: cfg.startScore,
+      humanTeam: 0, time: cfg.time, stadium: cfg.stadium, replays: st.replays, score: cfg.startScore, teamNames: cfg.teamNames,
       flip: Math.random() < 0.5,   // tu equipo arranca de un lado al azar
       skills: [PF.AI.SKILLS.mate, PF.AI.SKILLS[cfg.diff]],
     });
@@ -92,8 +92,8 @@
   }
 
   /** Monedas por el partido y retos cumplidos. Devuelve el detalle para la pantalla. */
-  function reward(m) {
-    const save = PF.Save.data, setup = save.setup;
+  function reward(m, setup = PF.Save.data.setup) {
+    const save = PF.Save.data;
     const mult = { easy: 0.6, normal: 1, hard: 1.6 }[setup.diff] * (setup.time / 120) ** 0.5;
     const lines = [];
     lines.push(['Partido jugado', 30]);
@@ -147,6 +147,70 @@
   function quickResult(m) {
     screen = 'result';
     PF.UI.result(m, reward(m), restartMatch, toSelect, toTitle);
+  }
+
+  // ---------------------------------------------------------------- torneo local
+  const TR = PF.Tournament;
+
+  function toTournament() {
+    toMenu();
+    if (PF.Save.data.tournament) return tournamentHub();
+    PF.UI.select(startTournament, toTitle, 'Armar el torneo');
+  }
+
+  function startTournament() {
+    PF.Save.data.tournament = TR.create(PF.Save.data.setup);
+    PF.Save.save();
+    tournamentHub();
+  }
+
+  function tournamentHub() {
+    toMenu();
+    screen = 'menu';
+    const t = PF.Save.data.tournament;
+    if (!t) return toTitle();
+    PF.TournamentUI.bracket(t, {
+      onPlay: tournamentPlay,
+      onMenu: toTitle,
+      onNew: () => { PF.Save.data.tournament = null; PF.Save.save(); toTournament(); },
+      onAbandon: () => { PF.Save.data.tournament = null; PF.Save.save(); toTitle(); },
+    });
+  }
+
+  function tournamentPlay(match) {
+    const t = PF.Save.data.tournament, s = TR.matchSetup(t, match);
+    const key = t.size + '-' + t.keeper, setup = PF.Save.data.setup;
+    setup.spots[key] = setup.spots[key] || {};
+    playMatch({
+      size: t.size, keeperMode: t.keeper, stadium: t.stadium, time: t.time, diff: t.diff,
+      teams: [s.mine, s.opp],
+      bench: [s.bench, s.oppBench],
+      formations: [PF.Board.spotsFor(setup.spots[key], s.mine, t.keeper), null],
+      teamNames: ['TÚ', s.rival.name],
+    }, (m) => tournamentResult(m, match), { label: 'Volver al torneo (el partido no cuenta)', fn: tournamentHub });
+  }
+
+  function tournamentResult(m, match) {
+    screen = 'result';
+    const t = PF.Save.data.tournament;
+    TR.report(t, match, m);
+    const finished = TR.advance(t) || !!t.out;
+    if (t.out) TR.finishAll(t);
+    const rw = reward(m, t);
+    if (finished || t.champion != null) {
+      t.prize = TR.prizeOf(t);
+      if (t.prize) { PF.Save.data.coins += t.prize; rw.coins += t.prize; rw.lines.push(['Premio del torneo', t.prize]); PF.Audio.sfx.coin(); }
+      if (TR.standing(t) === 'Campeón') PF.Save.data.stats.cups++;
+    }
+    PF.Save.save();
+    const won = m.winner === 0;
+    const note = t.champion != null
+      ? (TR.standing(t) === 'Campeón' ? '¡Ganaste el torneo!' : `Quedas eliminado en ${String(t.out).toLowerCase()}.`)
+      : won ? `Pasas a ${TR.roundName(t.round).toLowerCase()}.` : '';
+    PF.UI.result(m, rw, tournamentHub, null, toTitle, {
+      title: t.champion != null && TR.standing(t) === 'Campeón' ? '🏆 ¡Campeón!' : undefined,
+      note, rematch: 'Ver el cuadro', menu: 'Salir (se guarda)',
+    });
   }
 
   // ---------------------------------------------------------------- modo historia
@@ -631,7 +695,7 @@
   function toTitle() {
     toMenu();
     screen = 'title';
-    PF.UI.title(toSelect, toCareer, toOptions, toOnline);
+    PF.UI.title(toSelect, toCareer, toOptions, toOnline, toTournament);
   }
 
   function toOptions() {

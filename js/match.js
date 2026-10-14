@@ -334,6 +334,7 @@ PF.Match = (() => {
    * opts.time       segundos · opts.replays  repetición de los goles
    * opts.keeperMode 'dynamic' (arquero dinámico: ataja el más cercano a su arco) o 'fixed'
    * opts.formations [[[d, f]...], [[d, f]...]] posiciones (si falta, autoFormation)
+   * opts.teamNames  [nombre del equipo 0, del 1] para el marcador (si falta: TÚ / CPU)
    * opts.score      marcador inicial [equipo 0, equipo 1] (reglas de los líderes)
    * opts.mods       [{speed, power, cd, reflex, drain}, ...] multiplicadores por equipo (mejoras de la historia)
    * opts.bench      [[def...], [def...]] suplentes de cada equipo (hasta 3 cambios)
@@ -362,6 +363,7 @@ PF.Match = (() => {
       view: opts.view ?? 0,   // -1: espectador (no maneja a nadie)
       humanTeam: opts.humanTeam ?? (opts.humans && opts.humans[opts.view ?? 0] ? opts.humans[opts.view ?? 0].team : -1),
       demo: !!opts.demo, autoSubs: !!opts.autoSubs,
+      teamNames: opts.teamNames || null,   // nombres para el marcador (historia y torneo)
       orders: [0, 0],   // orden (índice en ORDERS) de cada equipo con humanos
       tactic: ['neutral', 'neutral'], coachT: 4, rotateT: 2,   // táctica de los equipos de la CPU
       keeperMode, keeper: [null, null],

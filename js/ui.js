@@ -34,7 +34,7 @@ PF.UI = (() => {
   }
 
   // ---------------------------------------------------------------- título
-  function title(onPlay, onCareer, onOptions, onOnline) {
+  function title(onPlay, onCareer, onOptions, onOnline, onTournament) {
     clear();
     const s = el(`
       <div class="screen title">
@@ -44,6 +44,7 @@ PF.UI = (() => {
         <div class="row">
           <button class="btn big" data-act="play">Partido rápido</button>
           <button class="btn big story" data-act="career">Modo Historia</button>
+          <button class="btn big tour" data-act="tour">Torneo</button>
           <button class="btn big online" data-act="online">Online</button>
           <button class="btn" data-act="opts">Opciones</button>
         </div>
@@ -65,6 +66,7 @@ PF.UI = (() => {
     s.querySelector('[data-act=career]').onclick = onCareer;
     s.querySelector('[data-act=opts]').onclick = onOptions;
     s.querySelector('[data-act=online]').onclick = onOnline;
+    s.querySelector('[data-act=tour]').onclick = onTournament;
     root().appendChild(s);
     s.querySelector('button').focus();
   }

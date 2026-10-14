@@ -534,3 +534,32 @@ input.code {
 .quote b { color: var(--yellow); font-weight: normal; margin-right: 6px; }
 .rule { max-width: 720px; text-align: center; font-size: 16px; color: #ffb066; }
 .rule b { font-weight: normal; color: var(--yellow); }
+
+/* torneo */
+.btn.tour { background: linear-gradient(#d19a1c, #8f6a0e); }
+.btn.tour:hover, .btn.tour:focus-visible { background: linear-gradient(#f0b72b, #a97c11); color: #fff; }
+.screen.tour { gap: 10px; }
+.bracket { display: flex; gap: 28px; width: 1040px; height: 360px; padding: 10px 18px; justify-content: space-between; }
+.bcol { flex: 1; display: flex; flex-direction: column; }
+.bcol h3 { margin: 0 0 6px; font-weight: normal; font-size: 17px; color: var(--muted); text-align: center; }
+.bcol.now h3 { color: var(--yellow); }
+.bcards { flex: 1; display: flex; flex-direction: column; justify-content: space-around; gap: 6px; }
+.bm { background: var(--ink); border: 3px solid var(--line); border-radius: 8px; overflow: hidden; }
+.bm.cur { border-color: var(--yellow); box-shadow: 0 0 0 3px rgba(255, 210, 63, 0.35); }
+.bm.ghost { opacity: 0.45; }
+.bt { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 3px 10px; font-size: 16px; border-left: 6px solid var(--tc, var(--line)); }
+.bt + .bt { border-top: 2px solid rgba(255, 255, 255, 0.1); }
+.bt.me span { color: var(--yellow); }
+.bt.lose { opacity: 0.5; }
+.bt.win b { color: #9cff6b; }
+.bt b { font-weight: normal; min-width: 22px; text-align: right; }
+.bt small { font-size: 11px; color: var(--muted); }
+.tbanner { font-size: 21px; text-align: center; }
+.tbanner.win { color: var(--yellow); font-size: 26px; }
+.tbanner b { color: var(--yellow); font-weight: normal; }
+.trival { display: flex; align-items: center; justify-content: center; gap: 24px; padding: 6px 18px; }
+.trival b { font-weight: normal; font-size: 16px; color: var(--muted); }
+.tminis { display: flex; gap: 6px; margin-top: 2px; }
+.tmini { display: flex; flex-direction: column; align-items: center; font-size: 11px; color: var(--muted); }
+.tmini canvas { image-rendering: pixelated; background: radial-gradient(circle at 50% 85%, color-mix(in srgb, var(--tc) 35%, transparent), transparent 70%); }
+.tvs { font-size: 30px; color: var(--yellow); text-shadow: 3px 3px 0 var(--ink); }

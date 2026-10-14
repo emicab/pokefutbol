@@ -319,6 +319,24 @@ Las especies del modo historia salen de la Pokédex (`js/pokedex.js`): stats
 de cancha y habilidades por tipo se calculan solos (`js/species.js`), así que
 cualquier Pokémon importado se puede usar.
 
+## Torneo
+
+Un torneo local de eliminación directa, con tu equipo del partido rápido:
+
+- **8 equipos:** el tuyo y 7 de la CPU, cada uno de un tipo (Llamas de Canela,
+  Marea Celeste, Sombras de Lavanda…). En Difícil los equipos de la CPU traen
+  Pokémon más evolucionados, como en el partido rápido.
+- **Cuartos, semis y final:** tus partidos se juegan en la cancha, con el
+  formato, el tiempo, la dificultad, el arquero y la cancha que hayas elegido
+  (si empatan, gol de oro). Los demás se resuelven solos según la fuerza de
+  cada equipo, con algo de azar. Ves el cuadro y el rival antes de cada ronda.
+- **Premios:** cada partido da sus monedas como siempre, y además se paga la
+  etapa alcanzada: semifinales 50, final 120 y campeón 300 (por la dificultad
+  y el tiempo). Ser campeón se cuenta en tus estadísticas.
+- **Se guarda:** puedes salir entre partido y partido y seguir después; si
+  sales a mitad de un partido, ese partido no cuenta. Si quedas eliminado, el
+  torneo se termina solo y ves quién fue el campeón.
+
 ## Online
 
 Hasta **4 jugadores** (y los que quieran mirar), cada uno en su compu, con
@@ -432,6 +450,8 @@ js/board.js       pizarra táctica (arrastrar a cada Pokémon a su puesto)
 js/ui.js          pantallas (título, opciones, selección, pausa, resultado)
 js/career.js      modo historia: club, experiencia, evoluciones, copas
 js/ui-career.js   pantallas del modo historia
+js/tournament.js  torneo local: equipos de la CPU, cuadro y resultados
+js/ui-tournament.js  pantalla del cuadro del torneo
 js/net.js         online: conexión (PeerJS), sincronización del estado, teclas del invitado
 js/ui-online.js   sala online (equipos A/B y espectadores) y menú durante el partido
 js/main.js        bucle a 60 Hz fijo, flujo de pantallas, online y premios
