@@ -334,6 +334,7 @@ PF.Match = (() => {
    * opts.time       segundos · opts.replays  repetición de los goles
    * opts.keeperMode 'dynamic' (arquero dinámico: ataja el más cercano a su arco) o 'fixed'
    * opts.formations [[[d, f]...], [[d, f]...]] posiciones (si falta, autoFormation)
+   * opts.pure / opts.goalLimit / opts.allowDraw   reglas especiales (ver rules.js)
    * opts.teamNames  [nombre del equipo 0, del 1] para el marcador (si falta: TÚ / CPU)
    * opts.score      marcador inicial [equipo 0, equipo 1] (reglas de los líderes)
    * opts.mods       [{speed, power, cd, reflex, drain}, ...] multiplicadores por equipo (mejoras de la historia)
@@ -363,6 +364,9 @@ PF.Match = (() => {
       view: opts.view ?? 0,   // -1: espectador (no maneja a nadie)
       humanTeam: opts.humanTeam ?? (opts.humans && opts.humans[opts.view ?? 0] ? opts.humans[opts.view ?? 0].team : -1),
       demo: !!opts.demo, autoSubs: !!opts.autoSubs,
+      pure: !!opts.pure,                   // sin habilidades (fútbol puro)
+      goalLimit: opts.goalLimit || 0, limitHit: false,   // el primero en llegar a N goles gana
+      allowDraw: !!opts.allowDraw,         // el empate vale (partido de ida)
       teamNames: opts.teamNames || null,   // nombres para el marcador (historia y torneo)
       orders: [0, 0],   // orden (índice en ORDERS) de cada equipo con humanos
       tactic: ['neutral', 'neutral'], coachT: 4, rotateT: 2,   // táctica de los equipos de la CPU
@@ -491,7 +495,7 @@ PF.Match = (() => {
   }
 
   function afterGoal(m) {
-    if (m.golden) finish(m);
+    if (m.golden || m.limitHit) finish(m);
     else kickoff(m);
   }
 
@@ -764,7 +768,7 @@ PF.Match = (() => {
       m.time -= dt;
       if (m.time <= 0) {
         m.time = 0;
-        if (m.score[0] !== m.score[1] || m.demo) finish(m);
+        if (m.score[0] !== m.score[1] || m.demo || m.allowDraw) finish(m);
         else {
           m.golden = true;
           PF.Audio.sfx.whistle();
@@ -1018,7 +1022,7 @@ PF.Match = (() => {
     }
 
     // sin la energía que cuesta, no hay habilidad ni placaje
-    if (it.ability && p.cd <= 0) {
+    if (it.ability && p.cd <= 0 && !m.pure) {
       if (p.status === 'fear') {
         if (p.human && m.clock - (p.noEnergyT || -9) > 1) { p.noEnergyT = m.clock; PF.FX.text(m.fx, p.x, p.y - 60, '¡asustado!', STATUS.fear.color, 0.7, 0.8); PF.Audio.sfx.fail(); }
       } else if (p.stamina < abilityCost(p)) noEnergy(m, p);
@@ -1975,6 +1979,7 @@ PF.Match = (() => {
     b.vx *= 0.25; b.vy *= 0.25;   // que se quede en la red
     b.vine = null; b.passTo = null;
     m.score[team]++;
+    if (m.goalLimit && m.score[team] >= m.goalLimit) m.limitHit = true;   // modo "primero a N"
     m.state = 'goal';
     m.stateT = 1.8;
     m.goalTeam = team;

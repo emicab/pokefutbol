@@ -319,6 +319,29 @@ Las especies del modo historia salen de la Pokédex (`js/pokedex.js`): stats
 de cancha y habilidades por tipo se calculan solos (`js/species.js`), así que
 cualquier Pokémon importado se puede usar.
 
+## Reglas especiales
+
+En la pantalla de equipo (partido rápido y torneo) hay un botón **⚙ Reglas**
+con atajos (Copa de bronce, Copa de élite, Colores, Barato, Fútbol puro, Muerte
+súbita, Maratón) y estas opciones, que valen también para los rivales de la CPU:
+
+- **Tipos:** sólo Pokémon con alguno de los tipos que marques (uno o varios).
+- **Fases:** sólo de las fases que marques (fase 1, 2, 3, fuertes, élite o
+  legendarios).
+- **Tipos distintos:** los titulares no pueden compartir ningún tipo.
+- **Presupuesto:** cada titular cuesta puntos según su fase (1, 2, 3, fuerte 4,
+  élite 5, legendario 6); "ajustado" permite 1,5 por puesto y "medio" 2,5.
+- **Fútbol puro:** sin habilidades, sólo pases, tiros y placajes.
+- **Final:** normal, **gol de oro** (el primero que marca gana) o **primero a
+  3 goles**.
+- Sólo en el torneo: **sin repetir** (cada Pokémon juega una sola vez en todo el
+  torneo y eliges un equipo nuevo en cada cruce), **ida y vuelta** (cuartos y
+  semis a dos partidos con resultado global; la final es única) y **canchas
+  rotativas** (una distinta por ronda).
+
+Los Pokémon que no cumplen quedan apagados en la grilla; si tu equipo no cumple,
+un aviso te dice por qué y puedes quitar los que sobran con un botón.
+
 ## Torneo
 
 Un torneo local de eliminación directa, con tu equipo del partido rápido:
@@ -450,6 +473,7 @@ js/board.js       pizarra táctica (arrastrar a cada Pokémon a su puesto)
 js/ui.js          pantallas (título, opciones, selección, pausa, resultado)
 js/career.js      modo historia: club, experiencia, evoluciones, copas
 js/ui-career.js   pantallas del modo historia
+js/rules.js       reglas especiales (tipos, fases, presupuesto, fútbol puro...)
 js/tournament.js  torneo local: equipos de la CPU, cuadro y resultados
 js/ui-tournament.js  pantalla del cuadro del torneo
 js/net.js         online: conexión (PeerJS), sincronización del estado, teclas del invitado

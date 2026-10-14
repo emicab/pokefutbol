@@ -16,7 +16,7 @@ PF.Save = (() => {
     stadiums: ['estadio'],
     stats: { played: 0, won: 0, goals: 0, hardWins: 0, bigWins: 0, cups: 0 },
     settings: { music: 0.5, sfx: 0.8, aids: true, replays: true, keys: null },
-    setup: { size: 2, time: 120, diff: 'normal', stadium: 'estadio', picks: [], abil: {}, keeper: 'dynamic', spots: {} },
+    setup: { size: 2, time: 120, diff: 'normal', stadium: 'estadio', picks: [], abil: {}, keeper: 'dynamic', spots: {}, rules: {} },
     career: null,                 // modo historia (career.js)
     tournament: null,             // torneo local en curso (tournament.js)
   });

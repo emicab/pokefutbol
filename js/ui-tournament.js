@@ -24,9 +24,10 @@ PF.TournamentUI = (() => {
       const cards = Array.from({ length: SIZES[r] }, (_, k) => {
         const m = ms && ms[k];
         if (!m) return '<div class="bm ghost"><div class="bt"><span>Por definir</span></div><div class="bt"><span>Por definir</span></div></div>';
-        const row = (i, sc) => `<div class="bt ${i === mine ? 'me' : ''} ${m.w == null ? '' : m.w === i ? 'win' : 'lose'}" style="--tc:${teamColor(t, i)}">
-          <span>${t.teams[i].name}</span><b>${sc == null ? '' : sc}${m.pen && m.w === i ? ' <small>pen.</small>' : ''}</b></div>`;
-        return `<div class="bm ${m === next ? 'cur' : ''}">${row(m.a, m.sa)}${row(m.b, m.sb)}</div>`;
+        const row = (i, sc0) => { const sc = m.w == null && m.l1 ? m.l1[i === m.a ? 0 : 1] : sc0; return `<div class="bt ${i === mine ? 'me' : ''} ${m.w == null ? '' : m.w === i ? 'win' : 'lose'}" style="--tc:${teamColor(t, i)}">
+          <span>${t.teams[i].name}</span><b>${sc == null ? '' : sc}${m.pen && m.w === i ? ' <small>pen.</small>' : ''}</b></div>`; };
+        const tag = m.legs === 2 ? `<div class="bl">${m.l1 ? `ida ${m.l1[0]}–${m.l1[1]}${m.w == null ? ' · falta la vuelta' : ' · global'}` : 'ida y vuelta'}</div>` : '';
+        return `<div class="bm ${m === next ? 'cur' : ''}">${row(m.a, m.sa)}${row(m.b, m.sb)}${tag}</div>`;
       }).join('');
       return `<div class="bcol ${r === t.round && !done ? 'now' : ''}"><h3>${T().ROUNDS[r]}</h3><div class="bcards">${cards}</div></div>`;
     };
@@ -45,12 +46,13 @@ PF.TournamentUI = (() => {
         <div><b>${s.rival.name}</b><div class="tminis">${minis(s.rival.members.slice(0, t.size))}</div></div>
       </div>`;
     }
+    const rulesTxt = PF.Rules.summary(t.rules || PF.Rules.DEFAULTS, true).join(' · ');
     const diffES = { easy: 'Fácil', normal: 'Normal', hard: 'Difícil' }[t.diff];
     const s = el(`
       <div class="screen tour">
         <div class="selhead">
           <h2>🏆 Torneo</h2>
-          <div class="rsub">${t.size} vs ${t.size} · ${t.time / 60 >= 1 ? t.time / 60 + ' min' : t.time + ' s'} · ${diffES}</div>
+          <div class="rsub">${t.size} vs ${t.size} · ${t.time / 60 >= 1 ? t.time / 60 + ' min' : t.time + ' s'} · ${diffES}${rulesTxt ? ' · ' + rulesTxt : ''}</div>
           <span class="coins"><i class="coin"></i>${PF.Save.data.coins}</span>
         </div>
         <div class="bracket box">${[0, 1, 2].map(col).join('')}</div>
@@ -59,7 +61,7 @@ PF.TournamentUI = (() => {
         <div class="row">
           ${done
             ? '<button class="btn" data-act="menu">Menú</button><button class="btn big" data-act="new">Nuevo torneo</button>'
-            : `<button class="btn danger" data-act="quit">Abandonar torneo</button><button class="btn" data-act="menu">Salir (se guarda)</button><button class="btn big" data-act="play">¡Jugar ${T().ROUNDS[t.round].toLowerCase()}!</button>`}
+            : `<button class="btn danger" data-act="quit">Abandonar torneo</button><button class="btn" data-act="menu">Salir (se guarda)</button><button class="btn big" data-act="play">${next && t.rules.norepeat && !next.l1 ? 'Elegir equipo' : next && next.l1 ? '¡Jugar la vuelta!' : `¡Jugar ${T().ROUNDS[t.round].toLowerCase()}!`}</button>`}
         </div>
       </div>`);
     const on = (a, f) => { const b = s.querySelector(`[data-act=${a}]`); if (b) b.onclick = f; };

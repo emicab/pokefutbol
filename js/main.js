@@ -54,6 +54,7 @@
     match = PF.Match.create({
       teams: cfg.teams, formations: cfg.formations, keeperMode: cfg.keeperMode, mods: cfg.mods, bench: cfg.bench,
       humanTeam: 0, time: cfg.time, stadium: cfg.stadium, replays: st.replays, score: cfg.startScore, teamNames: cfg.teamNames,
+      pure: cfg.pure, goalLimit: cfg.goalLimit, allowDraw: cfg.allowDraw,
       flip: Math.random() < 0.5,   // tu equipo arranca de un lado al azar
       skills: [PF.AI.SKILLS.mate, PF.AI.SKILLS[cfg.diff]],
     });
@@ -76,11 +77,15 @@
 
   function quickMatch() {
     const setup = PF.Save.data.setup;
+    const rules = PF.Rules.get(setup), restricted = PF.Rules.restricts(rules);
     const all = setup.picks.map((id) => PF.withAbility(PF.rosterById(id), setup.abil[id] || 0));
     const mine = all.slice(0, setup.size), bench = all.slice(setup.size);
-    // equipo incompleto: el resto, al azar (casi siempre fase 1)
-    for (const id of PF.randomFill(setup.picks, setup.size - mine.length)) mine.push(PF.withAbility(PF.rosterById(id), 0));
-    const rival = pickRival(setup.picks, setup.size + 2).map(randomAbility);
+    // equipo incompleto: el resto, al azar (casi siempre fase 1; con reglas, respetándolas)
+    if (restricted) for (const r of PF.Rules.fill(setup.size, setup.size, setup.diff, rules, mine)) mine.push(PF.withAbility(r, 0));
+    else for (const id of PF.randomFill(setup.picks, setup.size - mine.length)) mine.push(PF.withAbility(PF.rosterById(id), 0));
+    const rival = (restricted
+      ? PF.Rules.fill(setup.size + 2, setup.size, setup.diff, rules, [], new Set(setup.picks.concat(mine.map((d) => d.id)))).map((r) => r.id).map(PF.rosterById)
+      : pickRival(setup.picks, setup.size + 2)).map(randomAbility);
     const key = setup.size + '-' + setup.keeper;
     setup.spots[key] = setup.spots[key] || {};
     playMatch({
@@ -88,6 +93,7 @@
       teams: [mine, rival.slice(0, setup.size)],
       bench: [bench, rival.slice(setup.size)],
       formations: [PF.Board.spotsFor(setup.spots[key], mine, setup.keeper), null],
+      pure: rules.pure, goalLimit: rules.goal,
     }, quickResult, { label: 'Salir al menú', fn: toTitle });
   }
 
@@ -155,11 +161,17 @@
   function toTournament() {
     toMenu();
     if (PF.Save.data.tournament) return tournamentHub();
-    PF.UI.select(startTournament, toTitle, 'Armar el torneo');
+    PF.UI.select(startTournament, toTitle, 'Armar el torneo', { mode: 'tournament' });
   }
 
   function startTournament() {
-    PF.Save.data.tournament = TR.create(PF.Save.data.setup);
+    const setup = PF.Save.data.setup, rules = PF.Rules.get(setup);
+    const need = rules.norepeat ? setup.size * 3 : setup.size;
+    if (PF.Rules.available(rules) < need) {
+      PF.UI.toast(`Con esas reglas no te alcanzan los Pokémon (${PF.Rules.available(rules)} de ${need}).`);
+      return;
+    }
+    PF.Save.data.tournament = TR.create(setup);
     PF.Save.save();
     tournamentHub();
   }
@@ -167,7 +179,7 @@
   function tournamentHub() {
     toMenu();
     screen = 'menu';
-    const t = PF.Save.data.tournament;
+    const t = PF.Save.data.tournament && TR.normalize(PF.Save.data.tournament);
     if (!t) return toTitle();
     PF.TournamentUI.bracket(t, {
       onPlay: tournamentPlay,
@@ -177,23 +189,60 @@
     });
   }
 
+  /** Sin repetir: antes de cada cruce se elige el equipo entre los que todavía no jugaron. */
+  function tournamentPick(t, match) {
+    const setup = PF.Save.data.setup, used = TR.usedSet(t);
+    const orig = { picks: setup.picks.slice(), size: setup.size, keeper: setup.keeper };
+    const restore = () => { setup.picks = orig.picks; setup.size = orig.size; setup.keeper = orig.keeper; PF.Save.save(); };
+    setup.size = t.size;
+    setup.keeper = t.keeper;
+    setup.picks = setup.picks.filter((id) => !used.has(id));
+    PF.UI.select(() => {
+      const chosen = setup.picks.map(PF.rosterById);
+      const extra = PF.Rules.fill(t.size, t.size, t.diff, t.rules, chosen, used);   // equipo incompleto: el resto, al azar
+      const ids = chosen.concat(extra).map((r) => r.id);
+      const abil = Object.assign({}, setup.abil);
+      restore();
+      TR.setTeam(t, ids, abil);
+      PF.Save.save();
+      tournamentLaunch(match);
+    }, () => { restore(); tournamentHub(); }, 'Jugar el cruce', { mode: 'tournament', exclude: used, rules: t.rules, lock: true });
+  }
+
   function tournamentPlay(match) {
+    const t = PF.Save.data.tournament;
+    if (TR.needsPick(t, match)) return tournamentPick(t, match);
+    tournamentLaunch(match);
+  }
+
+  function tournamentLaunch(match) {
     const t = PF.Save.data.tournament, s = TR.matchSetup(t, match);
     const key = t.size + '-' + t.keeper, setup = PF.Save.data.setup;
     setup.spots[key] = setup.spots[key] || {};
     playMatch({
-      size: t.size, keeperMode: t.keeper, stadium: t.stadium, time: t.time, diff: t.diff,
+      size: t.size, keeperMode: t.keeper, stadium: TR.stadiumFor(t), time: t.time, diff: t.diff,
       teams: [s.mine, s.opp],
       bench: [s.bench, s.oppBench],
       formations: [PF.Board.spotsFor(setup.spots[key], s.mine, t.keeper), null],
       teamNames: ['TÚ', s.rival.name],
+      pure: t.rules.pure, goalLimit: s.leg ? 0 : t.rules.goal,
+      startScore: s.startScore, allowDraw: s.allowDraw,
     }, (m) => tournamentResult(m, match), { label: 'Volver al torneo (el partido no cuenta)', fn: tournamentHub });
   }
 
   function tournamentResult(m, match) {
     screen = 'result';
     const t = PF.Save.data.tournament;
-    TR.report(t, match, m);
+    const leg1 = TR.report(t, match, m) === 'leg1';
+    if (leg1) {
+      const rw = reward(m, t);
+      PF.Save.save();
+      PF.UI.result(m, rw, tournamentHub, null, toTitle, {
+        title: 'Partido de ida',
+        note: `Ida: ${m.score[0]}–${m.score[1]}. Falta la vuelta.`, rematch: 'Ver el cuadro', menu: 'Salir (se guarda)',
+      });
+      return;
+    }
     const finished = TR.advance(t) || !!t.out;
     if (t.out) TR.finishAll(t);
     const rw = reward(m, t);
@@ -204,9 +253,10 @@
     }
     PF.Save.save();
     const won = m.winner === 0;
+    const global = match.legs === 2 ? ` (global ${m.score[0]}–${m.score[1]})` : '';
     const note = t.champion != null
-      ? (TR.standing(t) === 'Campeón' ? '¡Ganaste el torneo!' : `Quedas eliminado en ${String(t.out).toLowerCase()}.`)
-      : won ? `Pasas a ${TR.roundName(t.round).toLowerCase()}.` : '';
+      ? (TR.standing(t) === 'Campeón' ? '¡Ganaste el torneo!' : `Quedas eliminado en ${String(t.out).toLowerCase()}${global}.`)
+      : won ? `Pasas a ${TR.roundName(t.round).toLowerCase()}${global}.` : '';
     PF.UI.result(m, rw, tournamentHub, null, toTitle, {
       title: t.champion != null && TR.standing(t) === 'Campeón' ? '🏆 ¡Campeón!' : undefined,
       note, rematch: 'Ver el cuadro', menu: 'Salir (se guarda)',

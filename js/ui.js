@@ -145,15 +145,81 @@ PF.UI = (() => {
       '</div>';
   }
 
+  // ---------------------------------------------------------------- reglas
+  /** Pantalla de reglas especiales (mode: 'quick' o 'tournament'); las cambia en setup.rules y llama a onDone. */
+  function rulesScreen(mode, onDone) {
+    clear();
+    const setup = PF.Save.data.setup, RU = PF.Rules, tourney = mode === 'tournament';
+    if (!setup.rules) setup.rules = {};
+    const cur = () => RU.get(setup);
+    const flip = (list, v) => (list.includes(v) ? list.filter((x) => x !== v) : list.concat(v));
+    const typeIds = Object.keys(PF.TYPE_ES).filter((k) => PF.ROSTER.some((r) => PF.typesOf(r).includes(k)));
+    const btn = (on, label, act, v, title = '') => `<button class="${on ? 'on' : ''}" data-act="${act}" data-v="${v}" ${title ? `title="${title}"` : ''}>${label}</button>`;
+
+    const s = el('<div class="screen rules"></div>');
+    const set = (patch) => { setup.rules = Object.assign({}, cur(), patch); PF.Save.save(); PF.Audio.sfx.click(); draw(); };
+    function draw() {
+      const r = cur();
+      const avail = RU.available(r);
+      const need = tourney && r.norepeat ? setup.size * 3 : setup.size;
+      const warn = avail < need ? `<div class="rwarn">Con estas reglas tienes ${avail} Pokémon y hacen falta ${need}${tourney && r.norepeat ? ' (3 equipos distintos)' : ''}.</div>` : '';
+      s.innerHTML = `
+        <div class="selhead"><h2>Reglas ${tourney ? 'del torneo' : 'del partido'}</h2></div>
+        <div class="box rbox">
+          <div class="rpresets">${RU.PRESETS.map((p, i) => `<button class="btn small" data-act="preset" data-v="${i}" title="${p.desc || 'Sin reglas especiales'}">${p.name}</button>`).join('')}</div>
+          <div class="chips rtypes"><span>Tipos</span>${typeIds.map((t) => btn(r.types.includes(t), PF.TYPE_ES[t], 'type', t)).join('')}<em>${r.types.length ? '' : 'todos'}</em></div>
+          <div class="chips"><span>Fases</span>${['f1', 'f2', 'f3', 'strong', 'elite', 'legend'].map((t) => btn(r.tiers.includes(t), PF.TIERS[t].label, 'tier', t)).join('')}<em>${r.tiers.length ? '' : 'todas'}</em></div>
+          <div class="chips"><span>Equipo</span>
+            ${btn(r.distinct, 'Tipos distintos', 'distinct', 1, 'Los titulares no pueden compartir ningún tipo')}
+            <span class="sp">Presupuesto</span>${[[0, 'Libre'], [1, 'Ajustado'], [2, 'Medio']].map(([v, l]) => btn(r.cap === v, l, 'cap', v, 'Puntos por titular: fase 1 = 1, fase 2 = 2, fase 3 = 3, fuerte = 4, élite = 5, legendario = 6. Ajustado: 1,5 por puesto; medio: 2,5.')).join('')}
+            <em>${r.cap ? `máx. ${RU.capOf(r, setup.size)} puntos con ${setup.size}` : ''}</em></div>
+          <div class="chips"><span>Partido</span>
+            ${btn(r.pure, 'Fútbol puro (sin habilidades)', 'pure', 1)}
+            <span class="sp">Final</span>${[[0, 'Normal'], [1, 'Gol de oro'], [3, 'Primero a 3']].map(([v, l]) => btn(r.goal === v, l, 'goal', v, v ? 'Termina cuando alguien llega a ese número de goles' : 'Tiempo reglamentario (y gol de oro si empatan)')).join('')}</div>
+          ${tourney ? `<div class="chips"><span>Torneo</span>
+            ${btn(r.norepeat, 'Sin repetir Pokémon', 'norepeat', 1, 'Cada Pokémon juega una sola vez en todo el torneo: eliges un equipo nuevo en cada cruce')}
+            ${btn(r.legs === 2, 'Ida y vuelta', 'legs', 1, 'Cuartos y semis a dos partidos (resultado global); la final es única')}
+            ${btn(r.rotate, 'Canchas rotativas', 'rotate', 1, 'Una cancha distinta en cada ronda (entre las que tengas)')}</div>` : ''}
+          <div class="rinfo2">${r.goal && tourney && r.legs === 2 ? 'El final "primero a N" no vale en los partidos de ida y vuelta. ' : ''}Con estas reglas puedes usar <b>${avail}</b> Pokémon de los que tienes.</div>
+          ${warn}
+        </div>
+        <div class="row"><button class="btn" data-act="reset">Quitar reglas</button><button class="btn big" data-act="done">Listo</button></div>`;
+      s.querySelectorAll('button[data-act]').forEach((b) => {
+        const a = b.dataset.act, v = b.dataset.v;
+        b.onclick = () => {
+          const rr = cur();
+          if (a === 'preset') set(Object.assign({}, RU.DEFAULTS, RU.PRESETS[+v].rules));
+          else if (a === 'type') set({ types: flip(rr.types, v) });
+          else if (a === 'tier') set({ tiers: flip(rr.tiers, v) });
+          else if (a === 'distinct') set({ distinct: !rr.distinct });
+          else if (a === 'cap') set({ cap: +v });
+          else if (a === 'pure') set({ pure: !rr.pure });
+          else if (a === 'goal') set({ goal: +v });
+          else if (a === 'norepeat') set({ norepeat: !rr.norepeat });
+          else if (a === 'legs') set({ legs: rr.legs === 2 ? 1 : 2 });
+          else if (a === 'rotate') set({ rotate: !rr.rotate });
+          else if (a === 'reset') set(Object.assign({}, RU.DEFAULTS));
+          else if (a === 'done') onDone();
+        };
+      });
+      const d = s.querySelector('[data-act=done]');
+      if (d) d.focus();
+    }
+    root().appendChild(s);
+    draw();
+  }
+
   /** onGo() cuando el equipo está completo; la elección queda en PF.Save.data.setup. */
-  function select(onGo, onBack, goLabel = '¡A la cancha!') {
+  function select(onGo, onBack, goLabel = '¡A la cancha!', opts = {}) {
     clear();
     const save = PF.Save.data, setup = save.setup;
+    const rules = opts.rules || PF.Rules.get(setup), exclude = opts.exclude || new Set();   // reglas y Pokémon que ya no se pueden usar
+    const banned = (r) => (exclude.has(r.id) ? 'Ya jugó en este torneo' : PF.Rules.whyNot(r, rules));
     let focus = setup.picks[0] || PF.ROSTER[0].id;
     let abFocus = null;   // { id, i }: habilidad sin comprar que se está mirando
 
     const s = el(`
-      <div class="screen select">
+      <div class="screen select ${opts.lock ? 'lockcfg' : ''}">
         <div class="selhead">
           <h2>Arma tu equipo</h2>
           ${coinHTML(save.coins)}
@@ -164,6 +230,7 @@ PF.UI = (() => {
           ${chips('Rival', [['easy', 'Fácil'], ['normal', 'Normal'], ['hard', 'Difícil']], setup.diff)}
           ${chips('Arquero', [['fixed', 'Fijo'], ['dynamic', 'Dinámico']], setup.keeper)}
           <em class="keeperhelp"></em>
+          <button class="btn small rulesbtn" data-act="rules"></button>
         </div>
         <div class="setup stadiums"></div>
         <div class="filters">
@@ -187,6 +254,7 @@ PF.UI = (() => {
             <div class="boardslot"></div>
           </div>
         </div>
+        <div class="rulemsg"></div>
         <div class="row foot-row">
           <div class="team"></div>
           <button class="btn" data-act="back">Volver</button>
@@ -251,6 +319,8 @@ PF.UI = (() => {
 
     function clickPokemon(r) {
       focus = r.id;
+      const why = banned(r);
+      if (why && !setup.picks.includes(r.id)) { toast(why + '.'); PF.Audio.sfx.fail(); refresh(); return; }
       if (PF.isUnlocked(r)) {
         const i = setup.picks.indexOf(r.id);
         if (i >= 0) setup.picks.splice(i, 1);
@@ -281,7 +351,24 @@ PF.UI = (() => {
     });
 
     s.querySelector('[data-act=back]').onclick = onBack;
-    s.querySelector('[data-act=go]').onclick = () => { if (setup.picks.length >= 1) onGo(); };
+    s.querySelector('[data-act=go]').onclick = () => { if (setup.picks.length >= 1 && !teamProblem()) onGo(); };
+    s.querySelector('[data-act=rules]').onclick = () => rulesScreen(opts.mode || 'quick', () => select(onGo, onBack, goLabel, opts));
+
+    /** Saca de la lista los que no se pueden usar y, si el equipo sigue mal, el último titular hasta que cumpla. */
+    function fixPicks() {
+      setup.picks = setup.picks.filter((id) => !banned(PF.rosterById(id)));
+      let guard = 20;
+      while (guard-- > 0 && PF.Rules.teamError(setup.picks.slice(0, setup.size).map((id) => PF.rosterById(id)), rules, setup.size)) {
+        setup.picks.splice(Math.min(setup.size, setup.picks.length) - 1, 1);
+      }
+    }
+
+    /** Qué le pasa al equipo elegido con las reglas (o null si está bien). */
+    function teamProblem() {
+      const bad = setup.picks.map((id) => PF.rosterById(id)).find((r) => banned(r));
+      if (bad) return `${bad.name}: ${banned(bad).toLowerCase()}`;
+      return PF.Rules.teamError(setup.picks.slice(0, setup.size).map((id) => PF.rosterById(id)), rules, setup.size);
+    }
 
     function buy(price, apply, label) {
       if (save.coins < price) { toast(`Te faltan ${price - save.coins} monedas.`); PF.Audio.sfx.fail(); return; }
@@ -410,6 +497,9 @@ PF.UI = (() => {
         c.classList.toggle('on', i >= 0);
         c.classList.toggle('focus', r.id === focus);
         c.classList.toggle('locked', !un);
+        const why = banned(r);
+        c.classList.toggle('banned', !!why && un);
+        c.title = why || '';
         c.querySelector('.pick').textContent = i < 0 ? '' : i < setup.size ? String(i + 1) : 'S';
         c.querySelector('.lock').innerHTML = un ? '' : r.unlock.coins ? `<i class="coin"></i>${r.unlock.coins}` : '🔒 reto';
       });
@@ -426,8 +516,15 @@ PF.UI = (() => {
       // con uno solo ya se puede jugar: el resto se completa al azar (PF.randomFill)
       const go = s.querySelector('[data-act=go]');
       const missing = setup.size - setup.picks.length;
-      go.disabled = setup.picks.length < 1;
-      go.textContent = go.disabled ? 'Elige al menos 1' : missing > 0 && goLabel === '¡A la cancha!' ? `¡A la cancha! (+${missing} 🎲)` : goLabel;
+      const problem = setup.picks.length ? teamProblem() : null;
+      const msg = s.querySelector('.rulemsg');
+      const sum = PF.Rules.summary(rules, opts.mode === 'tournament');
+      msg.innerHTML = problem ? `<span class="bad">⚠ ${problem}</span> <button class="btn small" data-act="fix">Quitar los que no cumplen</button>` : sum.length ? `Reglas: ${sum.join(' · ')}` : '';
+      const fixb = msg.querySelector('[data-act=fix]');
+      if (fixb) fixb.onclick = () => { fixPicks(); PF.Save.save(); refresh(); };
+      s.querySelector('.rulesbtn').textContent = sum.length ? `⚙ Reglas (${sum.length})` : '⚙ Reglas';
+      go.disabled = setup.picks.length < 1 || !!problem;
+      go.textContent = go.disabled ? (problem ? 'Revisa las reglas' : 'Elige al menos 1') : missing > 0 && goLabel === '¡A la cancha!' ? `¡A la cancha! (+${missing} 🎲)` : goLabel;
     }
 
     // limpia elecciones que ya no valen (p. ej. tras borrar el progreso)
@@ -596,5 +693,5 @@ PF.UI = (() => {
     s.querySelector('button').focus();
   }
 
-  return { clear, title, options, select, tickPortraits, addPortrait, clearPortraits, addEvolution, pause, subs, result, toast };
+  return { clear, title, options, select, rulesScreen, tickPortraits, addPortrait, clearPortraits, addEvolution, pause, subs, result, toast };
 })();
